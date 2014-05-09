@@ -6,16 +6,33 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"strconv"
 )
 
 var addr = flag.String("addr", "127.0.0.1:4242", "network address to listen on")
 
+func main() {
+	flag.Parse()
+
+	http.HandleFunc("/job/submit", submit)
+	http.HandleFunc("/job/retrieve", retrieve)
+	http.HandleFunc("/work/fetch", fetch)
+	http.HandleFunc("/work/push", push)
+
+	go dispatcher()
+
+	if err := http.ListenAndServe(*addr, nil); err != nil {
+		log.Fatal(err)
+	}
+}
+
 var (
-	submitjobs = make(chan *Job)
-	pushjobs   = make(chan *Job)
-	fetchjobs  = make(chan WorkRequest)
-	alljobs    = map[int]*Job{}
-	queue      = []*Job{}
+	submitjobs   = make(chan *Job)
+	retrievejobs = make(chan JobRequest)
+	pushjobs     = make(chan *Job)
+	fetchjobs    = make(chan WorkRequest)
+	alljobs      = map[int]*Job{}
+	queue        = []*Job{}
 )
 
 const (
@@ -40,42 +57,6 @@ type JobRequest struct {
 
 type WorkRequest chan *Job
 
-func main() {
-	flag.Parse()
-
-	http.HandleFunc("/job/submit", submit)
-	http.HandleFunc("/job/retrieve", retrieve)
-	http.HandleFunc("/work/fetch", fetch)
-	http.HandleFunc("/work/push", push)
-
-	go dispatcher()
-
-	if err := http.ListenAndServe(*addr); err != nil {
-		log.Fatal(err)
-	}
-}
-
-func submit(w http.ResponseWriter, r http.Request) {
-	data, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		log.Print(err)
-		return
-	}
-
-	j := &Job{}
-	if err := json.Unmarshal(data, &j); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		log.Print(err)
-		return
-	}
-	submitjobs <- j
-}
-
-func submit(w http.ResponseWriter, r http.Request) {
-	w
-}
-
 func dispatcher() {
 	for {
 		select {
@@ -99,10 +80,86 @@ func dispatcher() {
 	}
 }
 
-func fetch(w http.ResponseWriter, r http.Request) {
+func submit(w http.ResponseWriter, r *http.Request) {
+	data, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		log.Print(err)
+		return
+	}
+
+	j := &Job{}
+	if err := json.Unmarshal(data, &j); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		log.Print(err)
+		return
+	}
+	submitjobs <- j
 }
 
-func push(w http.ResponseWriter, r http.Request) {
+func retrieve(w http.ResponseWriter, r *http.Request) {
+	idstr := r.URL.Path[len("/job/retrieve/"):]
+	id, err := strconv.Atoi(idstr)
+	if err != nil {
+		http.Error(w, "invalid job id "+idstr, http.StatusBadRequest)
+		log.Print(err)
+		return
+	}
+
+	ch := make(chan *Job)
+	retrievejobs <- JobRequest{Id: id, Resp: ch}
+	j := <-ch
+
+	data, err := json.Marshal(j)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Print(err)
+		return
+	}
+
+	_, err = w.Write(data)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Print(err)
+		return
+	}
+}
+
+func fetch(w http.ResponseWriter, r *http.Request) {
+	ch := make(WorkRequest)
+	fetchjobs <- ch
+	j := <-ch
+
+	data, err := json.Marshal(j)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Print(err)
+		return
+	}
+
+	_, err = w.Write(data)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Print(err)
+		return
+	}
+}
+
+func push(w http.ResponseWriter, r *http.Request) {
+	data, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		log.Print(err)
+		return
+	}
+
+	j := &Job{}
+	if err := json.Unmarshal(data, &j); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		log.Print(err)
+		return
+	}
+	pushjobs <- j
 }
 
 type Queue struct {
