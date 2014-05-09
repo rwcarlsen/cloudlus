@@ -9,6 +9,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 )
 
 var addr = flag.String("addr", "127.0.0.1:4242", "network address of dispatch server")
@@ -23,26 +24,35 @@ func main() {
 		err := s.ListenAndServe(*addr)
 		fatalif(err)
 	case "worker":
+		if !strings.HasPrefix(*addr, "http://") {
+			*addr = "http://" + *addr
+		}
 		w := &Worker{ServerAddr: *addr}
 		w.Run()
 	case "submit":
 		var err error
 		var data []byte
 		if len(flag.Args()) > 0 {
-			data, err = ioutil.ReadFile(flag.Arg(0))
+			data, err = ioutil.ReadFile(flag.Arg(1))
 			fatalif(err)
 		} else {
 			data, err = ioutil.ReadAll(os.Stdin)
 			fatalif(err)
 		}
 
+		if !strings.HasPrefix(*addr, "http://") {
+			*addr = "http://" + *addr
+		}
 		resp, err := http.Post(*addr+"/job/submit", "application/json", bytes.NewBuffer(data))
 		fatalif(err)
 		data, err = ioutil.ReadAll(resp.Body)
 		fatalif(err)
 		fmt.Printf("job submitted (id=%s)\n", data)
 	case "retrieve":
-		resp, err := http.Get(*addr + "/job/retrieve")
+		if !strings.HasPrefix(*addr, "http://") {
+			*addr = "http://" + *addr
+		}
+		resp, err := http.Get(*addr + "/job/retrieve/" + flag.Arg(1))
 		fatalif(err)
 		data, err := ioutil.ReadAll(resp.Body)
 		fatalif(err)
@@ -55,7 +65,7 @@ func main() {
 
 		files, err := d.Readdir(-1)
 		fatalif(err)
-		j := &Job{}
+		j := NewJob()
 		for _, info := range files {
 			if info.IsDir() {
 				continue
@@ -69,9 +79,9 @@ func main() {
 		fmt.Printf("%s\n", data)
 
 	case "unpack":
-		fname := flag.Arg(0)
+		fname := flag.Arg(1)
 		data, err := ioutil.ReadFile(fname)
-		j := &Job{}
+		j := NewJob()
 		err = json.Unmarshal(data, &j)
 		fatalif(err)
 

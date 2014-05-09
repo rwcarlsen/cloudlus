@@ -18,6 +18,14 @@ type Job struct {
 	wd        string
 }
 
+func NewJob() *Job {
+	return &Job{
+		Cmds:      [][]string{},
+		Results:   map[string][]byte{},
+		Resources: map[string][]byte{},
+	}
+}
+
 func (j *Job) setup() error {
 	var err error
 	if j.wd == "" {
@@ -50,6 +58,8 @@ func (j *Job) Execute() error {
 
 	for _, args := range j.Cmds {
 		cmd := exec.Command(args[0], args[1:]...)
+		cmd.Stderr = os.Stderr
+		cmd.Stdout = os.Stdout
 		if err := cmd.Run(); err != nil {
 			return err
 		}
