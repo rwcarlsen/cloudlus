@@ -22,6 +22,7 @@ type Server struct {
 	retrievejobs chan JobRequest
 	pushjobs     chan *Job
 	fetchjobs    chan WorkRequest
+	statjobs     chan JobRequest
 	alljobs      map[int]*Job
 	queue        []*Job
 }
@@ -30,6 +31,7 @@ func NewServer() *Server {
 	return &Server{
 		submitjobs:   make(chan JobSubmit),
 		retrievejobs: make(chan JobRequest),
+		statjobs:     make(chan JobRequest),
 		pushjobs:     make(chan *Job),
 		fetchjobs:    make(chan WorkRequest),
 		alljobs:      map[int]*Job{},
@@ -51,6 +53,7 @@ type WorkRequest chan *Job
 func (s *Server) ListenAndServe(addr string) error {
 	http.HandleFunc("/job/submit", s.submit)
 	http.HandleFunc("/job/retrieve/", s.retrieve)
+	http.HandleFunc("/job/status/", s.status)
 	http.HandleFunc("/work/fetch", s.fetch)
 	http.HandleFunc("/work/push", s.push)
 
@@ -73,9 +76,14 @@ func (s *Server) dispatcher() {
 		case req := <-s.retrievejobs:
 			j := s.alljobs[req.Id]
 			req.Resp <- j
-			if j.Status == StatusComplete || j.Status == StatusFailed {
-				delete(s.alljobs, req.Id)
+			if j != nil {
+				if j.Status == StatusComplete || j.Status == StatusFailed {
+					delete(s.alljobs, req.Id)
+				}
 			}
+		case req := <-s.statjobs:
+			j := s.alljobs[req.Id]
+			req.Resp <- j
 		case j := <-s.pushjobs:
 			if j.Status != StatusFailed {
 				j.Status = StatusComplete
@@ -132,24 +140,47 @@ func (s *Server) retrieve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var data []byte
-	if j.Status != StatusComplete && j.Status != StatusFailed {
-		jj := NewJob()
-		jj.Id = j.Id
-		jj.Status = j.Status
-		data, err = json.Marshal(jj)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			log.Print(err)
-			return
-		}
-	} else {
-		data, err = json.Marshal(j)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			log.Print(err)
-			return
-		}
+	data, err := json.Marshal(j)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Print(err)
+		return
+	}
+
+	_, err = w.Write(data)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Print(err)
+		return
+	}
+}
+
+func (s *Server) status(w http.ResponseWriter, r *http.Request) {
+	idstr := r.URL.Path[len("/job/status/"):]
+	id, err := strconv.Atoi(idstr)
+	if err != nil {
+		http.Error(w, "malformed job id "+idstr, http.StatusBadRequest)
+		log.Print("malformed job id status request: ", idstr)
+		return
+	}
+
+	ch := make(chan *Job)
+	s.statjobs <- JobRequest{Id: id, Resp: ch}
+	j := <-ch
+	if j == nil {
+		http.Error(w, "unknown job id "+idstr, http.StatusBadRequest)
+		log.Print("unknown job id status request: ", idstr)
+		return
+	}
+
+	jj := NewJob()
+	jj.Id = j.Id
+	jj.Status = j.Status
+	data, err := json.Marshal(jj)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Print(err)
+		return
 	}
 
 	_, err = w.Write(data)

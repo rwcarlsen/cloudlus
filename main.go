@@ -56,7 +56,15 @@ func main() {
 		fatalif(err)
 		data, err := ioutil.ReadAll(resp.Body)
 		fatalif(err)
-
+		fmt.Println(string(data))
+	case "status":
+		if !strings.HasPrefix(*addr, "http://") {
+			*addr = "http://" + *addr
+		}
+		resp, err := http.Get(*addr + "/job/status/" + flag.Arg(1))
+		fatalif(err)
+		data, err := ioutil.ReadAll(resp.Body)
+		fatalif(err)
 		fmt.Println(string(data))
 	case "pack":
 		d, err := os.Open(".")
@@ -72,7 +80,19 @@ func main() {
 			}
 			data, err := ioutil.ReadFile(info.Name())
 			fatalif(err)
-			j.Resources[info.Name()] = data
+			if info.Name() == "cmds.txt" {
+				err := json.Unmarshal(data, &j.Cmds)
+				fatalif(err)
+			} else if info.Name() == "want.txt" {
+				wanted := []string{}
+				err := json.Unmarshal(data, &wanted)
+				fatalif(err)
+				for _, w := range wanted {
+					j.Results[w] = []byte{}
+				}
+			} else {
+				j.Resources[info.Name()] = data
+			}
 		}
 		data, err := json.Marshal(j)
 		fatalif(err)
@@ -89,6 +109,8 @@ func main() {
 			err := ioutil.WriteFile(fname, data, 0644)
 			fatalif(err)
 		}
+	default:
+		log.Printf("Invalid command '%v'", cmd)
 	}
 }
 
