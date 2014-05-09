@@ -73,7 +73,9 @@ func (s *Server) dispatcher() {
 		case req := <-s.retrievejobs:
 			j := s.alljobs[req.Id]
 			req.Resp <- j
-			delete(s.alljobs, req.Id)
+			if j.Status == StatusComplete || j.Status == StatusFailed {
+				delete(s.alljobs, req.Id)
+			}
 		case j := <-s.pushjobs:
 			if j.Status != StatusFailed {
 				j.Status = StatusComplete
