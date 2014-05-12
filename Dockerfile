@@ -36,5 +36,3 @@ RUN git clone https://github.com/rwcarlsen/transoptim && cd transoptim/agents &&
 
 ENV GOPATH /
 RUN go get github.com/rwcarlsen/cloudlus
-ENTRYPOINT cloudlus worker
-
