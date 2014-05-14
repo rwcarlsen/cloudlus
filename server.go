@@ -24,6 +24,7 @@ type Server struct {
 	fetchjobs    chan WorkRequest
 	statjobs     chan JobRequest
 	alljobs      map[int]*Job
+	jobReqN      map[int]int
 	queue        []*Job
 }
 
@@ -35,6 +36,7 @@ func NewServer() *Server {
 		pushjobs:     make(chan *Job),
 		fetchjobs:    make(chan WorkRequest),
 		alljobs:      map[int]*Job{},
+		jobReqN:      map[int]int{},
 	}
 }
 
@@ -76,9 +78,10 @@ func (s *Server) dispatcher() {
 		case req := <-s.retrievejobs:
 			j := s.alljobs[req.Id]
 			req.Resp <- j
-			if j != nil {
-				if j.Status == StatusComplete || j.Status == StatusFailed {
-					delete(s.alljobs, req.Id)
+			if j != nil && (j.Status == StatusComplete || j.Status == StatusFailed) {
+				s.jobReqN[j.Id] += 1
+				if s.jobReqN[j.Id] == 3 {
+					delete(s.jobReqN, j.Id)
 				}
 			}
 		case req := <-s.statjobs:
