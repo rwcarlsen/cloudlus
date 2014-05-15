@@ -82,6 +82,7 @@ func (s *Server) dispatcher() {
 				s.jobReqN[j.Id] += 1
 				if s.jobReqN[j.Id] == 3 {
 					delete(s.jobReqN, j.Id)
+					delete(s.alljobs, j.Id)
 				}
 			}
 		case req := <-s.statjobs:
