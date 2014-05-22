@@ -7,6 +7,8 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+
+	"github.com/rwcarlsen/gocache"
 )
 
 const (
@@ -15,30 +17,6 @@ const (
 	StatusComplete = "complete"
 	StatusFailed   = "failed"
 )
-
-type Server struct {
-	nextid       int
-	submitjobs   chan JobSubmit
-	retrievejobs chan JobRequest
-	pushjobs     chan *Job
-	fetchjobs    chan WorkRequest
-	statjobs     chan JobRequest
-	alljobs      map[int]*Job
-	jobReqN      map[int]int
-	queue        []*Job
-}
-
-func NewServer() *Server {
-	return &Server{
-		submitjobs:   make(chan JobSubmit),
-		retrievejobs: make(chan JobRequest),
-		statjobs:     make(chan JobRequest),
-		pushjobs:     make(chan *Job),
-		fetchjobs:    make(chan WorkRequest),
-		alljobs:      map[int]*Job{},
-		jobReqN:      map[int]int{},
-	}
-}
 
 type JobRequest struct {
 	Id   int
@@ -51,6 +29,33 @@ type JobSubmit struct {
 }
 
 type WorkRequest chan *Job
+
+type Server struct {
+	nextid       int
+	submitjobs   chan JobSubmit
+	retrievejobs chan JobRequest
+	pushjobs     chan *Job
+	fetchjobs    chan WorkRequest
+	statjobs     chan JobRequest
+	jobReqN      map[int]int
+	queue        []*Job
+
+	alljobs *cache.LRUCache
+}
+
+const MB = 1 << 20
+
+func NewServer() *Server {
+	return &Server{
+		submitjobs:   make(chan JobSubmit),
+		retrievejobs: make(chan JobRequest),
+		statjobs:     make(chan JobRequest),
+		pushjobs:     make(chan *Job),
+		fetchjobs:    make(chan WorkRequest),
+		alljobs:      cache.NewLRUCache(250 * MB),
+		jobReqN:      map[int]int{},
+	}
+}
 
 func (s *Server) ListenAndServe(addr string) error {
 	http.HandleFunc("/job/submit", s.submit)
@@ -144,14 +149,8 @@ func (s *Server) retrieve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data, err := json.Marshal(j)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		log.Print(err)
-		return
-	}
-
-	_, err = w.Write(data)
+	w.Header().Add("Content-Disposition", fmt.Sprintf("filename=\"result-id-%v.tar\"", id))
+	_, err = w.Write(j.ResultData)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		log.Print(err)

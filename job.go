@@ -1,6 +1,9 @@
 package main
 
 import (
+	"archive/tar"
+	"bytes"
+	"io"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -9,21 +12,31 @@ import (
 )
 
 type Job struct {
-	Id        int
-	Cmds      [][]string
-	Resources map[string][]byte
-	Results   map[string][]byte
-	Status    string
-	dir       string
-	wd        string
+	Id         int
+	Cmds       [][]string
+	Resources  map[string][]byte
+	Results    []string
+	ResultData []byte
+	Status     string
+	dir        string
+	wd         string
 }
 
 func NewJob() *Job {
 	return &Job{
-		Cmds:      [][]string{},
-		Results:   map[string][]byte{},
-		Resources: map[string][]byte{},
+		Cmds:       [][]string{},
+		Results:    []string{},
+		Resources:  map[string][]byte{},
+		ResultData: []byte{},
 	}
+}
+
+func (j *Job) Size() int {
+	n := 0
+	for _, data := range j.Resources {
+		n += len(data)
+	}
+	return n + len(j.ResultData)
 }
 
 func (j *Job) setup() error {
@@ -65,14 +78,42 @@ func (j *Job) Execute() error {
 		}
 	}
 
-	for name := range j.Results {
-		data, err := ioutil.ReadFile(name)
-		if err != nil {
+	var buf bytes.Buffer
+	tarbuf := tar.NewWriter(&buf)
+	for _, name := range j.Results {
+		if err := writefile(name, tarbuf); err != nil {
 			return err
 		}
-		j.Results[name] = data
 	}
 
+	j.ResultData = buf.Bytes()
+	return nil
+}
+
+func writefile(fname string, buf *tar.Writer) error {
+	f, err := os.Open(fname)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	// make the tar header
+	info, err := f.Stat()
+	if err != nil {
+		return err
+	}
+	hdr, err := tar.FileInfoHeader(info, "")
+	if err != nil {
+		return err
+	}
+
+	// write the header and file data to the tar archive
+	if err := buf.WriteHeader(hdr); err != nil {
+		return err
+	}
+	if _, err := io.Copy(buf, f); err != nil {
+		return err
+	}
 	return nil
 }
 

@@ -84,12 +84,8 @@ func main() {
 				err := json.Unmarshal(data, &j.Cmds)
 				fatalif(err)
 			} else if info.Name() == "want.txt" {
-				wanted := []string{}
-				err := json.Unmarshal(data, &wanted)
+				err := json.Unmarshal(data, &j.Results)
 				fatalif(err)
-				for _, w := range wanted {
-					j.Results[w] = []byte{}
-				}
 			} else {
 				j.Resources[info.Name()] = data
 			}
@@ -97,18 +93,6 @@ func main() {
 		data, err := json.Marshal(j)
 		fatalif(err)
 		fmt.Printf("%s\n", data)
-
-	case "unpack":
-		fname := flag.Arg(1)
-		data, err := ioutil.ReadFile(fname)
-		j := NewJob()
-		err = json.Unmarshal(data, &j)
-		fatalif(err)
-
-		for fname, data := range j.Results {
-			err := ioutil.WriteFile(fname, data, 0644)
-			fatalif(err)
-		}
 	default:
 		log.Printf("Invalid command '%v'", cmd)
 	}
