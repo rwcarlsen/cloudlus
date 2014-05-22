@@ -127,6 +127,8 @@ func (s *Server) submit(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) submitInfile(w http.ResponseWriter, r *http.Request) {
+	// TODO add shortcut code to check for cached db files if this infile has
+	// already been run
 	data, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -134,13 +136,7 @@ func (s *Server) submitInfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	j := NewJob()
-	if err := json.Unmarshal(data, &j); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		log.Print(err)
-		return
-	}
-
+	j := NewJobDefault(data)
 	ch := make(chan int)
 	s.submitjobs <- JobSubmit{J: j, Resp: ch}
 	id := <-ch

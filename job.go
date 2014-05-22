@@ -31,19 +31,20 @@ func NewJob() *Job {
 	}
 }
 
-func NewJobFileData(data []byte) *Job {
+func NewJobDefault(data []byte) *Job {
 	j := NewJob()
 	j.Cmds = append(j.Cmds, []string{"cyclus", "input.xml"})
+	j.Results = []string{"cyclus.sqlite"}
 	j.Resources["input.xml"] = data
 	return j
 }
 
-func NewJobFile(fname string) (*Job, error) {
+func NewJobDefaultFile(fname string) (*Job, error) {
 	data, err := ioutil.ReadFile(fname)
 	if err != nil {
 		return nil, err
 	}
-	return NewJobFileData(data), nil
+	return NewJobDefault(data), nil
 }
 
 func (j *Job) Size() int {
