@@ -37,7 +37,6 @@ type Server struct {
 	pushjobs     chan *Job
 	fetchjobs    chan WorkRequest
 	statjobs     chan JobRequest
-	jobReqN      map[int]int
 	queue        []*Job
 
 	alljobs *cache.LRUCache
@@ -53,7 +52,6 @@ func NewServer() *Server {
 		pushjobs:     make(chan *Job),
 		fetchjobs:    make(chan WorkRequest),
 		alljobs:      cache.NewLRUCache(250 * MB),
-		jobReqN:      map[int]int{},
 	}
 }
 
@@ -78,26 +76,22 @@ func (s *Server) dispatcher() {
 			j.Id = s.nextid
 			j.Status = StatusQueued
 			s.queue = append(s.queue, j)
-			s.alljobs[j.Id] = j
+			s.alljobs.Set(j.Id, j)
 			sub.Resp <- j.Id
 		case req := <-s.retrievejobs:
-			j := s.alljobs[req.Id]
+			v, _ := s.alljobs.Get(req.Id)
+			j := v.(*Job)
+
 			req.Resp <- j
-			if j != nil && (j.Status == StatusComplete || j.Status == StatusFailed) {
-				s.jobReqN[j.Id] += 1
-				if s.jobReqN[j.Id] == 3 {
-					delete(s.jobReqN, j.Id)
-					delete(s.alljobs, j.Id)
-				}
-			}
 		case req := <-s.statjobs:
-			j := s.alljobs[req.Id]
+			v, _ := s.alljobs.Get(req.Id)
+			j := v.(*Job)
 			req.Resp <- j
 		case j := <-s.pushjobs:
 			if j.Status != StatusFailed {
 				j.Status = StatusComplete
 			}
-			s.alljobs[j.Id] = j
+			s.alljobs.Set(j.Id, j)
 		case req := <-s.fetchjobs:
 			var j *Job = nil
 			if len(s.queue) > 0 {
