@@ -57,6 +57,7 @@ func NewServer() *Server {
 
 func (s *Server) ListenAndServe(addr string) error {
 	http.HandleFunc("/job/submit", s.submit)
+	http.HandleFunc("/job/submit-infile", s.submitInfile)
 	http.HandleFunc("/job/retrieve/", s.retrieve)
 	http.HandleFunc("/job/status/", s.status)
 	http.HandleFunc("/work/fetch", s.fetch)
@@ -105,6 +106,27 @@ func (s *Server) dispatcher() {
 }
 
 func (s *Server) submit(w http.ResponseWriter, r *http.Request) {
+	data, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		log.Print(err)
+		return
+	}
+
+	j := NewJob()
+	if err := json.Unmarshal(data, &j); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		log.Print(err)
+		return
+	}
+
+	ch := make(chan int)
+	s.submitjobs <- JobSubmit{J: j, Resp: ch}
+	id := <-ch
+	fmt.Fprintf(w, "%v", id)
+}
+
+func (s *Server) submitInfile(w http.ResponseWriter, r *http.Request) {
 	data, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)

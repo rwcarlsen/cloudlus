@@ -31,6 +31,21 @@ func NewJob() *Job {
 	}
 }
 
+func NewJobFileData(data []byte) *Job {
+	j := NewJob()
+	j.Cmds = append(j.Cmds, []string{"cyclus", "input.xml"})
+	j.Resources["input.xml"] = data
+	return j
+}
+
+func NewJobFile(fname string) (*Job, error) {
+	data, err := ioutil.ReadFile(fname)
+	if err != nil {
+		return nil, err
+	}
+	return NewJobFileData(data), nil
+}
+
 func (j *Job) Size() int {
 	n := 0
 	for _, data := range j.Resources {
