@@ -1,12 +1,12 @@
 package main
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
-	"strconv"
 
 	"github.com/rwcarlsen/gocache"
 )
@@ -19,20 +19,14 @@ const (
 )
 
 type JobRequest struct {
-	Id   int
+	Id   [16]byte
 	Resp chan *Job
-}
-
-type JobSubmit struct {
-	J    *Job
-	Resp chan int
 }
 
 type WorkRequest chan *Job
 
 type Server struct {
-	nextid       int
-	submitjobs   chan JobSubmit
+	submitjobs   chan *Job
 	retrievejobs chan JobRequest
 	pushjobs     chan *Job
 	fetchjobs    chan WorkRequest
@@ -46,7 +40,7 @@ const MB = 1 << 20
 
 func NewServer() *Server {
 	return &Server{
-		submitjobs:   make(chan JobSubmit),
+		submitjobs:   make(chan *Job),
 		retrievejobs: make(chan JobRequest),
 		statjobs:     make(chan JobRequest),
 		pushjobs:     make(chan *Job),
@@ -71,14 +65,10 @@ func (s *Server) ListenAndServe(addr string) error {
 func (s *Server) dispatcher() {
 	for {
 		select {
-		case sub := <-s.submitjobs:
-			s.nextid++
-			j := sub.J
-			j.Id = s.nextid
+		case j := <-s.submitjobs:
 			j.Status = StatusQueued
 			s.queue = append(s.queue, j)
 			s.alljobs.Set(j.Id, j)
-			sub.Resp <- j.Id
 		case req := <-s.retrievejobs:
 			v, _ := s.alljobs.Get(req.Id)
 			j := v.(*Job)
@@ -89,9 +79,6 @@ func (s *Server) dispatcher() {
 			j := v.(*Job)
 			req.Resp <- j
 		case j := <-s.pushjobs:
-			if j.Status != StatusFailed {
-				j.Status = StatusComplete
-			}
 			s.alljobs.Set(j.Id, j)
 		case req := <-s.fetchjobs:
 			var j *Job = nil
@@ -120,10 +107,8 @@ func (s *Server) submit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ch := make(chan int)
-	s.submitjobs <- JobSubmit{J: j, Resp: ch}
-	id := <-ch
-	fmt.Fprintf(w, "%v", id)
+	s.submitjobs <- j
+	fmt.Fprintf(w, "%x", j.Id)
 }
 
 func (s *Server) submitInfile(w http.ResponseWriter, r *http.Request) {
@@ -137,15 +122,13 @@ func (s *Server) submitInfile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	j := NewJobDefault(data)
-	ch := make(chan int)
-	s.submitjobs <- JobSubmit{J: j, Resp: ch}
-	id := <-ch
-	fmt.Fprintf(w, "%v", id)
+	s.submitjobs <- j
+	fmt.Fprintf(w, "%x", j.Id)
 }
 
 func (s *Server) retrieve(w http.ResponseWriter, r *http.Request) {
 	idstr := r.URL.Path[len("/job/retrieve/"):]
-	id, err := strconv.Atoi(idstr)
+	id, err := convid(idstr)
 	if err != nil {
 		http.Error(w, "malformed job id "+idstr, http.StatusBadRequest)
 		log.Print("malformed job id status request: ", idstr)
@@ -172,7 +155,7 @@ func (s *Server) retrieve(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) status(w http.ResponseWriter, r *http.Request) {
 	idstr := r.URL.Path[len("/job/status/"):]
-	id, err := strconv.Atoi(idstr)
+	id, err := convid(idstr)
 	if err != nil {
 		http.Error(w, "malformed job id "+idstr, http.StatusBadRequest)
 		log.Print("malformed job id status request: ", idstr)
@@ -241,4 +224,14 @@ func (s *Server) push(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.pushjobs <- j
+}
+
+func convid(s string) ([16]byte, error) {
+	uid, err := hex.DecodeString(s)
+	if err != nil {
+		return [16]byte{}, err
+	}
+	var id [16]byte
+	copy(id[:], uid)
+	return id, nil
 }

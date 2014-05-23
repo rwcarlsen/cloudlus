@@ -12,7 +12,7 @@ import (
 )
 
 type Job struct {
-	Id         int
+	Id         [16]byte
 	Cmds       [][]string
 	Resources  map[string][]byte
 	Results    []string
@@ -23,7 +23,11 @@ type Job struct {
 }
 
 func NewJob() *Job {
+	uid := uuid.NewRandom()
+	var id [16]byte
+	copy(id[:], uid)
 	return &Job{
+		Id:         id,
 		Cmds:       [][]string{},
 		Results:    []string{},
 		Resources:  map[string][]byte{},
@@ -90,6 +94,7 @@ func (j *Job) Execute() error {
 		cmd.Stderr = os.Stderr
 		cmd.Stdout = os.Stdout
 		if err := cmd.Run(); err != nil {
+			j.Status = StatusFailed
 			return err
 		}
 	}
@@ -98,6 +103,7 @@ func (j *Job) Execute() error {
 	tarbuf := tar.NewWriter(&buf)
 	for _, name := range j.Results {
 		if err := writefile(name, tarbuf); err != nil {
+			j.Status = StatusFailed
 			return err
 		}
 	}
