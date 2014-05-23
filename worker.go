@@ -7,14 +7,20 @@ import (
 	"log"
 	"net/http"
 	"time"
+
+	"code.google.com/p/go-uuid/uuid"
 )
 
 type Worker struct {
+	Id         [16]byte
 	ServerAddr string
 	Wait       time.Duration
 }
 
 func (w *Worker) Run() {
+	uid := uuid.NewRandom()
+	copy(w.Id[:], uid)
+
 	if w.Wait == 0 {
 		w.Wait = 10 * time.Second
 	}

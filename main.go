@@ -86,7 +86,7 @@ func submit(cmd string, args []string) {
 	fatalif(err)
 	data, err = ioutil.ReadAll(resp.Body)
 	fatalif(err)
-	fmt.Printf("job submitted (id=%s)\n", data)
+	fmt.Printf("job submitted successfully:\n%s\n", data)
 }
 
 func submitInfile(cmd string, args []string) {
@@ -98,11 +98,12 @@ func submitInfile(cmd string, args []string) {
 	fatalif(err)
 	data, err = ioutil.ReadAll(resp.Body)
 	fatalif(err)
-	fmt.Printf("job submitted (id=%s)\n", data)
+	fmt.Printf("job submitted successfully:\n%s\n", data)
 }
 
 func retrieve(cmd string, args []string) {
 	fs := newFlagSet(cmd, "[JOB-ID]", "retrieve the result tar file for the given job id")
+	fname := fs.String("o", "", "send result tar to file instead of stdout")
 	fs.Parse(args)
 
 	if len(fs.Args()) == 0 {
@@ -113,7 +114,13 @@ func retrieve(cmd string, args []string) {
 	fatalif(err)
 	data, err := ioutil.ReadAll(resp.Body)
 	fatalif(err)
-	fmt.Println(string(data))
+
+	if *fname == "" {
+		fmt.Println(string(data))
+	} else {
+		err := ioutil.WriteFile(*fname, data, 0644)
+		fatalif(err)
+	}
 }
 
 func stat(cmd string, args []string) {
@@ -128,7 +135,13 @@ func stat(cmd string, args []string) {
 	fatalif(err)
 	data, err := ioutil.ReadAll(resp.Body)
 	fatalif(err)
-	fmt.Println(string(data))
+
+	j := &Job{}
+	if err := json.Unmarshal(data, &j); err != nil {
+		log.Fatalf("server has no job of id %v", fs.Arg(0))
+	}
+
+	fmt.Printf("Job %x status: %v\n", j.Id, j.Status)
 }
 
 func pack(cmd string, args []string) {

@@ -11,13 +11,6 @@ import (
 	"github.com/rwcarlsen/gocache"
 )
 
-const (
-	StatusQueued   = "queued"
-	StatusRunning  = "running"
-	StatusComplete = "complete"
-	StatusFailed   = "failed"
-)
-
 type JobRequest struct {
 	Id   [16]byte
 	Resp chan *Job
@@ -74,18 +67,21 @@ func (s *Server) dispatcher() {
 			s.queue = append(s.queue, j)
 			s.alljobs.Set(j.Id, j)
 		case req := <-s.retrievejobs:
-			v, _ := s.alljobs.Get(req.Id)
-			j := v.(*Job)
-
-			req.Resp <- j
+			if v, ok := s.alljobs.Get(req.Id); ok {
+				req.Resp <- v.(*Job)
+			} else {
+				req.Resp <- nil
+			}
 		case req := <-s.statjobs:
-			v, _ := s.alljobs.Get(req.Id)
-			j := v.(*Job)
-			req.Resp <- j
+			if v, ok := s.alljobs.Get(req.Id); ok {
+				req.Resp <- v.(*Job)
+			} else {
+				req.Resp <- nil
+			}
 		case j := <-s.pushjobs:
 			s.alljobs.Set(j.Id, j)
 		case req := <-s.fetchjobs:
-			var j *Job = nil
+			var j *Job
 			if len(s.queue) > 0 {
 				j = s.queue[0]
 				j.Status = StatusRunning

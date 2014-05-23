@@ -11,6 +11,13 @@ import (
 	"code.google.com/p/go-uuid/uuid"
 )
 
+const (
+	StatusQueued   = "queued"
+	StatusRunning  = "running"
+	StatusComplete = "complete"
+	StatusFailed   = "failed"
+)
+
 type Job struct {
 	Id         [16]byte
 	Cmds       [][]string
@@ -74,6 +81,10 @@ func (j *Job) setup() error {
 		return err
 	}
 
+	if err := os.Chdir(j.dir); err != nil {
+		return err
+	}
+
 	for name, data := range j.Resources {
 		err := ioutil.WriteFile(name, data, 0755)
 		if err != nil {
@@ -91,16 +102,19 @@ func (j *Job) Execute() error {
 	defer j.teardown()
 
 	var out bytes.Buffer
+	multiout := io.MultiWriter(os.Stdout, &out)
+	multierr := io.MultiWriter(os.Stderr, &out)
 	for _, args := range j.Cmds {
 		cmd := exec.Command(args[0], args[1:]...)
-		cmd.Stderr = &out
-		cmd.Stdout = &out
+		cmd.Stderr = multierr
+		cmd.Stdout = multiout
 		if err := cmd.Run(); err != nil {
 			j.Status = StatusFailed
 			return err
 		}
 	}
 	j.Output = out.String()
+	j.Status = StatusComplete
 
 	var buf bytes.Buffer
 	tarbuf := tar.NewWriter(&buf)
@@ -113,6 +127,18 @@ func (j *Job) Execute() error {
 
 	j.ResultData = buf.Bytes()
 	return nil
+}
+
+func (j *Job) teardown() error {
+	defer func() {
+		j.dir = ""
+	}()
+
+	if err := os.Chdir(j.wd); err != nil {
+		return err
+	}
+
+	return os.RemoveAll(j.dir)
 }
 
 func writefile(fname string, buf *tar.Writer) error {
@@ -140,16 +166,4 @@ func writefile(fname string, buf *tar.Writer) error {
 		return err
 	}
 	return nil
-}
-
-func (j *Job) teardown() error {
-	defer func() {
-		j.dir = ""
-	}()
-
-	if err := os.Chdir(j.wd); err != nil {
-		return err
-	}
-
-	return os.RemoveAll(j.dir)
 }
