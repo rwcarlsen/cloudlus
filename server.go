@@ -20,6 +20,7 @@ type JobRequest struct {
 type WorkRequest chan *Job
 
 type Server struct {
+	Host         string
 	submitjobs   chan *Job
 	retrievejobs chan JobRequest
 	pushjobs     chan *Job

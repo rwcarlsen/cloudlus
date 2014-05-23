@@ -15,16 +15,16 @@ var dashtmplstr = `
 
     {{ range $job := .}}
     <tr class="status-{{$job.Status}}">
-        <td><a href="/dashboard/infile/{{$job.Id}}">{{$job.Id}}</a></td>
+        <td><a href="{{$job.Host}}/dashboard/infile/{{$job.Id}}">{{$job.Id}}</a></td>
 
         {{if eq $job.Status "complete"}}
-        <td><a href="/dashboard/output/{{$job.Id}}">{{$job.Status}}</a></td>
+        <td><a href="{{$job.Host}}/dashboard/output/{{$job.Id}}">{{$job.Status}}</a></td>
         {{else}}
         <td>{{$job.Status}}</td>
         {{end}}
 
         {{if eq $job.Status "complete"}}
-        <td><a href="/job/retrieve/{{$job.Id}}">Results</a></td>
+        <td><a href="{{$job.Host}}/job/retrieve/{{$job.Id}}">Results</a></td>
         {{else}}
         <td></td>
         {{end}}
@@ -38,6 +38,7 @@ type JobData struct {
 	Id        string
 	Status    string
 	Submitted time.Time
+	Host      string
 }
 
 type JobList []JobData
@@ -53,11 +54,19 @@ func (s *Server) dashboard(w http.ResponseWriter, r *http.Request) {
 	jds := make(JobList, 0)
 	for _, item := range s.alljobs.Items() {
 		j := item.Value.(*Job)
-		jd := JobData{Id: fmt.Sprintf("%x", j.Id), Status: j.Status, Submitted: j.Submitted}
+		jd := JobData{
+			Id:        fmt.Sprintf("%x", j.Id),
+			Status:    j.Status,
+			Submitted: j.Submitted,
+			Host:      s.Host,
+		}
 		jds = append(jds, jd)
 	}
 
 	sort.Sort(ByTime{jds})
+
+	// allow cross-domain ajax requests for the dashboard content
+	w.Header().Add("Access-Control-Allow-Origin", "*")
 	if err := tmpl.Execute(w, jds); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		log.Print(err)

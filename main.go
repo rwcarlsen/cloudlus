@@ -63,8 +63,10 @@ func main() {
 
 func serve(cmd string, args []string) {
 	fs := newFlagSet(cmd, "", "run a work dispatch server listening for jobs and workers")
+	host := fs.String("host", "", "server host base url")
 	fs.Parse(args)
 	s := NewServer()
+	s.Host = fulladdr(*host)
 	err := s.ListenAndServe(*addr)
 	fatalif(err)
 }
