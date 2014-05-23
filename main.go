@@ -24,44 +24,30 @@ func main() {
 		err := s.ListenAndServe(*addr)
 		fatalif(err)
 	case "worker":
-		if !strings.HasPrefix(*addr, "http://") {
-			*addr = "http://" + *addr
-		}
-		w := &Worker{ServerAddr: *addr}
+		w := &Worker{ServerAddr: fulladdr(*addr)}
 		w.Run()
 	case "submit":
-		var err error
-		var data []byte
-		if len(flag.Args()) > 0 {
-			data, err = ioutil.ReadFile(flag.Arg(1))
-			fatalif(err)
-		} else {
-			data, err = ioutil.ReadAll(os.Stdin)
-			fatalif(err)
-		}
-
-		if !strings.HasPrefix(*addr, "http://") {
-			*addr = "http://" + *addr
-		}
-		resp, err := http.Post(*addr+"/job/submit", "application/json", bytes.NewBuffer(data))
+		data := stdinOrFile()
+		resp, err := http.Post(fulladdr(*addr)+"/job/submit", "application/json", bytes.NewBuffer(data))
+		fatalif(err)
+		data, err = ioutil.ReadAll(resp.Body)
+		fatalif(err)
+		fmt.Printf("job submitted (id=%s)\n", data)
+	case "submit-infile":
+		data := stdinOrFile()
+		resp, err := http.Post(fulladdr(*addr)+"/job/submit-infile", "application/json", bytes.NewBuffer(data))
 		fatalif(err)
 		data, err = ioutil.ReadAll(resp.Body)
 		fatalif(err)
 		fmt.Printf("job submitted (id=%s)\n", data)
 	case "retrieve":
-		if !strings.HasPrefix(*addr, "http://") {
-			*addr = "http://" + *addr
-		}
-		resp, err := http.Get(*addr + "/job/retrieve/" + flag.Arg(1))
+		resp, err := http.Get(fulladdr(*addr) + "/job/retrieve/" + flag.Arg(1))
 		fatalif(err)
 		data, err := ioutil.ReadAll(resp.Body)
 		fatalif(err)
 		fmt.Println(string(data))
 	case "status":
-		if !strings.HasPrefix(*addr, "http://") {
-			*addr = "http://" + *addr
-		}
-		resp, err := http.Get(*addr + "/job/status/" + flag.Arg(1))
+		resp, err := http.Get(fulladdr(*addr) + "/job/status/" + flag.Arg(1))
 		fatalif(err)
 		data, err := ioutil.ReadAll(resp.Body)
 		fatalif(err)
@@ -102,4 +88,22 @@ func fatalif(err error) {
 	if err != nil {
 		log.Fatal(err)
 	}
+}
+
+func fulladdr(addr string) string {
+	if !strings.HasPrefix(addr, "http://") {
+		return "http://" + addr
+	}
+	return addr
+}
+
+func stdinOrFile() []byte {
+	if len(flag.Args()) > 0 {
+		data, err := ioutil.ReadFile(flag.Arg(1))
+		fatalif(err)
+		return data
+	}
+	data, err := ioutil.ReadAll(os.Stdin)
+	fatalif(err)
+	return data
 }
