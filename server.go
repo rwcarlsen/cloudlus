@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/rwcarlsen/gocache"
 )
@@ -43,6 +44,7 @@ func NewServer() *Server {
 }
 
 func (s *Server) ListenAndServe(addr string) error {
+	http.HandleFunc("/", s.dashmain)
 	http.HandleFunc("/job/submit", s.submit)
 	http.HandleFunc("/job/submit-infile", s.submitInfile)
 	http.HandleFunc("/job/retrieve/", s.retrieve)
@@ -50,13 +52,12 @@ func (s *Server) ListenAndServe(addr string) error {
 	http.HandleFunc("/work/fetch", s.fetch)
 	http.HandleFunc("/work/push", s.push)
 	http.HandleFunc("/dashboard", s.dashboard)
+	http.HandleFunc("/dashboard/infile/", s.dashboardInfile)
+	http.HandleFunc("/dashboard/output/", s.dashboardOutput)
 
 	go s.dispatcher()
 
 	return http.ListenAndServe(addr, nil)
-}
-
-func (s *Server) dashboard(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) dispatcher() {
@@ -64,6 +65,7 @@ func (s *Server) dispatcher() {
 		select {
 		case j := <-s.submitjobs:
 			j.Status = StatusQueued
+			j.Submitted = time.Now()
 			s.queue = append(s.queue, j)
 			s.alljobs.Set(j.Id, j)
 		case req := <-s.retrievejobs:
@@ -128,23 +130,19 @@ func (s *Server) submitInfile(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) retrieve(w http.ResponseWriter, r *http.Request) {
 	idstr := r.URL.Path[len("/job/retrieve/"):]
-	id, err := convid(idstr)
+	j, err := s.getjob(idstr)
 	if err != nil {
-		http.Error(w, "malformed job id "+idstr, http.StatusBadRequest)
-		log.Print("malformed job id status request: ", idstr)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		log.Print(err)
+		return
+	} else if j.Status != StatusComplete {
+		msg := fmt.Sprintf("job %v status: %v", idstr, j.Status)
+		http.Error(w, msg, http.StatusBadRequest)
+		log.Print(msg)
 		return
 	}
 
-	ch := make(chan *Job)
-	s.retrievejobs <- JobRequest{Id: id, Resp: ch}
-	j := <-ch
-	if j == nil {
-		http.Error(w, "unknown job id "+idstr, http.StatusBadRequest)
-		log.Print("unknown job id status request: ", idstr)
-		return
-	}
-
-	w.Header().Add("Content-Disposition", fmt.Sprintf("filename=\"result-id-%v.tar\"", id))
+	w.Header().Add("Content-Disposition", fmt.Sprintf("filename=\"results-id-%x.tar\"", j.Id))
 	_, err = w.Write(j.ResultData)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -153,21 +151,27 @@ func (s *Server) retrieve(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *Server) status(w http.ResponseWriter, r *http.Request) {
-	idstr := r.URL.Path[len("/job/status/"):]
+func (s *Server) getjob(idstr string) (*Job, error) {
 	id, err := convid(idstr)
 	if err != nil {
-		http.Error(w, "malformed job id "+idstr, http.StatusBadRequest)
-		log.Print("malformed job id status request: ", idstr)
-		return
+		return nil, fmt.Errorf("malformed job id %v", idstr)
 	}
 
 	ch := make(chan *Job)
 	s.statjobs <- JobRequest{Id: id, Resp: ch}
 	j := <-ch
 	if j == nil {
-		http.Error(w, "unknown job id "+idstr, http.StatusBadRequest)
-		log.Print("unknown job id status request: ", idstr)
+		return nil, fmt.Errorf("unknown job id %v", idstr)
+	}
+	return j, nil
+}
+
+func (s *Server) status(w http.ResponseWriter, r *http.Request) {
+	idstr := r.URL.Path[len("/job/status/"):]
+	j, err := s.getjob(idstr)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		log.Print(err)
 		return
 	}
 

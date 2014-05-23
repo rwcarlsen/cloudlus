@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"time"
 
 	"code.google.com/p/go-uuid/uuid"
 )
@@ -18,8 +19,11 @@ const (
 	StatusFailed   = "failed"
 )
 
+const DefaultInfile = "input.xml"
+
 type Job struct {
 	Id         [16]byte
+	Submitted  time.Time
 	Cmds       [][]string
 	Resources  map[string][]byte
 	Results    []string
@@ -45,9 +49,9 @@ func NewJob() *Job {
 
 func NewJobDefault(data []byte) *Job {
 	j := NewJob()
-	j.Cmds = append(j.Cmds, []string{"cyclus", "input.xml"})
+	j.Cmds = append(j.Cmds, []string{"cyclus", DefaultInfile})
 	j.Results = []string{"cyclus.sqlite"}
-	j.Resources["input.xml"] = data
+	j.Resources[DefaultInfile] = data
 	return j
 }
 
