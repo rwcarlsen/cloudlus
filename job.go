@@ -18,6 +18,7 @@ type Job struct {
 	Results    []string
 	ResultData []byte
 	Status     string
+	Output     string
 	dir        string
 	wd         string
 }
@@ -89,15 +90,17 @@ func (j *Job) Execute() error {
 	}
 	defer j.teardown()
 
+	var out bytes.Buffer
 	for _, args := range j.Cmds {
 		cmd := exec.Command(args[0], args[1:]...)
-		cmd.Stderr = os.Stderr
-		cmd.Stdout = os.Stdout
+		cmd.Stderr = &out
+		cmd.Stdout = &out
 		if err := cmd.Run(); err != nil {
 			j.Status = StatusFailed
 			return err
 		}
 	}
+	j.Output = out.String()
 
 	var buf bytes.Buffer
 	tarbuf := tar.NewWriter(&buf)

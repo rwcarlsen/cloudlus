@@ -11,11 +11,15 @@ import (
 
 type Worker struct {
 	ServerAddr string
+	Wait       time.Duration
 }
 
 func (w *Worker) Run() {
+	if w.Wait == 0 {
+		w.Wait = 10 * time.Second
+	}
 	for {
-		<-time.After(10 * time.Second)
+		<-time.After(w.Wait)
 
 		resp, err := http.Get(w.ServerAddr + "/work/fetch")
 		if err != nil {

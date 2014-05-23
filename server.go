@@ -56,10 +56,14 @@ func (s *Server) ListenAndServe(addr string) error {
 	http.HandleFunc("/job/status/", s.status)
 	http.HandleFunc("/work/fetch", s.fetch)
 	http.HandleFunc("/work/push", s.push)
+	http.HandleFunc("/dashboard", s.dashboard)
 
 	go s.dispatcher()
 
 	return http.ListenAndServe(addr, nil)
+}
+
+func (s *Server) dashboard(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) dispatcher() {
