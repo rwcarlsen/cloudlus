@@ -37,7 +37,7 @@ func newFlagSet(cmd, args, desc string) *flag.FlagSet {
 }
 
 func main() {
-	log.SetFlags(log.Lshortfile)
+	log.SetFlags(0)
 	flag.Usage = func() {
 		log.Printf("Usage: cloudlus [OPTION] <subcommand> [OPTION] [args]\n")
 		flag.PrintDefaults()
