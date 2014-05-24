@@ -132,3 +132,109 @@ func (s *Server) dashboardOutput(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 }
+
+func (s *Server) dashboardDefaultInfile(w http.ResponseWriter, r *http.Request) {
+	// allow cross-domain ajax requests for the dashboard content
+	w.Header().Add("Access-Control-Allow-Origin", "*")
+	w.Header().Add("Content-Type", "text/plain")
+	_, err := w.Write([]byte(defaultInfile))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Print(err)
+		return
+	}
+}
+
+const defaultInfile = `
+<?xml version="1.0"?>
+<!-- 1 Source, 1 Sink -->
+
+<simulation>
+  <control>
+    <duration>100</duration>
+    <startmonth>1</startmonth>
+    <startyear>2000</startyear>
+    <decay>0</decay>
+  </control>
+
+  <commodity>
+    <name>commodity</name>
+  </commodity>
+
+  <facility>
+    <name>Source</name>
+    <module>
+      <lib>agents</lib>
+      <agent>Source</agent>
+    </module>
+    <agent>
+      <Source>
+        <commod>commodity</commod>
+        <recipe_name>commod_recipe</recipe_name>
+        <capacity>1.00</capacity>
+      </Source>
+    </agent>
+  </facility>
+
+  <facility>
+    <name>Sink</name>
+    <module>
+      <lib>agents</lib>
+      <agent>Sink</agent>
+    </module>
+    <agent>
+      <Sink>
+        <in_commods>
+          <val>commodity</val>
+        </in_commods>
+        <capacity>1.00</capacity>
+      </Sink>
+    </agent>
+  </facility>
+
+  <region>
+    <name>SingleRegion</name>
+    <module>
+      <lib>agents</lib>
+      <agent>NullRegion</agent>
+    </module>
+    <allowedfacility>Source</allowedfacility>
+    <allowedfacility>Sink</allowedfacility>
+    <agent>
+      <NullRegion/>
+    </agent>
+    <institution>
+      <name>SingleInstitution</name>
+      <module>
+        <lib>agents</lib>
+        <agent>NullInst</agent>
+      </module>
+      <availableprototype>Source</availableprototype>
+      <availableprototype>Sink</availableprototype>
+      <initialfacilitylist>
+        <entry>
+          <prototype>Source</prototype>
+          <number>1</number>
+        </entry>
+        <entry>
+          <prototype>Sink</prototype>
+          <number>1</number>
+        </entry>
+      </initialfacilitylist>
+      <agent>
+        <NullInst/>
+      </agent>
+    </institution>
+  </region>
+
+  <recipe>
+    <name>commod_recipe</name>
+    <basis>mass</basis>
+    <nuclide>
+      <id>010010000</id>
+      <comp>1</comp>
+    </nuclide>
+  </recipe>
+
+</simulation>
+`

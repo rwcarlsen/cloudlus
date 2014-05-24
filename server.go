@@ -55,6 +55,7 @@ func (s *Server) ListenAndServe(addr string) error {
 	http.HandleFunc("/dashboard", s.dashboard)
 	http.HandleFunc("/dashboard/infile/", s.dashboardInfile)
 	http.HandleFunc("/dashboard/output/", s.dashboardOutput)
+	http.HandleFunc("/dashboard/default-infile", s.dashboardDefaultInfile)
 
 	go s.dispatcher()
 
