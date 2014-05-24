@@ -32,8 +32,8 @@ RUN git clone https://github.com/cyclus/cycamore
 RUN cd cycamore && mkdir build && cd build && cmake .. && make && make install
 
 # install other modules
-RUN git clone https://github.com/cyclus/kitlus && cd kitlus/kitlus && PREFIX=/usr/local make install
-RUN git clone https://github.com/rwcarlsen/transoptim && cd transoptim/agents && PREFIX=/usr/local make install
+#RUN git clone https://github.com/cyclus/kitlus && cd kitlus/kitlus && PREFIX=/usr/local make install
+#RUN git clone https://github.com/rwcarlsen/transoptim && cd transoptim/agents && PREFIX=/usr/local make install
 
 ENV GOPATH /
 RUN go get github.com/rwcarlsen/cloudlus
