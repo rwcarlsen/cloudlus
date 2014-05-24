@@ -35,6 +35,7 @@ var dashtmplstr = `
 </table>
 `
 var tmpl = template.Must(template.New("dashtable").Parse(dashtmplstr))
+var hometmpl = template.Must(template.New("home").Parse(home))
 
 type JobData struct {
 	Id        string
@@ -76,25 +77,11 @@ func (s *Server) dashboard(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) dashmain(w http.ResponseWriter, r *http.Request) {
-
-	home := `
-<!DOCTYPE html>
-<html class="no-js" lang="en-US">
-<head>
-    <title> Cyclus Run Dashboard </title>
-    <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.11.1/jquery.min.js"></script>
-</head>
-<body lang="en">
-
-<div id="dashboard"></div>
-
-<script>
-	$('#dashboard').load("/dashboard");
-</script>
-</body>
-</html>
-`
-	w.Write([]byte(home))
+	err := hometmpl.Execute(w, s.Host)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		log.Print(err)
+	}
 }
 
 func (s *Server) dashboardInfile(w http.ResponseWriter, r *http.Request) {
@@ -236,4 +223,104 @@ const defaultInfile = `<?xml version="1.0"?>
   </recipe>
 
 </simulation>
+`
+
+const home = `
+<!DOCTYPE html>
+<html class="no-js" lang="en-US">
+<head>
+    <title> Cyclus Run Dashboard </title>
+    <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.11.1/jquery.min.js"></script>
+	<style>
+		#dashboard table {
+			width:80%;
+			border-color:#a9a9a9;
+			color:#333333;
+			border-collapse:collapse;
+			margin:auto;
+			border-width:1px;
+			text-align:center;
+		}
+		#dashboard th {
+			padding:4px;
+			border-style:solid;
+			border-color:#a9a9a9;
+			border-width:1px;
+			background-color:#b8b8b8;
+			text-align:left;
+		}
+		#dashboard tr {
+			background-color:#ffffff;
+			text-align:center;
+		}
+		#dashboard td {
+			padding:4px;
+			border-color:#a9a9a9;
+			border-style:solid;
+			border-width:1px;
+			text-align:center;
+		}
+		#dashboard tr.status-complete {
+			background-color:#E0FFC2;
+		}
+		#dashboard tr.status-queued {
+			background-color:#FFFFCC;
+		}
+		#dashboard tr.status-running {
+			background-color:#D1F0FF;
+		}
+		#dashboard tr.status-failed {
+			background-color:#F0C2B2;
+		}
+
+		#infile-form {
+			width:80%;
+			margin:auto;
+		}
+		#infile-form textarea {
+			width: 100%;
+		}
+	</style>
+
+</head>
+<body lang="en">
+
+    <br>
+    <div id="infile-form">
+    Cyclus input file: <br>
+    <textarea id="infile-box" name="infile" rows=20></textarea>
+    <br><button onclick="submitJob()">Submit</button><label>    Job Id: </label><label id="jobid"></label>
+    </div>
+
+    <br>
+    <div id="dashboard"></div>
+    <br>
+
+    <script> 
+        var server = "{{.}}"
+
+        function submitJob() {
+            var text = $('#infile-box').val();
+            $.post(server + "/job/submit-infile", text, function(data) {
+                $('#jobid').text(data);
+                $('#dashboard').load(server + "/dashboard");
+            })
+        }
+        function loadDash() {
+            $('#dashboard').load(server + "/dashboard", function() {
+                setTimeout("loadDash()", 30000)
+            });
+        }
+        function loadDefaultInfile() {
+            $.get(server + "/dashboard/default-infile", function( data ) {
+                $('#infile-box').text(data);
+            })
+        }
+
+        loadDefaultInfile();
+        loadDash();
+    </script>
+
+</body>
+</html>
 `
