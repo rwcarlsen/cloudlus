@@ -50,7 +50,7 @@ func (s JobList) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
 
 type ByTime struct{ JobList }
 
-func (s ByTime) Less(i, j int) bool { return s.JobList[i].Submitted.Before(s.JobList[j].Submitted) }
+func (s ByTime) Less(i, j int) bool { return s.JobList[i].Submitted.After(s.JobList[j].Submitted) }
 
 func (s *Server) dashboard(w http.ResponseWriter, r *http.Request) {
 	jds := make(JobList, 0)
@@ -145,8 +145,7 @@ func (s *Server) dashboardDefaultInfile(w http.ResponseWriter, r *http.Request) 
 	}
 }
 
-const defaultInfile = `
-<?xml version="1.0"?>
+const defaultInfile = `<?xml version="1.0"?>
 <!-- 1 Source, 1 Sink -->
 
 <simulation>
