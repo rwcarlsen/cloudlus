@@ -77,6 +77,7 @@ func (s *Server) dashboard(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) dashmain(w http.ResponseWriter, r *http.Request) {
+	w.Header().Add("Access-Control-Allow-Origin", "*")
 	err := hometmpl.Execute(w, s.Host)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)

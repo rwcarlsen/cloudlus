@@ -192,7 +192,7 @@ func fatalif(err error) {
 }
 
 func fulladdr(addr string) string {
-	if !strings.HasPrefix(addr, "http://") {
+	if !strings.HasPrefix(addr, "http://") && addr != "" {
 		return "http://" + addr
 	}
 	return addr
