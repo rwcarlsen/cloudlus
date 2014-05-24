@@ -1,9 +1,10 @@
 
 FROM base/arch
 
-RUN pacman -Syu --noconfirm base-devel
+RUN pacman -Syu --noconfirm
 
 # developer packages
+RUN pacman -S --noconfirm base-devel
 RUN pacman -S --noconfirm cmake
 RUN pacman -S --noconfirm git
 RUN pacman -S --noconfirm mercurial
