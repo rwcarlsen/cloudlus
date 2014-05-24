@@ -19,7 +19,9 @@ var dashtmplstr = `
 
         {{if eq $job.Status "complete"}}
         <td><a href="{{$job.Host}}/dashboard/output/{{$job.Id}}">{{$job.Status}}</a></td>
-        {{else}}
+        {{else if eq $job.Status "failed"}}
+        <td><a href="{{$job.Host}}/dashboard/output/{{$job.Id}}">{{$job.Status}}</a></td>
+		{{else}}
         <td>{{$job.Status}}</td>
         {{end}}
 

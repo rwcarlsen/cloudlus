@@ -111,6 +111,9 @@ func (s *Server) submit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.submitjobs <- j
+
+	// allow cross-domain ajax requests for job submission
+	w.Header().Add("Access-Control-Allow-Origin", "*")
 	fmt.Fprintf(w, "%x", j.Id)
 }
 
@@ -126,6 +129,9 @@ func (s *Server) submitInfile(w http.ResponseWriter, r *http.Request) {
 
 	j := NewJobDefault(data)
 	s.submitjobs <- j
+
+	// allow cross-domain ajax requests for job submission
+	w.Header().Add("Access-Control-Allow-Origin", "*")
 	fmt.Fprintf(w, "%x", j.Id)
 }
 
