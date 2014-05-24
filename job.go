@@ -114,6 +114,7 @@ func (j *Job) Execute() error {
 		cmd.Stdout = multiout
 		if err := cmd.Run(); err != nil {
 			j.Status = StatusFailed
+			j.Output = out.String()
 			return err
 		}
 	}
