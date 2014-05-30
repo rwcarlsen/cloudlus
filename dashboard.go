@@ -133,10 +133,7 @@ func (s *Server) dashboardDefaultInfile(w http.ResponseWriter, r *http.Request) 
 	}
 }
 
-const defaultInfile = `
-<!-- 1 Source, 1 Sink -->
-
-<simulation>
+const defaultInfile = `<simulation>
   <control>
     <duration>100</duration>
     <startmonth>1</startmonth>
