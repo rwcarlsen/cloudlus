@@ -52,6 +52,7 @@ func (s *Server) ListenAndServe(addr string) error {
 	http.HandleFunc("/job/status/", s.status)
 	http.HandleFunc("/work/fetch", s.fetch)
 	http.HandleFunc("/work/push", s.push)
+	http.HandleFunc("/dashboard", s.dashboard)
 	http.HandleFunc("/dashboard/", s.dashboard)
 	http.HandleFunc("/dashboard/infile/", s.dashboardInfile)
 	http.HandleFunc("/dashboard/output/", s.dashboardOutput)
