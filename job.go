@@ -3,8 +3,10 @@ package main
 import (
 	"archive/tar"
 	"bytes"
+	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
 	"os"
 	"os/exec"
 	"time"
@@ -129,7 +131,9 @@ func (j *Job) Execute(dur time.Duration) {
 		case <-timeout:
 			cmd.Process.Kill()
 			j.Status = StatusFailed
-			j.Output += "\n" + "job was force-killed early"
+			msg := fmt.Sprintf("Job timed out after %v", dur)
+			j.Output += "\n" + msg
+			log.Print(msg)
 			return
 		case <-done:
 		}
