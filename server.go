@@ -40,7 +40,7 @@ func NewServer() *Server {
 		statjobs:     make(chan JobRequest),
 		pushjobs:     make(chan *Job),
 		fetchjobs:    make(chan WorkRequest),
-		alljobs:      cache.NewLRUCache(250 * MB),
+		alljobs:      cache.NewLRUCache(500 * MB),
 	}
 }
 
@@ -52,7 +52,7 @@ func (s *Server) ListenAndServe(addr string) error {
 	http.HandleFunc("/job/status/", s.status)
 	http.HandleFunc("/work/fetch", s.fetch)
 	http.HandleFunc("/work/push", s.push)
-	http.HandleFunc("/dashboard", s.dashboard)
+	http.HandleFunc("/dashboard/", s.dashboard)
 	http.HandleFunc("/dashboard/infile/", s.dashboardInfile)
 	http.HandleFunc("/dashboard/output/", s.dashboardOutput)
 	http.HandleFunc("/dashboard/default-infile", s.dashboardDefaultInfile)

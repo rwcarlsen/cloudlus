@@ -48,10 +48,7 @@ func (w *Worker) Run() {
 			continue
 		}
 
-		if err := j.Execute(); err != nil {
-			j.Status = StatusFailed
-			log.Print(err)
-		}
+		j.Execute(600 * time.Second)
 
 		data, err = json.Marshal(j)
 		if err != nil {

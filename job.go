@@ -98,12 +98,14 @@ func (j *Job) setup() error {
 	return nil
 }
 
-func (j *Job) Execute() error {
+func (j *Job) Execute(dur time.Duration) {
 	if err := j.setup(); err != nil {
 		j.Status = StatusFailed
-		return err
+		return
 	}
 	defer j.teardown()
+
+	timeout := time.After(dur)
 
 	var out bytes.Buffer
 	multiout := io.MultiWriter(os.Stdout, &out)
@@ -112,10 +114,24 @@ func (j *Job) Execute() error {
 		cmd := exec.Command(args[0], args[1:]...)
 		cmd.Stderr = multierr
 		cmd.Stdout = multiout
-		if err := cmd.Run(); err != nil {
+
+		done := make(chan bool)
+		go func() {
+			if err := cmd.Run(); err != nil {
+				j.Status = StatusFailed
+				j.Output += "\n" + out.String()
+			}
+			done <- true
+			close(done)
+		}()
+
+		select {
+		case <-timeout:
+			cmd.Process.Kill()
 			j.Status = StatusFailed
-			j.Output = out.String()
-			return err
+			j.Output += "\n" + "job was force-killed early"
+			return
+		case <-done:
 		}
 	}
 	j.Output = out.String()
@@ -126,12 +142,11 @@ func (j *Job) Execute() error {
 	for _, name := range j.Results {
 		if err := writefile(name, tarbuf); err != nil {
 			j.Status = StatusFailed
-			return err
+			return
 		}
 	}
 
 	j.ResultData = buf.Bytes()
-	return nil
 }
 
 func (j *Job) teardown() error {

@@ -25,11 +25,13 @@ RUN pacman -S --noconfirm python2-pytables
 RUN ln -s /usr/bin/python2 /usr/local/bin/python
 
 # install cyclus and cycamore
-RUN git clone https://github.com/cyclus/cyclus
-RUN cd cyclus && mkdir build && cd build && cmake .. && make && make install
+RUN wget https://github.com/cyclus/cyclus/archive/1.0.0-rc4.tar.gz -O cyclus-1.0.0-rc4.tar.gz
+RUN tar -xzf cyclus-1.0.0-rc4.tar.gz
+RUN cd cyclus-1.0.0-rc4 && mkdir release && cd release && cmake .. -DCMAKE_BUILD_TYPE=Release && make && make install
 
-RUN git clone https://github.com/cyclus/cycamore
-RUN cd cycamore && mkdir build && cd build && cmake .. && make && make install
+RUN wget https://github.com/cyclus/cycamore/archive/1.0.0-rc4.tar.gz -O cycamore-1.0.0-rc4.tar.gz
+RUN tar -xzf cycamore-1.0.0-rc4.tar.gz
+RUN cd cycamore-1.0.0-rc4 && mkdir release && cd release && cmake .. -DCMAKE_BUILD_TYPE=Release && make && make install
 
 # install other modules
 #RUN git clone https://github.com/cyclus/kitlus && cd kitlus/kitlus && PREFIX=/usr/local make install
