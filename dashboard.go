@@ -133,7 +133,7 @@ func (s *Server) dashboardDefaultInfile(w http.ResponseWriter, r *http.Request) 
 	}
 }
 
-const defaultInfile = `<?xml version="1.0"?>
+const defaultInfile = `
 <!-- 1 Source, 1 Sink -->
 
 <simulation>
@@ -141,63 +141,43 @@ const defaultInfile = `<?xml version="1.0"?>
     <duration>100</duration>
     <startmonth>1</startmonth>
     <startyear>2000</startyear>
-    <decay>0</decay>
   </control>
 
-  <commodity>
-    <name>commodity</name>
-  </commodity>
+  <archetypes>
+    <spec> <lib>agents</lib><name>Source</name> </spec>
+    <spec> <lib>agents</lib><name>Sink</name> </spec>
+    <spec> <lib>agents</lib><name>NullRegion</name> </spec>
+    <spec> <lib>agents</lib><name>NullInst</name> </spec>
+  </archetypes>
 
   <facility>
     <name>Source</name>
-    <module>
-      <lib>agents</lib>
-      <agent>Source</agent>
-    </module>
-    <agent>
+    <config>
       <Source>
         <commod>commodity</commod>
         <recipe_name>commod_recipe</recipe_name>
         <capacity>1.00</capacity>
       </Source>
-    </agent>
+    </config>
   </facility>
 
   <facility>
     <name>Sink</name>
-    <module>
-      <lib>agents</lib>
-      <agent>Sink</agent>
-    </module>
-    <agent>
+    <config>
       <Sink>
         <in_commods>
           <val>commodity</val>
         </in_commods>
         <capacity>1.00</capacity>
       </Sink>
-    </agent>
+    </config>
   </facility>
 
   <region>
     <name>SingleRegion</name>
-    <module>
-      <lib>agents</lib>
-      <agent>NullRegion</agent>
-    </module>
-    <allowedfacility>Source</allowedfacility>
-    <allowedfacility>Sink</allowedfacility>
-    <agent>
-      <NullRegion/>
-    </agent>
+    <config> <NullRegion/> </config>
     <institution>
       <name>SingleInstitution</name>
-      <module>
-        <lib>agents</lib>
-        <agent>NullInst</agent>
-      </module>
-      <availableprototype>Source</availableprototype>
-      <availableprototype>Sink</availableprototype>
       <initialfacilitylist>
         <entry>
           <prototype>Source</prototype>
@@ -208,19 +188,14 @@ const defaultInfile = `<?xml version="1.0"?>
           <number>1</number>
         </entry>
       </initialfacilitylist>
-      <agent>
-        <NullInst/>
-      </agent>
+      <config> <NullInst/> </config>
     </institution>
   </region>
 
   <recipe>
     <name>commod_recipe</name>
     <basis>mass</basis>
-    <nuclide>
-      <id>010010000</id>
-      <comp>1</comp>
-    </nuclide>
+    <nuclide> <id>010010000</id> <comp>1</comp> </nuclide>
   </recipe>
 
 </simulation>

@@ -11,6 +11,7 @@ RUN pacman -S --noconfirm mercurial
 RUN pacman -S --noconfirm abs
 RUN pacman -S --noconfirm gcc-fortran
 RUN pacman -S --noconfirm go
+RUN pacman -S --noconfirm wget
 
 # cyclus dependencies
 RUN git clone https://github.com/rwcarlsen/arch-abs
