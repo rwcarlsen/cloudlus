@@ -112,6 +112,8 @@ func (j *Job) Execute(dur time.Duration) {
 	var out bytes.Buffer
 	multiout := io.MultiWriter(os.Stdout, &out)
 	multierr := io.MultiWriter(os.Stderr, &out)
+	defer func() { j.Output += out.String() }()
+
 	for _, args := range j.Cmds {
 		cmd := exec.Command(args[0], args[1:]...)
 		cmd.Stderr = multierr
@@ -121,7 +123,8 @@ func (j *Job) Execute(dur time.Duration) {
 		go func() {
 			if err := cmd.Run(); err != nil {
 				j.Status = StatusFailed
-				j.Output += "\n" + out.String()
+			} else {
+				j.Status = StatusComplete
 			}
 			done <- true
 			close(done)
@@ -132,14 +135,13 @@ func (j *Job) Execute(dur time.Duration) {
 			cmd.Process.Kill()
 			j.Status = StatusFailed
 			msg := fmt.Sprintf("Job timed out after %v", dur)
-			j.Output += "\n" + msg
+			out.WriteString("\n" + msg)
 			log.Print(msg)
+			<-done
 			return
 		case <-done:
 		}
 	}
-	j.Output = out.String()
-	j.Status = StatusComplete
 
 	var buf bytes.Buffer
 	tarbuf := tar.NewWriter(&buf)
