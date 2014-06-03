@@ -126,7 +126,6 @@ func (j *Job) Execute(dur time.Duration) {
 			} else {
 				j.Status = StatusComplete
 			}
-			done <- true
 			close(done)
 		}()
 
