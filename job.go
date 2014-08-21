@@ -9,6 +9,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"strings"
 	"time"
 
 	"code.google.com/p/go-uuid/uuid"
@@ -22,6 +23,8 @@ const (
 )
 
 const DefaultInfile = "input.xml"
+
+var cycbin = "cyclus"
 
 type Job struct {
 	Id         [16]byte
@@ -103,6 +106,7 @@ func (j *Job) setup() error {
 func (j *Job) Execute(dur time.Duration) {
 	if err := j.setup(); err != nil {
 		j.Status = StatusFailed
+		log.Print(err)
 		return
 	}
 	defer j.teardown()
@@ -115,7 +119,15 @@ func (j *Job) Execute(dur time.Duration) {
 	defer func() { j.Output += out.String() }()
 
 	for _, args := range j.Cmds {
-		cmd := exec.Command(args[0], args[1:]...)
+		var cmd *exec.Cmd
+		if args[0] == "cyclus" || strings.HasSuffix(args[0], "/cyclus") {
+			binargs := strings.Split(cycbin, " ")
+			cmd = exec.Command(binargs[0], append(binargs[1:], args[1:]...)...)
+		} else {
+			cmd = exec.Command(args[0], args[1:]...)
+		}
+		fmt.Println(cmd.Path, cmd.Args)
+
 		cmd.Stderr = multierr
 		cmd.Stdout = multiout
 
@@ -123,6 +135,7 @@ func (j *Job) Execute(dur time.Duration) {
 		go func() {
 			if err := cmd.Run(); err != nil {
 				j.Status = StatusFailed
+				log.Print(err)
 			} else {
 				j.Status = StatusComplete
 			}
@@ -147,6 +160,7 @@ func (j *Job) Execute(dur time.Duration) {
 	for _, name := range j.Results {
 		if err := writefile(name, tarbuf); err != nil {
 			j.Status = StatusFailed
+			log.Print(err)
 			return
 		}
 	}
@@ -160,10 +174,15 @@ func (j *Job) teardown() error {
 	}()
 
 	if err := os.Chdir(j.wd); err != nil {
+		log.Print(err)
 		return err
 	}
 
-	return os.RemoveAll(j.dir)
+	if err := os.RemoveAll(j.dir); err != nil {
+		log.Print(err)
+		return err
+	}
+	return nil
 }
 
 func writefile(fname string, buf *tar.Writer) error {

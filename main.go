@@ -74,6 +74,7 @@ func serve(cmd string, args []string) {
 func work(cmd string, args []string) {
 	fs := newFlagSet(cmd, "", "run a worker polling for jobs and workers")
 	wait := fs.Duration("interval", 10*time.Second, "time interval between work polls when idle")
+	fs.StringVar(&cycbin, "cycbin", "cyclus", "command to run cyclus")
 	fs.Parse(args)
 	w := &Worker{ServerAddr: fulladdr(*addr), Wait: *wait}
 	w.Run()
