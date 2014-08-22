@@ -1,4 +1,4 @@
-package main
+package cloudlus
 
 import (
 	"bytes"
@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
 	"time"
 
 	"code.google.com/p/go-uuid/uuid"
@@ -17,7 +18,13 @@ type Worker struct {
 	Wait       time.Duration
 }
 
-func (w *Worker) Run() {
+func (w *Worker) Run() error {
+	wd, err := os.Getwd()
+	if err != nil {
+		return err
+	}
+	os.Setenv("PATH", os.Getenv("PATH")+":"+wd)
+
 	uid := uuid.NewRandom()
 	copy(w.Id[:], uid)
 

@@ -1,4 +1,4 @@
-package main
+package cloudlus
 
 import (
 	"fmt"

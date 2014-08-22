@@ -11,6 +11,8 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"github.com/rwcarlsen/cloudlus"
 )
 
 var addr = flag.String("addr", "127.0.0.1:4242", "network address of dispatch server")
@@ -65,7 +67,7 @@ func serve(cmd string, args []string) {
 	fs := newFlagSet(cmd, "", "run a work dispatch server listening for jobs and workers")
 	host := fs.String("host", "", "server host base url")
 	fs.Parse(args)
-	s := NewServer()
+	s := cloudlus.NewServer()
 	s.Host = fulladdr(*host)
 	err := s.ListenAndServe(*addr)
 	fatalif(err)
@@ -74,9 +76,9 @@ func serve(cmd string, args []string) {
 func work(cmd string, args []string) {
 	fs := newFlagSet(cmd, "", "run a worker polling for jobs and workers")
 	wait := fs.Duration("interval", 10*time.Second, "time interval between work polls when idle")
-	fs.StringVar(&cycbin, "cycbin", "cyclus", "command to run cyclus")
+	fs.StringVar(&cloudlus.Cycbin, "cycbin", "cyclus", "command to run cyclus")
 	fs.Parse(args)
-	w := &Worker{ServerAddr: fulladdr(*addr), Wait: *wait}
+	w := &cloudlus.Worker{ServerAddr: fulladdr(*addr), Wait: *wait}
 	w.Run()
 }
 
@@ -139,7 +141,7 @@ func stat(cmd string, args []string) {
 	data, err := ioutil.ReadAll(resp.Body)
 	fatalif(err)
 
-	j := &Job{}
+	j := &cloudlus.Job{}
 	if err := json.Unmarshal(data, &j); err != nil {
 		log.Fatalf("server has no job of id %v", fs.Arg(0))
 	}
@@ -158,7 +160,7 @@ func pack(cmd string, args []string) {
 
 	files, err := d.Readdir(-1)
 	fatalif(err)
-	j := NewJob()
+	j := cloudlus.NewJob()
 	for _, info := range files {
 		if info.IsDir() {
 			continue

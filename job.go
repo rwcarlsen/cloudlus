@@ -1,4 +1,4 @@
-package main
+package cloudlus
 
 import (
 	"archive/tar"
@@ -24,7 +24,7 @@ const (
 
 const DefaultInfile = "input.xml"
 
-var cycbin = "cyclus"
+var Cycbin = "cyclus"
 
 type Job struct {
 	Id         [16]byte
@@ -121,7 +121,7 @@ func (j *Job) Execute(dur time.Duration) {
 	for _, args := range j.Cmds {
 		var cmd *exec.Cmd
 		if args[0] == "cyclus" || strings.HasSuffix(args[0], "/cyclus") {
-			binargs := strings.Split(cycbin, " ")
+			binargs := strings.Split(Cycbin, " ")
 			cmd = exec.Command(binargs[0], append(binargs[1:], args[1:]...)...)
 		} else {
 			cmd = exec.Command(args[0], args[1:]...)
