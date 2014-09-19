@@ -27,16 +27,21 @@ const DefaultInfile = "input.xml"
 var Cycbin = "cyclus"
 
 type Job struct {
-	Id         [16]byte
-	Submitted  time.Time
-	Cmds       [][]string
-	Resources  map[string][]byte
-	Results    []string
-	ResultData []byte
-	Status     string
-	Output     string
-	dir        string
-	wd         string
+	Id        [16]byte
+	Submitted time.Time
+	Started   time.Time
+	Finished  time.Time
+	Cmds      [][]string
+	SrcNames  []string
+	DstNames  []string
+	InData    [][]byte
+	OutNames  []string
+	OutData   [][]byte
+	Status    string
+	Stdout    string
+	Stderr    string
+	dir       string
+	wd        string
 }
 
 func NewJob() *Job {
@@ -58,6 +63,14 @@ func NewJobDefault(data []byte) *Job {
 	j.Results = []string{"cyclus.sqlite"}
 	j.Resources[DefaultInfile] = data
 	return j
+}
+
+func (j *Job) Marshal() ([]byte, error) {
+}
+
+func (j *Job) AddFile(src, dst string) {
+	j.srcnames = append(j.srcnames, src)
+	j.dstnames = append(j.dstnames, dst)
 }
 
 func NewJobDefaultFile(fname string) (*Job, error) {

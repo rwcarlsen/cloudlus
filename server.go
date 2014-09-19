@@ -44,6 +44,11 @@ func NewServer() *Server {
 	}
 }
 
+func (s *Server) Submit(j *Job, unused *int) error {
+	s.submitjobs <- j
+	return nil
+}
+
 func (s *Server) ListenAndServe(addr string) error {
 	http.HandleFunc("/", s.dashmain)
 	http.HandleFunc("/job/submit", s.submit)
