@@ -49,7 +49,7 @@ func (w *Worker) Run() error {
 			continue
 		}
 
-		var j *Job
+		j := NewJob()
 		if err := json.Unmarshal(data, &j); err != nil {
 			log.Print(err)
 			continue

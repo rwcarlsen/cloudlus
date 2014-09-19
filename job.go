@@ -22,6 +22,8 @@ const (
 
 const DefaultInfile = "input.xml"
 
+var DefaultTimeout = 600 * time.Second
+
 type Job struct {
 	Id        [16]byte
 	Cmd       []string
@@ -44,19 +46,24 @@ type File struct {
 	Cache bool
 }
 
-func NewJob(cmd string, args ...string) *Job {
+func NewJob() *Job {
 	uid := uuid.NewRandom()
 	var id [16]byte
 	copy(id[:], uid)
 	return &Job{
 		Id:      id,
-		Cmd:     append([]string{cmd}, args...),
-		Timeout: 600 * time.Second,
+		Timeout: DefaultTimeout,
 	}
 }
 
+func NewJobCmd(cmd string, args ...string) *Job {
+	j := NewJob()
+	j.Cmd = append([]string{cmd}, args...)
+	return j
+}
+
 func NewJobDefault(data []byte) *Job {
-	j := NewJob("cyclus", DefaultInfile)
+	j := NewJobCmd("cyclus", DefaultInfile)
 	j.AddOutfile("cyclus.sqlite")
 	j.AddInfile(DefaultInfile, data)
 	return j
@@ -94,6 +101,9 @@ func (j *Job) Size() int {
 }
 
 func (j *Job) Execute() {
+	if j.Timeout == 0 {
+		j.Timeout = DefaultTimeout
+	}
 	j.Started = time.Now()
 	defer func() { j.Finished = time.Now() }()
 
@@ -115,7 +125,7 @@ func (j *Job) Execute() {
 	defer func() { j.Stderr += stderr.String() }()
 
 	cmd := exec.Command(j.Cmd[0], j.Cmd[1:]...)
-	fmt.Println("running command: ", cmd.Path, cmd.Args)
+	fmt.Printf("running job %x command: %v\n", j.Id, cmd.Args)
 
 	cmd.Stderr = multierr
 	cmd.Stdout = multiout

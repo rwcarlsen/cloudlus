@@ -100,14 +100,14 @@ func submitrpc(cmd string, args []string) {
 	fs.Parse(args)
 
 	data := stdinOrFile(fs)
-	j := &cloudlus.Job{}
+	j := cloudlus.NewJob()
 	err := json.Unmarshal(data, &j)
 	fatalif(err)
 
 	client, err := rpc.DialHTTP("tcp", *addr)
 	fatalif(err)
-	result := &cloudlus.Job{}
-	err = client.Call("Server.Submit", j, &result)
+	result := cloudlus.NewJob()
+	err = client.Call("RPC.Submit", j, &result)
 	fatalif(err)
 
 	data, err = json.Marshal(result)
@@ -162,7 +162,7 @@ func stat(cmd string, args []string) {
 	data, err := ioutil.ReadAll(resp.Body)
 	fatalif(err)
 
-	j := &cloudlus.Job{}
+	j := cloudlus.NewJob()
 	if err := json.Unmarshal(data, &j); err != nil {
 		log.Fatalf("server has no job of id %v", fs.Arg(0))
 	}
@@ -181,14 +181,14 @@ func pack(cmd string, args []string) {
 
 	files, err := d.Readdir(-1)
 	fatalif(err)
-	j := &cloudlus.Job{}
+	j := cloudlus.NewJob()
 	for _, info := range files {
 		if info.IsDir() {
 			continue
 		}
 		data, err := ioutil.ReadFile(info.Name())
 		fatalif(err)
-		if info.Name() == "cmds.txt" {
+		if info.Name() == "cmd.txt" {
 			err := json.Unmarshal(data, &j.Cmd)
 			fatalif(err)
 		} else if info.Name() == "want.txt" {

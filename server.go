@@ -1,7 +1,6 @@
 package cloudlus
 
 import (
-	"archive/tar"
 	"archive/zip"
 	"bytes"
 	"encoding/hex"
@@ -12,7 +11,6 @@ import (
 	"log"
 	"net/http"
 	"net/rpc"
-	"os"
 	"time"
 
 	"github.com/rwcarlsen/gocache"
@@ -40,8 +38,8 @@ type Server struct {
 	fetchjobs    chan WorkRequest
 	statjobs     chan JobRequest
 	queue        []*Job
-
-	alljobs *cache.LRUCache
+	alljobs      *cache.LRUCache
+	rpc          *RPC
 }
 
 const MB = 1 << 20
@@ -72,7 +70,8 @@ func NewServer(addr string) *Server {
 	mux.HandleFunc("/dashboard/default-infile", s.dashboardDefaultInfile)
 	mux.Handle(rpc.DefaultRPCPath, rpc.DefaultServer)
 
-	rpc.Register(s)
+	s.rpc = &RPC{s}
+	rpc.Register(s.rpc)
 
 	s.serv = &http.Server{Addr: addr, Handler: mux}
 	return s
@@ -86,14 +85,6 @@ type Beat struct {
 
 func (s *Server) Heartbeat(b Beat, unused *int) error {
 	panic("not implemented")
-}
-
-// Submit j via rpc and block until complete returning the result job.
-func (s *Server) Submit(j *Job, result **Job) error {
-	ch := make(chan *Job)
-	s.submitjobs <- JobSubmit{j, ch}
-	*result = <-ch
-	return nil
 }
 
 func (s *Server) Run() error {
@@ -151,7 +142,7 @@ func (s *Server) submit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	j := &Job{}
+	j := NewJob()
 	if err := json.Unmarshal(data, &j); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		log.Print(err)
@@ -297,7 +288,7 @@ func (s *Server) push(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	j := &Job{}
+	j := NewJob()
 	if err := json.Unmarshal(data, &j); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		log.Print(err)
@@ -316,29 +307,14 @@ func convid(s string) ([16]byte, error) {
 	return id, nil
 }
 
-func writefile(fname string, buf *tar.Writer) error {
-	f, err := os.Open(fname)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
+type RPC struct {
+	s *Server
+}
 
-	// make the tar header
-	info, err := f.Stat()
-	if err != nil {
-		return err
-	}
-	hdr, err := tar.FileInfoHeader(info, "")
-	if err != nil {
-		return err
-	}
-
-	// write the header and file data to the tar archive
-	if err := buf.WriteHeader(hdr); err != nil {
-		return err
-	}
-	if _, err := io.Copy(buf, f); err != nil {
-		return err
-	}
+// Submit j via rpc and block until complete returning the result job.
+func (r *RPC) Submit(j *Job, result **Job) error {
+	ch := make(chan *Job)
+	r.s.submitjobs <- JobSubmit{j, ch}
+	*result = <-ch
 	return nil
 }
