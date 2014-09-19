@@ -1,7 +1,6 @@
 package cloudlus
 
 import (
-	"archive/tar"
 	"bytes"
 	"fmt"
 	"io"
@@ -9,7 +8,6 @@ import (
 	"log"
 	"os"
 	"os/exec"
-	"strings"
 	"time"
 
 	"code.google.com/p/go-uuid/uuid"
@@ -24,53 +22,44 @@ const (
 
 const DefaultInfile = "input.xml"
 
-var Cycbin = "cyclus"
-
 type Job struct {
 	Id        [16]byte
-	Submitted time.Time
-	Started   time.Time
-	Finished  time.Time
-	Cmds      [][]string
-	SrcNames  []string
-	DstNames  []string
-	InData    [][]byte
-	OutNames  []string
-	OutData   [][]byte
+	Cmd       []string
+	Infiles   []File
+	Outfiles  []File
 	Status    string
 	Stdout    string
 	Stderr    string
+	Timeout   time.Duration
+	Submitted time.Time
+	Started   time.Time
+	Finished  time.Time
 	dir       string
 	wd        string
 }
 
-func NewJob() *Job {
+type File struct {
+	Name  string
+	Data  []byte
+	Cache bool
+}
+
+func NewJob(cmd string, args ...string) *Job {
 	uid := uuid.NewRandom()
 	var id [16]byte
 	copy(id[:], uid)
 	return &Job{
-		Id:         id,
-		Cmds:       [][]string{},
-		Results:    []string{},
-		Resources:  map[string][]byte{},
-		ResultData: []byte{},
+		Id:      id,
+		Cmd:     append([]string{cmd}, args...),
+		Timeout: 600 * time.Second,
 	}
 }
 
 func NewJobDefault(data []byte) *Job {
-	j := NewJob()
-	j.Cmds = append(j.Cmds, []string{"cyclus", DefaultInfile})
-	j.Results = []string{"cyclus.sqlite"}
-	j.Resources[DefaultInfile] = data
+	j := NewJob("cyclus", DefaultInfile)
+	j.AddOutfile("cyclus.sqlite")
+	j.AddInfile(DefaultInfile, data)
 	return j
-}
-
-func (j *Job) Marshal() ([]byte, error) {
-}
-
-func (j *Job) AddFile(src, dst string) {
-	j.srcnames = append(j.srcnames, src)
-	j.dstnames = append(j.dstnames, dst)
 }
 
 func NewJobDefaultFile(fname string) (*Job, error) {
@@ -81,12 +70,87 @@ func NewJobDefaultFile(fname string) (*Job, error) {
 	return NewJobDefault(data), nil
 }
 
+func (j *Job) AddOutfile(fname string) {
+	j.Outfiles = append(j.Outfiles, File{fname, nil, false})
+}
+
+func (j *Job) AddInfile(fname string, data []byte) {
+	j.Infiles = append(j.Infiles, File{fname, data, false})
+}
+
+func (j *Job) AddInfileCached(fname string, data []byte) {
+	j.Infiles = append(j.Infiles, File{fname, data, true})
+}
+
 func (j *Job) Size() int {
 	n := 0
-	for _, data := range j.Resources {
-		n += len(data)
+	for _, f := range j.Infiles {
+		n += len(f.Data)
 	}
-	return n + len(j.ResultData)
+	for _, f := range j.Outfiles {
+		n += len(f.Data)
+	}
+	return n
+}
+
+func (j *Job) Execute() {
+	j.Started = time.Now()
+	defer func() { j.Finished = time.Now() }()
+
+	if err := j.setup(); err != nil {
+		j.Status = StatusFailed
+		log.Print(err)
+		return
+	}
+	defer j.teardown()
+
+	var err error
+
+	// set up stderr/stdout tee's and exec command
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	multiout := io.MultiWriter(os.Stdout, &stdout)
+	multierr := io.MultiWriter(os.Stderr, &stderr)
+	defer func() { j.Stdout += stdout.String() }()
+	defer func() { j.Stderr += stderr.String() }()
+
+	cmd := exec.Command(j.Cmd[0], j.Cmd[1:]...)
+	fmt.Println("running command: ", cmd.Path, cmd.Args)
+
+	cmd.Stderr = multierr
+	cmd.Stdout = multiout
+
+	// launch job process
+	done := make(chan bool)
+	go func() {
+		if err := cmd.Run(); err != nil {
+			j.Status = StatusFailed
+			log.Print(err)
+		} else {
+			j.Status = StatusComplete
+		}
+		close(done)
+	}()
+
+	// wait for job to finish or timeout
+	select {
+	case <-time.After(j.Timeout):
+		cmd.Process.Kill()
+		j.Status = StatusFailed
+		fmt.Fprintf(multierr, "\nJob timed out after %v", j.Timeout)
+		<-done
+		return
+	case <-done:
+	}
+
+	// collect output data
+	for i, f := range j.Outfiles {
+		j.Outfiles[i].Data, err = ioutil.ReadFile(f.Name)
+		if err != nil {
+			j.Status = StatusFailed
+			fmt.Fprintf(multierr, "%v", err)
+		}
+	}
 }
 
 func (j *Job) setup() error {
@@ -107,78 +171,13 @@ func (j *Job) setup() error {
 		return err
 	}
 
-	for name, data := range j.Resources {
-		err := ioutil.WriteFile(name, data, 0755)
+	for _, f := range j.Infiles {
+		err := ioutil.WriteFile(f.Name, f.Data, 0755)
 		if err != nil {
 			return err
 		}
 	}
 	return nil
-}
-
-func (j *Job) Execute(dur time.Duration) {
-	if err := j.setup(); err != nil {
-		j.Status = StatusFailed
-		log.Print(err)
-		return
-	}
-	defer j.teardown()
-
-	timeout := time.After(dur)
-
-	var out bytes.Buffer
-	multiout := io.MultiWriter(os.Stdout, &out)
-	multierr := io.MultiWriter(os.Stderr, &out)
-	defer func() { j.Output += out.String() }()
-
-	for _, args := range j.Cmds {
-		var cmd *exec.Cmd
-		if args[0] == "cyclus" || strings.HasSuffix(args[0], "/cyclus") {
-			binargs := strings.Split(Cycbin, " ")
-			cmd = exec.Command(binargs[0], append(binargs[1:], args[1:]...)...)
-		} else {
-			cmd = exec.Command(args[0], args[1:]...)
-		}
-		fmt.Println(cmd.Path, cmd.Args)
-
-		cmd.Stderr = multierr
-		cmd.Stdout = multiout
-
-		done := make(chan bool)
-		go func() {
-			if err := cmd.Run(); err != nil {
-				j.Status = StatusFailed
-				log.Print(err)
-			} else {
-				j.Status = StatusComplete
-			}
-			close(done)
-		}()
-
-		select {
-		case <-timeout:
-			cmd.Process.Kill()
-			j.Status = StatusFailed
-			msg := fmt.Sprintf("Job timed out after %v", dur)
-			out.WriteString("\n" + msg)
-			log.Print(msg)
-			<-done
-			return
-		case <-done:
-		}
-	}
-
-	var buf bytes.Buffer
-	tarbuf := tar.NewWriter(&buf)
-	for _, name := range j.Results {
-		if err := writefile(name, tarbuf); err != nil {
-			j.Status = StatusFailed
-			log.Print(err)
-			return
-		}
-	}
-
-	j.ResultData = buf.Bytes()
 }
 
 func (j *Job) teardown() error {
@@ -193,33 +192,6 @@ func (j *Job) teardown() error {
 
 	if err := os.RemoveAll(j.dir); err != nil {
 		log.Print(err)
-		return err
-	}
-	return nil
-}
-
-func writefile(fname string, buf *tar.Writer) error {
-	f, err := os.Open(fname)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
-	// make the tar header
-	info, err := f.Stat()
-	if err != nil {
-		return err
-	}
-	hdr, err := tar.FileInfoHeader(info, "")
-	if err != nil {
-		return err
-	}
-
-	// write the header and file data to the tar archive
-	if err := buf.WriteHeader(hdr); err != nil {
-		return err
-	}
-	if _, err := io.Copy(buf, f); err != nil {
 		return err
 	}
 	return nil

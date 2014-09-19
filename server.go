@@ -1,12 +1,17 @@
 package cloudlus
 
 import (
+	"archive/tar"
+	"archive/zip"
+	"bytes"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/rwcarlsen/gocache"
@@ -17,11 +22,18 @@ type JobRequest struct {
 	Resp chan *Job
 }
 
+type JobSubmit struct {
+	J      *Job
+	Result chan *Job
+}
+
 type WorkRequest chan *Job
 
 type Server struct {
+	serv         *http.Server
 	Host         string
-	submitjobs   chan *Job
+	submitjobs   chan JobSubmit
+	submitchans  map[[16]byte]chan *Job
 	retrievejobs chan JobRequest
 	pushjobs     chan *Job
 	fetchjobs    chan WorkRequest
@@ -33,45 +45,66 @@ type Server struct {
 
 const MB = 1 << 20
 
-func NewServer() *Server {
-	return &Server{
-		submitjobs:   make(chan *Job),
+func NewServer(addr string) *Server {
+	s := &Server{
+		submitjobs:   make(chan JobSubmit),
+		submitchans:  map[[16]byte]chan *Job{},
 		retrievejobs: make(chan JobRequest),
 		statjobs:     make(chan JobRequest),
 		pushjobs:     make(chan *Job),
 		fetchjobs:    make(chan WorkRequest),
 		alljobs:      cache.NewLRUCache(500 * MB),
 	}
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", s.dashmain)
+	mux.HandleFunc("/job/submit", s.submit)
+	mux.HandleFunc("/job/submit-infile", s.submitInfile)
+	mux.HandleFunc("/job/retrieve/", s.retrieve)
+	mux.HandleFunc("/job/status/", s.status)
+	mux.HandleFunc("/work/fetch", s.fetch)
+	mux.HandleFunc("/work/push", s.push)
+	mux.HandleFunc("/dashboard", s.dashboard)
+	mux.HandleFunc("/dashboard/", s.dashboard)
+	mux.HandleFunc("/dashboard/infile/", s.dashboardInfile)
+	mux.HandleFunc("/dashboard/output/", s.dashboardOutput)
+	mux.HandleFunc("/dashboard/default-infile", s.dashboardDefaultInfile)
+
+	s.serv = &http.Server{Addr: addr, Handler: mux}
+	return s
 }
 
-func (s *Server) Submit(j *Job, unused *int) error {
-	s.submitjobs <- j
+type Beat struct {
+	WorkerId [16]byte
+	Busy     bool
+	CurrJob  [16]byte
+}
+
+func (s *Server) Heartbeat(b Beat, unused *int) error {
+	panic("not implemented")
+}
+
+// Submit j via rpc and block until complete returning the result job.
+func (s *Server) Submit(j *Job, result **Job) error {
+	ch := make(chan *Job)
+	s.submitjobs <- JobSubmit{j, ch}
+	*result = <-ch
 	return nil
 }
 
-func (s *Server) ListenAndServe(addr string) error {
-	http.HandleFunc("/", s.dashmain)
-	http.HandleFunc("/job/submit", s.submit)
-	http.HandleFunc("/job/submit-infile", s.submitInfile)
-	http.HandleFunc("/job/retrieve/", s.retrieve)
-	http.HandleFunc("/job/status/", s.status)
-	http.HandleFunc("/work/fetch", s.fetch)
-	http.HandleFunc("/work/push", s.push)
-	http.HandleFunc("/dashboard", s.dashboard)
-	http.HandleFunc("/dashboard/", s.dashboard)
-	http.HandleFunc("/dashboard/infile/", s.dashboardInfile)
-	http.HandleFunc("/dashboard/output/", s.dashboardOutput)
-	http.HandleFunc("/dashboard/default-infile", s.dashboardDefaultInfile)
-
+func (s *Server) Run() error {
 	go s.dispatcher()
-
-	return http.ListenAndServe(addr, nil)
+	return s.serv.ListenAndServe()
 }
 
 func (s *Server) dispatcher() {
 	for {
 		select {
-		case j := <-s.submitjobs:
+		case js := <-s.submitjobs:
+			j := js.J
+			if js.Result != nil {
+				s.submitchans[j.Id] = js.Result
+			}
 			j.Status = StatusQueued
 			j.Submitted = time.Now()
 			s.queue = append(s.queue, j)
@@ -89,6 +122,10 @@ func (s *Server) dispatcher() {
 				req.Resp <- nil
 			}
 		case j := <-s.pushjobs:
+			if ch, ok := s.submitchans[j.Id]; ok {
+				ch <- j
+				delete(s.submitchans, j.Id)
+			}
 			s.alljobs.Set(j.Id, j)
 		case req := <-s.fetchjobs:
 			var j *Job
@@ -110,14 +147,14 @@ func (s *Server) submit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	j := NewJob()
+	j := &Job{}
 	if err := json.Unmarshal(data, &j); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		log.Print(err)
 		return
 	}
 
-	s.submitjobs <- j
+	s.submitjobs <- JobSubmit{j, nil}
 
 	// allow cross-domain ajax requests for job submission
 	w.Header().Add("Access-Control-Allow-Origin", "*")
@@ -135,7 +172,7 @@ func (s *Server) submitInfile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	j := NewJobDefault(data)
-	s.submitjobs <- j
+	s.submitjobs <- JobSubmit{j, nil}
 
 	// allow cross-domain ajax requests for job submission
 	w.Header().Add("Access-Control-Allow-Origin", "*")
@@ -157,7 +194,30 @@ func (s *Server) retrieve(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Add("Content-Disposition", fmt.Sprintf("filename=\"results-id-%x.tar\"", j.Id))
-	_, err = w.Write(j.ResultData)
+
+	// return single zip file
+	var buf bytes.Buffer
+	zipbuf := zip.NewWriter(&buf)
+	for _, fd := range j.Outfiles {
+		f, err := zipbuf.Create(fd.Name)
+		if err != nil {
+			log.Print(err)
+			return
+		}
+		_, err = f.Write(fd.Data)
+		if err != nil {
+			log.Print(err)
+			return
+		}
+	}
+	err = zipbuf.Close()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Print(err)
+		return
+	}
+
+	_, err = io.Copy(w, &buf)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		log.Print(err)
@@ -189,9 +249,7 @@ func (s *Server) status(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jj := NewJob()
-	jj.Id = j.Id
-	jj.Status = j.Status
+	jj := &Job{Id: j.Id, Status: j.Status}
 	data, err := json.Marshal(jj)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -235,7 +293,7 @@ func (s *Server) push(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	j := NewJob()
+	j := &Job{}
 	if err := json.Unmarshal(data, &j); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		log.Print(err)
@@ -252,4 +310,31 @@ func convid(s string) ([16]byte, error) {
 	var id [16]byte
 	copy(id[:], uid)
 	return id, nil
+}
+
+func writefile(fname string, buf *tar.Writer) error {
+	f, err := os.Open(fname)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	// make the tar header
+	info, err := f.Stat()
+	if err != nil {
+		return err
+	}
+	hdr, err := tar.FileInfoHeader(info, "")
+	if err != nil {
+		return err
+	}
+
+	// write the header and file data to the tar archive
+	if err := buf.WriteHeader(hdr); err != nil {
+		return err
+	}
+	if _, err := io.Copy(buf, f); err != nil {
+		return err
+	}
+	return nil
 }

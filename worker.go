@@ -15,10 +15,13 @@ import (
 type Worker struct {
 	Id         [16]byte
 	ServerAddr string
+	FileCache  map[string][]byte
 	Wait       time.Duration
 }
 
 func (w *Worker) Run() error {
+	w.FileCache = map[string][]byte{}
+
 	wd, err := os.Getwd()
 	if err != nil {
 		return err
@@ -55,7 +58,21 @@ func (w *Worker) Run() error {
 			continue
 		}
 
-		j.Execute(600 * time.Second)
+		// add precached files
+		for name, data := range w.FileCache {
+			j.AddInfile(name, data)
+		}
+
+		// cache new files needing caching
+		for _, f := range j.Infiles {
+			if f.Cache {
+				w.FileCache[f.Name] = f.Data
+			}
+		}
+
+		// run job
+		j.Execute()
+		j.Infiles = nil // don't need to send back input files
 
 		data, err = json.Marshal(j)
 		if err != nil {

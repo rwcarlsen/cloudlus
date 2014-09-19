@@ -67,16 +67,15 @@ func serve(cmd string, args []string) {
 	fs := newFlagSet(cmd, "", "run a work dispatch server listening for jobs and workers")
 	host := fs.String("host", "", "server host base url")
 	fs.Parse(args)
-	s := cloudlus.NewServer()
+	s := cloudlus.NewServer(*addr)
 	s.Host = fulladdr(*host)
-	err := s.ListenAndServe(*addr)
+	err := s.Run()
 	fatalif(err)
 }
 
 func work(cmd string, args []string) {
 	fs := newFlagSet(cmd, "", "run a worker polling for jobs and workers")
 	wait := fs.Duration("interval", 10*time.Second, "time interval between work polls when idle")
-	fs.StringVar(&cloudlus.Cycbin, "cycbin", "cyclus", "command to run cyclus")
 	fs.Parse(args)
 	w := &cloudlus.Worker{ServerAddr: fulladdr(*addr), Wait: *wait}
 	w.Run()
@@ -160,7 +159,7 @@ func pack(cmd string, args []string) {
 
 	files, err := d.Readdir(-1)
 	fatalif(err)
-	j := cloudlus.NewJob()
+	j := &cloudlus.Job{}
 	for _, info := range files {
 		if info.IsDir() {
 			continue
@@ -168,13 +167,17 @@ func pack(cmd string, args []string) {
 		data, err := ioutil.ReadFile(info.Name())
 		fatalif(err)
 		if info.Name() == "cmds.txt" {
-			err := json.Unmarshal(data, &j.Cmds)
+			err := json.Unmarshal(data, &j.Cmd)
 			fatalif(err)
 		} else if info.Name() == "want.txt" {
-			err := json.Unmarshal(data, &j.Results)
+			list := []string{}
+			err := json.Unmarshal(data, &list)
 			fatalif(err)
+			for _, name := range list {
+				j.AddOutfile(name)
+			}
 		} else {
-			j.Resources[info.Name()] = data
+			j.AddInfile(info.Name(), data)
 		}
 	}
 	data, err := json.Marshal(j)

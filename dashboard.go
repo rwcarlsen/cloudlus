@@ -96,7 +96,7 @@ func (s *Server) dashboardInfile(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Add("Content-Type", "text/xml")
 	w.Header().Add("Content-Disposition", fmt.Sprintf("filename=\"job-id-%x-infile.xml\"", j.Id))
-	_, err = w.Write(j.Resources[DefaultInfile])
+	_, err = w.Write(j.Infiles[0].Data)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		log.Print(err)
@@ -113,7 +113,13 @@ func (s *Server) dashboardOutput(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err = w.Write([]byte(j.Output))
+	_, err = w.Write([]byte(j.Stdout))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Print(err)
+		return
+	}
+	_, err = w.Write([]byte(j.Stderr))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		log.Print(err)
