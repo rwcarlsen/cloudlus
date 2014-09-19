@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"net/rpc"
 	"os"
 	"strings"
 	"time"
@@ -23,6 +24,7 @@ var cmds = map[string]CmdFunc{
 	"serve":         serve,
 	"work":          work,
 	"submit":        submit,
+	"submitrpc":     submitrpc,
 	"submit-infile": submitInfile,
 	"retrieve":      retrieve,
 	"status":        stat,
@@ -91,6 +93,26 @@ func submit(cmd string, args []string) {
 	data, err = ioutil.ReadAll(resp.Body)
 	fatalif(err)
 	fmt.Printf("job submitted successfully:\n%s\n", data)
+}
+
+func submitrpc(cmd string, args []string) {
+	fs := newFlagSet(cmd, "[FILE]", "submit a job file (may be piped to stdin)")
+	fs.Parse(args)
+
+	data := stdinOrFile(fs)
+	j := &cloudlus.Job{}
+	err := json.Unmarshal(data, &j)
+	fatalif(err)
+
+	client, err := rpc.DialHTTP("tcp", *addr)
+	fatalif(err)
+	result := &cloudlus.Job{}
+	err = client.Call("Server.Submit", j, &result)
+	fatalif(err)
+
+	data, err = json.Marshal(result)
+	fatalif(err)
+	fmt.Println(string(data))
 }
 
 func submitInfile(cmd string, args []string) {

@@ -11,6 +11,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"net/rpc"
 	"os"
 	"time"
 
@@ -69,6 +70,9 @@ func NewServer(addr string) *Server {
 	mux.HandleFunc("/dashboard/infile/", s.dashboardInfile)
 	mux.HandleFunc("/dashboard/output/", s.dashboardOutput)
 	mux.HandleFunc("/dashboard/default-infile", s.dashboardDefaultInfile)
+	mux.Handle(rpc.DefaultRPCPath, rpc.DefaultServer)
+
+	rpc.Register(s)
 
 	s.serv = &http.Server{Addr: addr, Handler: mux}
 	return s
