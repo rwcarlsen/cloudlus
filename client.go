@@ -1,8 +1,6 @@
 package cloudlus
 
-import (
-	"net/rpc"
-)
+import "net/rpc"
 
 type Client struct {
 	client *rpc.Client
@@ -17,7 +15,7 @@ func Dial(addr string) (*Client, error) {
 }
 
 func (c *Client) Submit(j *Job) (*Job, error) {
-	result := NewJob()
+	result := &Job{}
 	err := c.client.Call("RPC.Submit", j, &result)
 	if err != nil {
 		return nil, err
@@ -26,9 +24,15 @@ func (c *Client) Submit(j *Job) (*Job, error) {
 }
 
 func (c *Client) Fetch(w *Worker) (*Job, error) {
-	panic("not implemented")
+	j := &Job{}
+	err := c.client.Call("RPC.Fetch", w.Id, &j)
+	if err != nil {
+		return nil, err
+	}
+	return j, nil
 }
 
 func (c *Client) Push(w *Worker, j *Job) error {
-	panic("not implemented")
+	var unused int
+	return c.client.Call("RPC.Push", j, &unused)
 }

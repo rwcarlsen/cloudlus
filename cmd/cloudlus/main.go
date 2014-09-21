@@ -8,7 +8,6 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
-	"net/rpc"
 	"os"
 	"strings"
 	"time"
@@ -16,7 +15,7 @@ import (
 	"github.com/rwcarlsen/cloudlus"
 )
 
-var addr = flag.String("addr", "127.0.0.1:4242", "network address of dispatch server")
+var addr = flag.String("addr", "127.0.0.1:9875", "network address of dispatch server")
 
 type CmdFunc func(cmd string, args []string)
 
@@ -79,7 +78,7 @@ func work(cmd string, args []string) {
 	fs := newFlagSet(cmd, "", "run a worker polling for jobs and workers")
 	wait := fs.Duration("interval", 10*time.Second, "time interval between work polls when idle")
 	fs.Parse(args)
-	w := &cloudlus.Worker{ServerAddr: fulladdr(*addr), Wait: *wait}
+	w := &cloudlus.Worker{ServerAddr: *addr, Wait: *wait}
 	w.Run()
 }
 
@@ -104,10 +103,9 @@ func submitrpc(cmd string, args []string) {
 	err := json.Unmarshal(data, &j)
 	fatalif(err)
 
-	client, err := rpc.DialHTTP("tcp", *addr)
+	client, err := cloudlus.Dial(*addr)
 	fatalif(err)
-	result := cloudlus.NewJob()
-	err = client.Call("RPC.Submit", j, &result)
+	result, err := client.Submit(j)
 	fatalif(err)
 
 	data, err = json.Marshal(result)

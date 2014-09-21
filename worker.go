@@ -1,11 +1,7 @@
 package cloudlus
 
 import (
-	"bytes"
-	"encoding/json"
-	"io/ioutil"
 	"log"
-	"net/http"
 	"os"
 	"time"
 
@@ -37,24 +33,15 @@ func (w *Worker) Run() error {
 	for {
 		<-time.After(w.Wait)
 
-		resp, err := http.Get(w.ServerAddr + "/work/fetch")
+		client, err := Dial(w.ServerAddr)
 		if err != nil {
 			log.Print(err)
 			continue
 		}
 
-		data, err := ioutil.ReadAll(resp.Body)
+		j, err := client.Fetch(w)
 		if err != nil {
 			log.Print(err)
-			continue
-		}
-
-		j := NewJob()
-		if err := json.Unmarshal(data, &j); err != nil {
-			log.Print(err)
-			continue
-		} else if j == nil {
-			log.Print("got nil job")
 			continue
 		}
 
@@ -74,15 +61,10 @@ func (w *Worker) Run() error {
 		j.Execute()
 		j.Infiles = nil // don't need to send back input files
 
-		data, err = json.Marshal(j)
+		err = client.Push(w, j)
 		if err != nil {
 			log.Print(err)
 		}
 
-		resp, err = http.Post(w.ServerAddr+"/work/push", "application/json", bytes.NewBuffer(data))
-		if err != nil {
-			log.Print(err)
-		}
-		resp.Body.Close()
 	}
 }

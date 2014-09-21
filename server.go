@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -16,42 +17,30 @@ import (
 	"github.com/rwcarlsen/gocache"
 )
 
-type JobRequest struct {
-	Id   [16]byte
-	Resp chan *Job
-}
-
-type JobSubmit struct {
-	J      *Job
-	Result chan *Job
-}
-
-type WorkRequest chan *Job
+const MB = 1 << 20
 
 type Server struct {
 	serv         *http.Server
 	Host         string
-	submitjobs   chan JobSubmit
+	submitjobs   chan jobSubmit
 	submitchans  map[[16]byte]chan *Job
-	retrievejobs chan JobRequest
+	retrievejobs chan jobRequest
 	pushjobs     chan *Job
-	fetchjobs    chan WorkRequest
-	statjobs     chan JobRequest
+	fetchjobs    chan workRequest
+	statjobs     chan jobRequest
 	queue        []*Job
 	alljobs      *cache.LRUCache
 	rpc          *RPC
 }
 
-const MB = 1 << 20
-
 func NewServer(addr string) *Server {
 	s := &Server{
-		submitjobs:   make(chan JobSubmit),
+		submitjobs:   make(chan jobSubmit),
 		submitchans:  map[[16]byte]chan *Job{},
-		retrievejobs: make(chan JobRequest),
-		statjobs:     make(chan JobRequest),
+		retrievejobs: make(chan jobRequest),
+		statjobs:     make(chan jobRequest),
 		pushjobs:     make(chan *Job),
-		fetchjobs:    make(chan WorkRequest),
+		fetchjobs:    make(chan workRequest),
 		alljobs:      cache.NewLRUCache(500 * MB),
 	}
 
@@ -61,8 +50,6 @@ func NewServer(addr string) *Server {
 	mux.HandleFunc("/job/submit-infile", s.submitInfile)
 	mux.HandleFunc("/job/retrieve/", s.retrieve)
 	mux.HandleFunc("/job/status/", s.status)
-	mux.HandleFunc("/work/fetch", s.fetch)
-	mux.HandleFunc("/work/push", s.push)
 	mux.HandleFunc("/dashboard", s.dashboard)
 	mux.HandleFunc("/dashboard/", s.dashboard)
 	mux.HandleFunc("/dashboard/infile/", s.dashboardInfile)
@@ -75,16 +62,6 @@ func NewServer(addr string) *Server {
 
 	s.serv = &http.Server{Addr: addr, Handler: mux}
 	return s
-}
-
-type Beat struct {
-	WorkerId [16]byte
-	Busy     bool
-	CurrJob  [16]byte
-}
-
-func (s *Server) Heartbeat(b Beat, unused *int) error {
-	panic("not implemented")
 }
 
 func (s *Server) Run() error {
@@ -149,7 +126,7 @@ func (s *Server) submit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.submitjobs <- JobSubmit{j, nil}
+	s.submitjobs <- jobSubmit{j, nil}
 
 	// allow cross-domain ajax requests for job submission
 	w.Header().Add("Access-Control-Allow-Origin", "*")
@@ -167,7 +144,7 @@ func (s *Server) submitInfile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	j := NewJobDefault(data)
-	s.submitjobs <- JobSubmit{j, nil}
+	s.submitjobs <- jobSubmit{j, nil}
 
 	// allow cross-domain ajax requests for job submission
 	w.Header().Add("Access-Control-Allow-Origin", "*")
@@ -227,7 +204,7 @@ func (s *Server) getjob(idstr string) (*Job, error) {
 	}
 
 	ch := make(chan *Job)
-	s.statjobs <- JobRequest{Id: id, Resp: ch}
+	s.statjobs <- jobRequest{Id: id, Resp: ch}
 	j := <-ch
 	if j == nil {
 		return nil, fmt.Errorf("unknown job id %v", idstr)
@@ -260,41 +237,53 @@ func (s *Server) status(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *Server) fetch(w http.ResponseWriter, r *http.Request) {
-	ch := make(WorkRequest)
-	s.fetchjobs <- ch
-	j := <-ch
-
-	data, err := json.Marshal(j)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		log.Print(err)
-		return
-	}
-
-	_, err = w.Write(data)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		log.Print(err)
-		return
-	}
+type RPC struct {
+	s *Server
 }
 
-func (s *Server) push(w http.ResponseWriter, r *http.Request) {
-	data, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		log.Print(err)
-		return
-	}
+func (r *RPC) Heartbeat(b Beat, unused *int) error {
+	panic("not implemented")
+}
 
-	j := NewJob()
-	if err := json.Unmarshal(data, &j); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		log.Print(err)
-		return
+// Submit j via rpc and block until complete returning the result job.
+func (r *RPC) Submit(j *Job, result **Job) error {
+	ch := make(chan *Job)
+	r.s.submitjobs <- jobSubmit{j, ch}
+	*result = <-ch
+	return nil
+}
+
+func (r *RPC) Fetch(wid [16]byte, j **Job) error {
+	ch := make(workRequest)
+	r.s.fetchjobs <- ch
+	*j = <-ch
+	if *j == nil {
+		return errors.New("no jobs available to run")
 	}
-	s.pushjobs <- j
+	return nil
+}
+
+func (r *RPC) Push(j *Job, unused *int) error {
+	r.s.pushjobs <- j
+	return nil
+}
+
+type jobRequest struct {
+	Id   [16]byte
+	Resp chan *Job
+}
+
+type jobSubmit struct {
+	J      *Job
+	Result chan *Job
+}
+
+type workRequest chan *Job
+
+type Beat struct {
+	WorkerId [16]byte
+	Busy     bool
+	CurrJob  [16]byte
 }
 
 func convid(s string) ([16]byte, error) {
@@ -305,16 +294,4 @@ func convid(s string) ([16]byte, error) {
 	var id [16]byte
 	copy(id[:], uid)
 	return id, nil
-}
-
-type RPC struct {
-	s *Server
-}
-
-// Submit j via rpc and block until complete returning the result job.
-func (r *RPC) Submit(j *Job, result **Job) error {
-	ch := make(chan *Job)
-	r.s.submitjobs <- JobSubmit{j, ch}
-	*result = <-ch
-	return nil
 }
