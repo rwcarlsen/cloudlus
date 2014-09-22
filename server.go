@@ -115,6 +115,7 @@ func (s *Server) dispatcher() {
 
 		select {
 		case js := <-s.submitjobs:
+			fmt.Printf("job %x submitted\n", js.J.Id)
 			j := js.J
 			if js.Result != nil {
 				s.submitchans[j.Id] = js.Result
@@ -136,6 +137,7 @@ func (s *Server) dispatcher() {
 				req.Resp <- nil
 			}
 		case j := <-s.pushjobs:
+			fmt.Printf("job %x pushed by worker\n", j.Id)
 			if ch, ok := s.submitchans[j.Id]; ok {
 				ch <- j
 				delete(s.submitchans, j.Id)
@@ -157,6 +159,7 @@ func (s *Server) dispatcher() {
 			if j == nil {
 				s.queue = nil
 			} else {
+				fmt.Printf("job %x fetched by worker\n", j.Id)
 				s.jobinfo[j.Id] = NewBeat(req.WorkerId, j.Id)
 			}
 

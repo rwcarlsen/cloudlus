@@ -41,3 +41,5 @@ func (c *Client) Push(w *Worker, j *Job) error {
 	var unused int
 	return c.client.Call("RPC.Push", j, &unused)
 }
+
+func (c *Client) Close() error { return c.client.Close() }
