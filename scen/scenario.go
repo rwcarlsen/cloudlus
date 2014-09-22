@@ -118,11 +118,17 @@ func (s *Scenario) Load(fname string) error {
 	}
 
 	s.File = fname
-	s.Params = make([]Param, s.Nvars())
+	if len(s.Params) == 0 {
+		s.Params = make([]Param, s.Nvars())
+	}
 	return nil
 }
 
 func (s *Scenario) GenCyclusInfile() ([]byte, error) {
+	if s.Handle == "" {
+		s.Handle = "none"
+	}
+
 	var buf bytes.Buffer
 	tmpl := s.CyclusTmpl
 	t := template.Must(template.ParseFiles(tmpl))
@@ -131,6 +137,7 @@ func (s *Scenario) GenCyclusInfile() ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	return buf.Bytes(), nil
 }
 
@@ -151,6 +158,7 @@ func (s *Scenario) Run() (dbfile string, simid []byte, err error) {
 
 	cmd := exec.Command("cyclus", cycin, "-o", cycout)
 	cmd.Stderr = os.Stderr
+	cmd.Stdout = os.Stdout
 	if err := cmd.Run(); err != nil {
 		return "", nil, err
 	}
