@@ -79,12 +79,27 @@ func (s *Server) ListenAndServe() error {
 }
 
 func (s *Server) Run(j *Job) *Job {
-	ch := make(chan *Job)
-	s.submitjobs <- jobSubmit{j, ch}
+	ch := s.Start(j, nil)
 	return <-ch
 }
 
-func (s *Server) Start(j *Job) { s.submitjobs <- jobSubmit{j, nil} }
+func (s *Server) Start(j *Job, ch chan *Job) chan *Job {
+	if ch == nil {
+		ch = make(chan *Job, 1)
+	}
+	s.submitjobs <- jobSubmit{j, ch}
+	return ch
+}
+
+func (s *Server) Get(jid JobId) (*Job, error) {
+	ch := make(chan *Job)
+	s.statjobs <- jobRequest{Id: jid, Resp: ch}
+	j := <-ch
+	if j == nil {
+		return nil, fmt.Errorf("unknown job id %x", j)
+	}
+	return j, nil
+}
 
 func (s *Server) dispatcher() {
 	beatcheck := time.NewTicker(beatInterval)
@@ -189,7 +204,7 @@ func (s *Server) handleSubmit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.Start(j)
+	s.Start(j, nil)
 
 	// allow cross-domain ajax requests for job submission
 	w.Header().Add("Access-Control-Allow-Origin", "*")
@@ -260,28 +275,20 @@ func (s *Server) handleRetrieve(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) getjob(idstr string) (*Job, error) {
-	id, err := convid(idstr)
+	uid, err := hex.DecodeString(idstr)
 	if err != nil {
 		return nil, fmt.Errorf("malformed job id %v", idstr)
 	}
 
-	ch := make(chan *Job)
-	s.statjobs <- jobRequest{Id: id, Resp: ch}
-	j := <-ch
-	if j == nil {
-		return nil, fmt.Errorf("unknown job id %v", idstr)
-	}
-	return j, nil
+	var id JobId
+	copy(id[:], uid)
+	return s.Get(id)
 }
 
 func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 	idstr := r.URL.Path[len("/job/status/"):]
+
 	j, err := s.getjob(idstr)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		log.Print(err)
-		return
-	}
 
 	jj := &Job{Id: j.Id, Status: j.Status}
 	data, err := json.Marshal(jj)
@@ -355,14 +362,4 @@ type Beat struct {
 
 func NewBeat(w WorkerId, j JobId) Beat {
 	return Beat{Time: time.Now(), WorkerId: w, JobId: j}
-}
-
-func convid(s string) ([16]byte, error) {
-	uid, err := hex.DecodeString(s)
-	if err != nil {
-		return [16]byte{}, err
-	}
-	var id [16]byte
-	copy(id[:], uid)
-	return id, nil
 }
