@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"log"
 	"math"
+	"strconv"
 
 	_ "github.com/mxk/go-sqlite/sqlite3"
 	"github.com/rwcarlsen/cloudlus/cloudlus"
@@ -24,13 +25,29 @@ var obj = flag.Bool("obj", false, "true to calculate objective instead of submit
 const tmpDir = "cyctmp"
 
 func main() {
+	var err error
 	flag.Parse()
 	log.SetFlags(log.Lshortfile)
 
+	params := make([]int, flag.NArg())
+	for i, s := range flag.Args() {
+		params[i], err = strconv.Atoi(s)
+		fatalif(err)
+	}
+
 	// load problem scen file
 	scen := &scen.Scenario{}
-	err := scen.Load(*scenfile)
+	err = scen.Load(*scenfile)
 	fatalif(err)
+
+	n := len(params)
+	if n != 0 && n != scen.Nvars() {
+		log.Fatalf("expected %v vars, got %v as args", scen.Nvars(), n)
+	}
+
+	if n > 0 {
+		scen.InitParams(params)
+	}
 
 	if !*obj {
 		scendata, err := json.Marshal(scen)
