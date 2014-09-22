@@ -14,6 +14,11 @@ func Dial(addr string) (*Client, error) {
 	return &Client{client: client}, nil
 }
 
+func (c *Client) Heartbeat(w WorkerId, j JobId) error {
+	var unused int
+	return c.client.Call("RPC.Heartbeat", NewBeat(w, j), &unused)
+}
+
 func (c *Client) Submit(j *Job) (*Job, error) {
 	result := &Job{}
 	err := c.client.Call("RPC.Submit", j, &result)

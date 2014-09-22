@@ -19,6 +19,11 @@ import (
 
 const MB = 1 << 20
 
+type WorkerId [16]byte
+type JobId [16]byte
+
+const beatInterval = 60 * time.Second
+
 type Server struct {
 	serv         *http.Server
 	Host         string
@@ -31,6 +36,8 @@ type Server struct {
 	queue        []*Job
 	alljobs      *cache.LRUCache
 	rpc          *RPC
+	jobinfo      map[JobId]Beat // map[Worker]Job
+	beat         chan Beat
 }
 
 func NewServer(addr string) *Server {
@@ -42,14 +49,16 @@ func NewServer(addr string) *Server {
 		pushjobs:     make(chan *Job),
 		fetchjobs:    make(chan workRequest),
 		alljobs:      cache.NewLRUCache(500 * MB),
+		jobinfo:      map[JobId]Beat{},
+		beat:         make(chan Beat),
 	}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", s.dashmain)
-	mux.HandleFunc("/job/submit", s.submit)
-	mux.HandleFunc("/job/submit-infile", s.submitInfile)
-	mux.HandleFunc("/job/retrieve/", s.retrieve)
-	mux.HandleFunc("/job/status/", s.status)
+	mux.HandleFunc("/job/submit", s.handleSubmit)
+	mux.HandleFunc("/job/submit-infile", s.handleSubmitInfile)
+	mux.HandleFunc("/job/retrieve/", s.handleRetrieve)
+	mux.HandleFunc("/job/status/", s.handleStatus)
 	mux.HandleFunc("/dashboard", s.dashboard)
 	mux.HandleFunc("/dashboard/", s.dashboard)
 	mux.HandleFunc("/dashboard/infile/", s.dashboardInfile)
@@ -64,13 +73,46 @@ func NewServer(addr string) *Server {
 	return s
 }
 
-func (s *Server) Run() error {
+func (s *Server) ListenAndServe() error {
 	go s.dispatcher()
 	return s.serv.ListenAndServe()
 }
 
+func (s *Server) Run(j *Job) *Job {
+	ch := make(chan *Job)
+	s.submitjobs <- jobSubmit{j, ch}
+	return <-ch
+}
+
+func (s *Server) Start(j *Job) { s.submitjobs <- jobSubmit{j, nil} }
+
 func (s *Server) dispatcher() {
+	beatcheck := time.NewTicker(beatInterval)
+	defer beatcheck.Stop()
+
 	for {
+		// check for workers that have stopped responding and requeue their
+		// jobs to try again.
+		select {
+		case <-beatcheck.C:
+			now := time.Now()
+			for jid, b := range s.jobinfo {
+				if now.Sub(b.Time) > 2*beatInterval {
+					v, ok := s.alljobs.Get(jid)
+					if !ok {
+						log.Printf("cannot find job %v for reassignment", jid)
+					} else {
+						fmt.Printf("requeuing job %v\n", jid)
+						j := v.(*Job)
+						j.Status = StatusQueued
+						s.queue = append([]*Job{j}, s.queue...)
+						delete(s.jobinfo, jid)
+					}
+				}
+			}
+		default: // don't block
+		}
+
 		select {
 		case js := <-s.submitjobs:
 			j := js.J
@@ -98,20 +140,38 @@ func (s *Server) dispatcher() {
 				ch <- j
 				delete(s.submitchans, j.Id)
 			}
+			delete(s.jobinfo, j.Id)
 			s.alljobs.Set(j.Id, j)
 		case req := <-s.fetchjobs:
 			var j *Job
-			if len(s.queue) > 0 {
-				j = s.queue[0]
-				j.Status = StatusRunning
-				s.queue = s.queue[1:]
+
+			// skip jobs that were finished by a worker reassigned *from*
+			for i, job := range s.queue {
+				v, ok := s.alljobs.Get(job.Id)
+				if ok && v.(*Job).Status == StatusQueued {
+					j = v.(*Job)
+					s.queue = s.queue[i+1:]
+				}
 			}
-			req <- j
+
+			if j == nil {
+				s.queue = nil
+			} else {
+				s.jobinfo[j.Id] = NewBeat(req.WorkerId, j.Id)
+			}
+
+			req.Ch <- j
+		case b := <-s.beat:
+			// make sure that this job hasn't been reassigned to another worker
+			oldb := s.jobinfo[b.JobId]
+			if oldb.WorkerId == b.WorkerId {
+				s.jobinfo[b.JobId] = b
+			}
 		}
 	}
 }
 
-func (s *Server) submit(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleSubmit(w http.ResponseWriter, r *http.Request) {
 	data, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -126,16 +186,14 @@ func (s *Server) submit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.submitjobs <- jobSubmit{j, nil}
+	s.Start(j)
 
 	// allow cross-domain ajax requests for job submission
 	w.Header().Add("Access-Control-Allow-Origin", "*")
 	fmt.Fprintf(w, "%x", j.Id)
 }
 
-func (s *Server) submitInfile(w http.ResponseWriter, r *http.Request) {
-	// TODO add shortcut code to check for cached db files if this infile has
-	// already been run
+func (s *Server) handleSubmitInfile(w http.ResponseWriter, r *http.Request) {
 	data, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -144,14 +202,15 @@ func (s *Server) submitInfile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	j := NewJobDefault(data)
-	s.submitjobs <- jobSubmit{j, nil}
+
+	s.Run(j)
 
 	// allow cross-domain ajax requests for job submission
 	w.Header().Add("Access-Control-Allow-Origin", "*")
 	fmt.Fprintf(w, "%x", j.Id)
 }
 
-func (s *Server) retrieve(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleRetrieve(w http.ResponseWriter, r *http.Request) {
 	idstr := r.URL.Path[len("/job/retrieve/"):]
 	j, err := s.getjob(idstr)
 	if err != nil {
@@ -165,7 +224,7 @@ func (s *Server) retrieve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Add("Content-Disposition", fmt.Sprintf("filename=\"results-id-%x.tar\"", j.Id))
+	w.Header().Add("Content-Disposition", fmt.Sprintf("filename=\"results-id-%x.zip\"", j.Id))
 
 	// return single zip file
 	var buf bytes.Buffer
@@ -212,7 +271,7 @@ func (s *Server) getjob(idstr string) (*Job, error) {
 	return j, nil
 }
 
-func (s *Server) status(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 	idstr := r.URL.Path[len("/job/status/"):]
 	j, err := s.getjob(idstr)
 	if err != nil {
@@ -242,7 +301,8 @@ type RPC struct {
 }
 
 func (r *RPC) Heartbeat(b Beat, unused *int) error {
-	panic("not implemented")
+	r.s.beat <- b
+	return nil
 }
 
 // Submit j via rpc and block until complete returning the result job.
@@ -254,12 +314,13 @@ func (r *RPC) Submit(j *Job, result **Job) error {
 }
 
 func (r *RPC) Fetch(wid [16]byte, j **Job) error {
-	ch := make(workRequest)
-	r.s.fetchjobs <- ch
-	*j = <-ch
+	req := workRequest{wid, make(chan *Job)}
+	r.s.fetchjobs <- req
+	*j = <-req.Ch
 	if *j == nil {
 		return errors.New("no jobs available to run")
 	}
+
 	return nil
 }
 
@@ -278,12 +339,19 @@ type jobSubmit struct {
 	Result chan *Job
 }
 
-type workRequest chan *Job
+type workRequest struct {
+	WorkerId [16]byte
+	Ch       chan *Job
+}
 
 type Beat struct {
+	Time     time.Time
 	WorkerId [16]byte
-	Busy     bool
-	CurrJob  [16]byte
+	JobId    [16]byte
+}
+
+func NewBeat(worker, job [16]byte) Beat {
+	return Beat{Time: time.Now(), WorkerId: worker, JobId: job}
 }
 
 func convid(s string) ([16]byte, error) {

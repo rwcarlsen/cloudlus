@@ -25,7 +25,7 @@ const DefaultInfile = "input.xml"
 var DefaultTimeout = 600 * time.Second
 
 type Job struct {
-	Id        [16]byte
+	Id        JobId
 	Cmd       []string
 	Infiles   []File
 	Outfiles  []File
@@ -36,6 +36,7 @@ type Job struct {
 	Submitted time.Time
 	Started   time.Time
 	Finished  time.Time
+	WorkerId  [16]byte
 	dir       string
 	wd        string
 }

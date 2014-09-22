@@ -70,7 +70,7 @@ func serve(cmd string, args []string) {
 	fs.Parse(args)
 	s := cloudlus.NewServer(*addr)
 	s.Host = fulladdr(*host)
-	err := s.Run()
+	err := s.ListenAndServe()
 	fatalif(err)
 }
 

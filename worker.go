@@ -9,7 +9,7 @@ import (
 )
 
 type Worker struct {
-	Id         [16]byte
+	Id         WorkerId
 	ServerAddr string
 	FileCache  map[string][]byte
 	Wait       time.Duration
@@ -30,14 +30,14 @@ func (w *Worker) Run() error {
 	if w.Wait == 0 {
 		w.Wait = 10 * time.Second
 	}
+
+	client, err := Dial(w.ServerAddr)
+	if err != nil {
+		return err
+	}
+
 	for {
 		<-time.After(w.Wait)
-
-		client, err := Dial(w.ServerAddr)
-		if err != nil {
-			log.Print(err)
-			continue
-		}
 
 		j, err := client.Fetch(w)
 		if err != nil {
@@ -57,9 +57,26 @@ func (w *Worker) Run() error {
 			}
 		}
 
+		done := make(chan struct{})
+		tick := time.NewTicker(beatInterval)
+
+		go func() {
+			for {
+				select {
+				case <-tick.C:
+					err := client.Heartbeat(w.Id, j.Id)
+					log.Print(err)
+				case <-done:
+					tick.Stop()
+				}
+			}
+		}()
+
 		// run job
 		j.Execute()
+		j.WorkerId = w.Id
 		j.Infiles = nil // don't need to send back input files
+		close(done)
 
 		err = client.Push(w, j)
 		if err != nil {
