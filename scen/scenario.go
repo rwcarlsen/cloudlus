@@ -162,20 +162,11 @@ func (s *Scenario) Run() (dbfile string, simid []byte, err error) {
 	}
 	defer db.Close()
 
-	if err := post.Prepare(db); err != nil {
-		return "", nil, err
-	}
-	defer post.Finish(db)
-
-	simids, err := post.GetSimIds(db)
+	simids, err := post.Process(db)
 	if err != nil {
 		return "", nil, err
 	}
 
-	ctx := post.NewContext(db, simids[0])
-	if err := ctx.WalkAll(); err != nil {
-		return "", nil, err
-	}
 	return cycout, simids[0], nil
 }
 

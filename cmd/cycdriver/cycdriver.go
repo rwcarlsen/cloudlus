@@ -17,7 +17,6 @@ import (
 )
 
 var scenfile = flag.String("scen", "scenario.json", "file containing problem scenification")
-var sweep = flag.String("sweep", "", "path to output db file")
 var addr = flag.String("addr", "127.0.0.1:9875", "address to submit jobs to (otherwise, run locally)")
 var out = flag.String("out", "out.txt", "name of output file")
 var obj = flag.Bool("obj", false, "true to calculate objective instead of submit job")
