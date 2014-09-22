@@ -65,9 +65,12 @@ func (w *Worker) Run() error {
 				select {
 				case <-tick.C:
 					err := client.Heartbeat(w.Id, j.Id)
-					log.Print(err)
+					if err != nil {
+						log.Print(err)
+					}
 				case <-done:
 					tick.Stop()
+					return
 				}
 			}
 		}()
@@ -82,6 +85,5 @@ func (w *Worker) Run() error {
 		if err != nil {
 			log.Print(err)
 		}
-
 	}
 }

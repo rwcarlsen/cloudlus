@@ -179,7 +179,7 @@ func (s *Server) handleSubmit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	j := NewJob()
+	j := &Job{}
 	if err := json.Unmarshal(data, &j); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		log.Print(err)
@@ -330,7 +330,7 @@ func (r *RPC) Push(j *Job, unused *int) error {
 }
 
 type jobRequest struct {
-	Id   [16]byte
+	Id   JobId
 	Resp chan *Job
 }
 
@@ -340,18 +340,18 @@ type jobSubmit struct {
 }
 
 type workRequest struct {
-	WorkerId [16]byte
+	WorkerId WorkerId
 	Ch       chan *Job
 }
 
 type Beat struct {
 	Time     time.Time
-	WorkerId [16]byte
-	JobId    [16]byte
+	WorkerId WorkerId
+	JobId    JobId
 }
 
-func NewBeat(worker, job [16]byte) Beat {
-	return Beat{Time: time.Now(), WorkerId: worker, JobId: job}
+func NewBeat(w WorkerId, j JobId) Beat {
+	return Beat{Time: time.Now(), WorkerId: w, JobId: j}
 }
 
 func convid(s string) ([16]byte, error) {
