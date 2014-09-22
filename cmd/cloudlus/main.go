@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rwcarlsen/cloudlus"
+	"github.com/rwcarlsen/cloudlus/cloudlus"
 )
 
 var addr = flag.String("addr", "127.0.0.1:9875", "network address of dispatch server")
