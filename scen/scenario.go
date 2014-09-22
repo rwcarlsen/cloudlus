@@ -122,16 +122,16 @@ func (s *Scenario) Load(fname string) error {
 	return nil
 }
 
-func (s *Scenario) GenCyclusInfile(fname string) error {
+func (s *Scenario) GenCyclusInfile() ([]byte, error) {
+	var buf bytes.Buffer
 	tmpl := s.CyclusTmpl
 	t := template.Must(template.ParseFiles(tmpl))
-	f, err := os.Create(fname)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
 
-	return t.Execute(f, s)
+	err := t.Execute(&buf, s)
+	if err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
 }
 
 func (s *Scenario) Run() (dbfile string, simid []byte, err error) {
@@ -140,7 +140,11 @@ func (s *Scenario) Run() (dbfile string, simid []byte, err error) {
 	cycin := ui.String() + ".cyclus.xml"
 	cycout := ui.String() + ".sqlite"
 
-	err = s.GenCyclusInfile(cycin)
+	data, err := s.GenCyclusInfile()
+	if err != nil {
+		return "", nil, err
+	}
+	err = ioutil.WriteFile(cycin, data, 0755)
 	if err != nil {
 		return "", nil, err
 	}

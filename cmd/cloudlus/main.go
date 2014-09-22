@@ -105,7 +105,7 @@ func submitrpc(cmd string, args []string) {
 
 	client, err := cloudlus.Dial(*addr)
 	fatalif(err)
-	result, err := client.Submit(j)
+	result, err := client.Run(j)
 	fatalif(err)
 
 	data, err = json.Marshal(result)
