@@ -31,13 +31,14 @@ func (w *Worker) Run() error {
 		w.Wait = 10 * time.Second
 	}
 
-	client, err := Dial(w.ServerAddr)
-	if err != nil {
-		return err
-	}
-
 	for {
 		<-time.After(w.Wait)
+
+		client, err := Dial(w.ServerAddr)
+		if err != nil {
+			log.Print(err)
+			continue
+		}
 
 		j, err := client.Fetch(w)
 		if err != nil {
