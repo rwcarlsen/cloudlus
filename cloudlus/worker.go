@@ -32,24 +32,28 @@ func (w *Worker) Run() error {
 	}
 
 	for {
-		<-time.After(w.Wait)
-		err := w.dojob()
+		wait, err := w.dojob()
 		if err != nil {
 			log.Print(err)
+		}
+		if wait {
+			<-time.After(w.Wait)
 		}
 	}
 }
 
-func (w *Worker) dojob() error {
+func (w *Worker) dojob() (wait bool, err error) {
 	client, err := Dial(w.ServerAddr)
 	if err != nil {
-		return err
+		return true, err
 	}
 	defer client.Close()
 
 	j, err := client.Fetch(w)
-	if err != nil {
-		return err
+	if err == nojoberr {
+		return false, nil
+	} else if err != nil {
+		return true, err
 	}
 
 	// add precached files
@@ -89,5 +93,5 @@ func (w *Worker) dojob() error {
 	j.WorkerId = w.Id
 	j.Infiles = nil // don't need to send back input files
 
-	return client.Push(w, j)
+	return false, client.Push(w, j)
 }

@@ -345,12 +345,14 @@ func (r *RPC) Retrieve(j JobId, result **Job) error {
 	return nil
 }
 
+var nojoberr = errors.New("no jobs available to run")
+
 func (r *RPC) Fetch(wid [16]byte, j **Job) error {
 	req := workRequest{wid, make(chan *Job)}
 	r.s.fetchjobs <- req
 	*j = <-req.Ch
 	if *j == nil {
-		return errors.New("no jobs available to run")
+		return nojoberr
 	}
 
 	return nil

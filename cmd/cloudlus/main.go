@@ -223,12 +223,17 @@ func unpack(cmd string, args []string) {
 		fatalif(err)
 		j := loadJob(data)
 
-		dirname := fmt.Sprintf("outfiles-%x", j.Id)
+		dirname := fmt.Sprintf("files-%x", j.Id)
 
 		err = os.MkdirAll(dirname, 0755)
 		fatalif(err)
 
 		for _, f := range j.Outfiles {
+			p := filepath.Join(dirname, f.Name)
+			err := ioutil.WriteFile(p, f.Data, 0755)
+			fatalif(err)
+		}
+		for _, f := range j.Infiles {
 			p := filepath.Join(dirname, f.Name)
 			err := ioutil.WriteFile(p, f.Data, 0755)
 			fatalif(err)
