@@ -32,7 +32,6 @@ type Server struct {
 	retrievejobs chan jobRequest
 	pushjobs     chan *Job
 	fetchjobs    chan workRequest
-	statjobs     chan jobRequest
 	queue        []*Job
 	alljobs      *cache.LRUCache
 	rpc          *RPC
@@ -45,7 +44,6 @@ func NewServer(addr string) *Server {
 		submitjobs:   make(chan jobSubmit),
 		submitchans:  map[[16]byte]chan *Job{},
 		retrievejobs: make(chan jobRequest),
-		statjobs:     make(chan jobRequest),
 		pushjobs:     make(chan *Job),
 		fetchjobs:    make(chan workRequest),
 		alljobs:      cache.NewLRUCache(500 * MB),
@@ -57,7 +55,7 @@ func NewServer(addr string) *Server {
 	mux.HandleFunc("/", s.dashmain)
 	mux.HandleFunc("/job/submit", s.handleSubmit)
 	mux.HandleFunc("/job/submit-infile", s.handleSubmitInfile)
-	mux.HandleFunc("/job/retrieve/", s.handleRetrieve)
+	mux.HandleFunc("/job/retrieve-zip/", s.handleRetrieveZip)
 	mux.HandleFunc("/job/status/", s.handleStatus)
 	mux.HandleFunc("/dashboard", s.dashboard)
 	mux.HandleFunc("/dashboard/", s.dashboard)
@@ -93,7 +91,7 @@ func (s *Server) Start(j *Job, ch chan *Job) chan *Job {
 
 func (s *Server) Get(jid JobId) (*Job, error) {
 	ch := make(chan *Job)
-	s.statjobs <- jobRequest{Id: jid, Resp: ch}
+	s.retrievejobs <- jobRequest{Id: jid, Resp: ch}
 	j := <-ch
 	if j == nil {
 		return nil, fmt.Errorf("unknown job id %x", j)
@@ -145,16 +143,11 @@ func (s *Server) dispatcher() {
 			} else {
 				req.Resp <- nil
 			}
-		case req := <-s.statjobs:
-			if v, ok := s.alljobs.Get(req.Id); ok {
-				req.Resp <- v.(*Job)
-			} else {
-				req.Resp <- nil
-			}
 		case j := <-s.pushjobs:
 			fmt.Printf("job %x pushed by worker\n", j.Id)
 			if ch, ok := s.submitchans[j.Id]; ok {
 				ch <- j
+				close(ch)
 				delete(s.submitchans, j.Id)
 			}
 			delete(s.jobinfo, j.Id)
@@ -230,6 +223,27 @@ func (s *Server) handleSubmitInfile(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleRetrieve(w http.ResponseWriter, r *http.Request) {
 	idstr := r.URL.Path[len("/job/retrieve/"):]
+	j, err := s.getjob(idstr)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		log.Print(err)
+		return
+	}
+
+	w.Header().Add("Content-Disposition", fmt.Sprintf("filename=\"results-%x.json\"", j.Id))
+
+	data, err := json.MarshalIndent(j, "", "    ")
+
+	_, err = w.Write(data)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Print(err)
+		return
+	}
+}
+
+func (s *Server) handleRetrieveZip(w http.ResponseWriter, r *http.Request) {
+	idstr := r.URL.Path[len("/job/retrieve-zip/"):]
 	j, err := s.getjob(idstr)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -317,9 +331,16 @@ func (r *RPC) Heartbeat(b Beat, unused *int) error {
 
 // Submit j via rpc and block until complete returning the result job.
 func (r *RPC) Submit(j *Job, result **Job) error {
-	ch := make(chan *Job)
-	r.s.submitjobs <- jobSubmit{j, ch}
-	*result = <-ch
+	*result = r.s.Run(j)
+	return nil
+}
+
+func (r *RPC) Retrieve(j JobId, result **Job) error {
+	var err error
+	*result, err = r.s.Get(j)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 

@@ -1,7 +1,7 @@
 package main
 
 import (
-	"bytes"
+	"encoding/hex"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -23,7 +23,6 @@ var cmds = map[string]CmdFunc{
 	"serve":         serve,
 	"work":          work,
 	"submit":        submit,
-	"submitrpc":     submitrpc,
 	"submit-infile": submitInfile,
 	"retrieve":      retrieve,
 	"status":        stat,
@@ -61,6 +60,7 @@ func main() {
 		flag.Usage()
 		return
 	}
+
 	cmd(flag.Arg(0), flag.Args()[1:])
 }
 
@@ -83,67 +83,107 @@ func work(cmd string, args []string) {
 }
 
 func submit(cmd string, args []string) {
-	fs := newFlagSet(cmd, "[FILE]", "submit a job file (may be piped to stdin)")
+	fs := newFlagSet(cmd, "[FILE...]", "submit a job file (may be piped to stdin)")
+	async := fs.Bool("async", false, "true for asynchronous submission")
 	fs.Parse(args)
 
-	data := stdinOrFile(fs)
-	resp, err := http.Post(fulladdr(*addr)+"/job/submit", "application/json", bytes.NewBuffer(data))
-	fatalif(err)
-	data, err = ioutil.ReadAll(resp.Body)
-	fatalif(err)
-	fmt.Printf("job submitted successfully:\n%s\n", data)
+	data := stdin(fs)
+	jobs := []*cloudlus.Job{}
+	if data != nil {
+		jobs = append(jobs, loadJob(data))
+	} else {
+		for _, fname := range fs.Args() {
+			data, err := ioutil.ReadFile(fname)
+			fatalif(err)
+			jobs = append(jobs, loadJob(data))
+		}
+	}
+
+	run(jobs, *async)
 }
 
-func submitrpc(cmd string, args []string) {
-	fs := newFlagSet(cmd, "[FILE]", "submit a job file (may be piped to stdin)")
-	fs.Parse(args)
-
-	data := stdinOrFile(fs)
-	j := cloudlus.NewJob()
-	err := json.Unmarshal(data, &j)
-	fatalif(err)
-
+func run(jobs []*cloudlus.Job, async bool) {
 	client, err := cloudlus.Dial(*addr)
 	fatalif(err)
-	result, err := client.Run(j)
-	fatalif(err)
+	defer client.Close()
 
-	data, err = json.Marshal(result)
-	fatalif(err)
-	fmt.Println(string(data))
+	ch := make(chan *cloudlus.Job, len(jobs))
+	for _, j := range jobs {
+		client.Start(j, ch)
+		if async {
+			fmt.Printf("%x\n", j.Id)
+		}
+	}
+
+	if !async {
+		for _ = range jobs {
+			j := <-ch
+			if err := client.Err(); err != nil {
+				log.Println(err)
+				continue
+			}
+
+			fname := fmt.Sprintf("result-%x.json", j.Id)
+			err := ioutil.WriteFile(fname, saveJob(j), 0755)
+			if err != nil {
+				log.Println(err)
+			}
+		}
+	}
 }
 
 func submitInfile(cmd string, args []string) {
-	fs := newFlagSet(cmd, "[FILE]", "submit a cyclus input file with default run params (may be piped to stdin)")
+	fs := newFlagSet(cmd, "[FILE...]", "submit a cyclus input file with default run params (may be piped to stdin)")
+	async := fs.Bool("async", false, "true for asynchronous submission")
 	fs.Parse(args)
 
-	data := stdinOrFile(fs)
-	resp, err := http.Post(fulladdr(*addr)+"/job/submit-infile", "application/json", bytes.NewBuffer(data))
-	fatalif(err)
-	data, err = ioutil.ReadAll(resp.Body)
-	fatalif(err)
-	fmt.Printf("job submitted successfully:\n%s\n", data)
+	data := stdin(fs)
+	jobs := []*cloudlus.Job{}
+	if data != nil {
+		jobs = append(jobs, cloudlus.NewJobDefault(data))
+	} else {
+		for _, fname := range fs.Args() {
+			data, err := ioutil.ReadFile(fname)
+			fatalif(err)
+			jobs = append(jobs, cloudlus.NewJobDefault(data))
+		}
+	}
+
+	run(jobs, *async)
 }
 
 func retrieve(cmd string, args []string) {
-	fs := newFlagSet(cmd, "[JOB-ID]", "retrieve the result tar file for the given job id")
-	fname := fs.String("o", "", "send result tar to file instead of stdout")
+	fs := newFlagSet(cmd, "[JOBID...]", "retrieve the result tar file for the given job id")
 	fs.Parse(args)
 
 	if len(fs.Args()) == 0 {
 		log.Fatal("no job id specified")
 	}
 
-	resp, err := http.Get(fulladdr(*addr) + "/job/retrieve/" + fs.Arg(0))
+	client, err := cloudlus.Dial(*addr)
 	fatalif(err)
-	data, err := ioutil.ReadAll(resp.Body)
-	fatalif(err)
+	defer client.Close()
 
-	if *fname == "" {
-		fmt.Println(string(data))
-	} else {
-		err := ioutil.WriteFile(*fname, data, 0644)
-		fatalif(err)
+	for _, arg := range fs.Args() {
+		uid, err := hex.DecodeString(arg)
+		if err != nil {
+			log.Println(err)
+			continue
+		}
+		var jid cloudlus.JobId
+		copy(jid[:], uid)
+
+		j, err := client.Retrieve(jid)
+		if err != nil {
+			log.Println(err)
+			continue
+		}
+
+		fname := fmt.Sprintf("result-%x.json", j.Id)
+		err = ioutil.WriteFile(fname, saveJob(j), 0755)
+		if err != nil {
+			log.Println(err)
+		}
 	}
 }
 
@@ -165,7 +205,7 @@ func stat(cmd string, args []string) {
 		log.Fatalf("server has no job of id %v", fs.Arg(0))
 	}
 
-	fmt.Printf("Job %x status: %v\n", j.Id, j.Status)
+	fmt.Println(j.Status)
 }
 
 func pack(cmd string, args []string) {
@@ -224,13 +264,24 @@ func fulladdr(addr string) string {
 	return addr
 }
 
-func stdinOrFile(fs *flag.FlagSet) []byte {
+func stdin(fs *flag.FlagSet) []byte {
 	if len(fs.Args()) > 0 {
-		data, err := ioutil.ReadFile(fs.Arg(0))
-		fatalif(err)
-		return data
+		return nil
 	}
 	data, err := ioutil.ReadAll(os.Stdin)
+	fatalif(err)
+	return data
+}
+
+func loadJob(data []byte) *cloudlus.Job {
+	j := &cloudlus.Job{}
+	err := json.Unmarshal(data, &j)
+	fatalif(err)
+	return j
+}
+
+func saveJob(j *cloudlus.Job) []byte {
+	data, err := json.Marshal(j)
 	fatalif(err)
 	return data
 }

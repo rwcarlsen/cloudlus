@@ -20,6 +20,15 @@ func (c *Client) Heartbeat(w WorkerId, j JobId) error {
 	return c.client.Call("RPC.Heartbeat", NewBeat(w, j), &unused)
 }
 
+func (c *Client) Retrieve(j JobId) (*Job, error) {
+	var result *Job
+	err := c.client.Call("RPC.Retrieve", j, &result)
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
 func (c *Client) Run(j *Job) (*Job, error) {
 	ch := c.Start(j, nil)
 	result := <-ch

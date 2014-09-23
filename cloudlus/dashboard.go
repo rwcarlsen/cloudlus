@@ -26,7 +26,7 @@ var dashtmplstr = `
         {{end}}
 
         {{if eq $job.Status "complete"}}
-        <td><a href="{{$job.Host}}/job/retrieve/{{$job.Id}}">Results</a></td>
+        <td><a href="{{$job.Host}}/job/retrieve-zip/{{$job.Id}}">Results</a></td>
         {{else}}
         <td></td>
         {{end}}
