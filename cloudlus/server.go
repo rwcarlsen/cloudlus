@@ -161,6 +161,7 @@ func (s *Server) dispatcher() {
 				if ok && v.(*Job).Status == StatusQueued {
 					j = v.(*Job)
 					s.queue = s.queue[i+1:]
+					break
 				}
 			}
 
