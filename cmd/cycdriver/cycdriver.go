@@ -50,38 +50,46 @@ func main() {
 	}
 
 	if !*obj {
-		scendata, err := json.Marshal(scen)
-		fatalif(err)
-
-		tmpldata, err := ioutil.ReadFile(scen.CyclusTmpl)
-		fatalif(err)
-
-		j := cloudlus.NewJobCmd("cycdriver", "-obj", "-out", *out, "-scen", *scenfile)
-		j.AddInfile(scen.CyclusTmpl, tmpldata)
-		j.AddInfile(*scenfile, scendata)
-		j.AddOutfile(*out)
-
-		client, err := cloudlus.Dial(*addr)
-		fatalif(err)
-		defer client.Close()
-
-		j, err = client.Run(j)
-		fatalif(err)
-		for _, f := range j.Outfiles {
-			if f.Name == *out {
-				fmt.Printf("%s\n", f.Data)
-				break
-			}
-		}
+		submitjob()
 	} else {
-		dbfile, simid, err := scen.Run()
-		val, err := CalcObjective(dbfile, simid, scen)
-		fatalif(err)
-
-		err = ioutil.WriteFile(*out, []byte(fmt.Sprint(val)), 0755)
-		fatalif(err)
+		runjob()
 	}
 
+}
+
+func submitjob() {
+	scendata, err := json.Marshal(scen)
+	fatalif(err)
+
+	tmpldata, err := ioutil.ReadFile(scen.CyclusTmpl)
+	fatalif(err)
+
+	j := cloudlus.NewJobCmd("cycdriver", "-obj", "-out", *out, "-scen", *scenfile)
+	j.AddInfile(scen.CyclusTmpl, tmpldata)
+	j.AddInfile(*scenfile, scendata)
+	j.AddOutfile(*out)
+
+	client, err := cloudlus.Dial(*addr)
+	fatalif(err)
+	defer client.Close()
+
+	j, err = client.Run(j)
+	fatalif(err)
+	for _, f := range j.Outfiles {
+		if f.Name == *out {
+			fmt.Printf("%s\n", f.Data)
+			break
+		}
+	}
+}
+
+func runjob() {
+	dbfile, simid, err := scen.Run()
+	val, err := CalcObjective(dbfile, simid, scen)
+	fatalif(err)
+
+	err = ioutil.WriteFile(*out, []byte(fmt.Sprint(val)), 0755)
+	fatalif(err)
 }
 
 func CalcObjective(dbfile string, simid []byte, scen *scen.Scenario) (float64, error) {
