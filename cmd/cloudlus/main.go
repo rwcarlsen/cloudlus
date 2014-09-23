@@ -149,6 +149,8 @@ func run(jobs []*cloudlus.Job, async bool) {
 			err := ioutil.WriteFile(fname, saveJob(j), 0755)
 			if err != nil {
 				log.Println(err)
+			} else {
+				fmt.Println(fname)
 			}
 		}
 	}

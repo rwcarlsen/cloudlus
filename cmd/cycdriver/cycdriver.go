@@ -21,6 +21,7 @@ var scenfile = flag.String("scen", "scenario.json", "file containing problem sce
 var addr = flag.String("addr", "127.0.0.1:9875", "address to submit jobs to (otherwise, run locally)")
 var out = flag.String("out", "out.txt", "name of output file")
 var obj = flag.Bool("obj", false, "true to calculate objective instead of submit job")
+var gen = flag.Bool("gen", false, "true to just print out job file without submitting")
 
 const tmpDir = "cyctmp"
 
@@ -49,15 +50,21 @@ func main() {
 		scen.InitParams(params)
 	}
 
-	if !*obj {
-		submitjob()
+	// perform action
+	if *gen {
+		j := buildjob(scen)
+		data, err := json.MarshalIndent(j, "", "    ")
+		fatalif(err)
+		fmt.Printf("%s\n", data)
+	} else if !*obj {
+		j := buildjob(scen)
+		submitjob(j)
 	} else {
-		runjob()
+		runjob(scen)
 	}
-
 }
 
-func submitjob() {
+func buildjob(scen *scen.Scenario) *cloudlus.Job {
 	scendata, err := json.Marshal(scen)
 	fatalif(err)
 
@@ -68,7 +75,10 @@ func submitjob() {
 	j.AddInfile(scen.CyclusTmpl, tmpldata)
 	j.AddInfile(*scenfile, scendata)
 	j.AddOutfile(*out)
+	return j
+}
 
+func submitjob(j *cloudlus.Job) {
 	client, err := cloudlus.Dial(*addr)
 	fatalif(err)
 	defer client.Close()
@@ -83,7 +93,7 @@ func submitjob() {
 	}
 }
 
-func runjob() {
+func runjob(scen *scen.Scenario) {
 	dbfile, simid, err := scen.Run()
 	val, err := CalcObjective(dbfile, simid, scen)
 	fatalif(err)
