@@ -9,6 +9,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -27,6 +28,7 @@ var cmds = map[string]CmdFunc{
 	"retrieve":      retrieve,
 	"status":        stat,
 	"pack":          pack,
+	"unpack":        unpack,
 }
 
 func newFlagSet(cmd, args, desc string) *flag.FlagSet {
@@ -102,6 +104,26 @@ func submit(cmd string, args []string) {
 	run(jobs, *async)
 }
 
+func submitInfile(cmd string, args []string) {
+	fs := newFlagSet(cmd, "[FILE...]", "submit a cyclus input file with default run params (may be piped to stdin)")
+	async := fs.Bool("async", false, "true for asynchronous submission")
+	fs.Parse(args)
+
+	data := stdin(fs)
+	jobs := []*cloudlus.Job{}
+	if data != nil {
+		jobs = append(jobs, cloudlus.NewJobDefault(data))
+	} else {
+		for _, fname := range fs.Args() {
+			data, err := ioutil.ReadFile(fname)
+			fatalif(err)
+			jobs = append(jobs, cloudlus.NewJobDefault(data))
+		}
+	}
+
+	run(jobs, *async)
+}
+
 func run(jobs []*cloudlus.Job, async bool) {
 	client, err := cloudlus.Dial(*addr)
 	fatalif(err)
@@ -130,26 +152,6 @@ func run(jobs []*cloudlus.Job, async bool) {
 			}
 		}
 	}
-}
-
-func submitInfile(cmd string, args []string) {
-	fs := newFlagSet(cmd, "[FILE...]", "submit a cyclus input file with default run params (may be piped to stdin)")
-	async := fs.Bool("async", false, "true for asynchronous submission")
-	fs.Parse(args)
-
-	data := stdin(fs)
-	jobs := []*cloudlus.Job{}
-	if data != nil {
-		jobs = append(jobs, cloudlus.NewJobDefault(data))
-	} else {
-		for _, fname := range fs.Args() {
-			data, err := ioutil.ReadFile(fname)
-			fatalif(err)
-			jobs = append(jobs, cloudlus.NewJobDefault(data))
-		}
-	}
-
-	run(jobs, *async)
 }
 
 func retrieve(cmd string, args []string) {
@@ -207,6 +209,29 @@ func stat(cmd string, args []string) {
 		} else {
 			fmt.Printf("%x: %v\n", j.Id, j.Status)
 		}
+	}
+}
+
+func unpack(cmd string, args []string) {
+	fs := newFlagSet(cmd, "", "unpack all the named job files' output files into id-named directories")
+	fs.Parse(args)
+
+	for _, fname := range fs.Args() {
+		data, err := ioutil.ReadFile(fname)
+		fatalif(err)
+		j := loadJob(data)
+
+		dirname := fmt.Sprintf("outfiles-%x", j.Id)
+
+		err = os.MkdirAll(dirname, 0755)
+		fatalif(err)
+
+		for _, f := range j.Outfiles {
+			p := filepath.Join(dirname, f.Name)
+			err := ioutil.WriteFile(p, f.Data, 0755)
+			fatalif(err)
+		}
+		fmt.Println(dirname)
 	}
 }
 

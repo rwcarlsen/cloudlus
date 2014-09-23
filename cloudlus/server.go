@@ -256,7 +256,7 @@ func (s *Server) handleRetrieveZip(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Add("Content-Disposition", fmt.Sprintf("filename=\"results-id-%x.zip\"", j.Id))
+	w.Header().Add("Content-Disposition", fmt.Sprintf("filename=\"results-%x.zip\"", j.Id))
 
 	// return single zip file
 	var buf bytes.Buffer
