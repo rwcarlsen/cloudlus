@@ -188,24 +188,26 @@ func retrieve(cmd string, args []string) {
 }
 
 func stat(cmd string, args []string) {
-	fs := newFlagSet(cmd, "[JOB-ID]", "get the status of the given job id")
+	fs := newFlagSet(cmd, "JOBID [JOBID...]", "get the status of the given job id")
 	fs.Parse(args)
 
 	if len(fs.Args()) == 0 {
 		log.Fatal("no job id specified")
 	}
 
-	resp, err := http.Get(fulladdr(*addr) + "/job/status/" + fs.Arg(0))
-	fatalif(err)
-	data, err := ioutil.ReadAll(resp.Body)
-	fatalif(err)
+	for _, arg := range fs.Args() {
+		resp, err := http.Get(fulladdr(*addr) + "/job/status/" + fs.Arg(0))
+		fatalif(err)
+		data, err := ioutil.ReadAll(resp.Body)
+		fatalif(err)
 
-	j := cloudlus.NewJob()
-	if err := json.Unmarshal(data, &j); err != nil {
-		log.Fatalf("server has no job of id %v", fs.Arg(0))
+		j := cloudlus.NewJob()
+		if err := json.Unmarshal(data, &j); err != nil {
+			log.Printf("[ERR] no such job %v\n", arg)
+		} else {
+			fmt.Printf("%x: %v\n", j.Id, j.Status)
+		}
 	}
-
-	fmt.Println(j.Status)
 }
 
 func pack(cmd string, args []string) {
