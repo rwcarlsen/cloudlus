@@ -40,10 +40,12 @@ const condorfile = `
 	transfer_input_files = {{.Infiles}}
 	should_transfer_files = yes
 	when_to_transfer_output = on_exit
-	output = worker.\$(PROCESS).output
-	error = worker.\$(PROCESS).error
+	output = worker.$(PROCESS).output
+	error = worker.$(PROCESS).error
 	log = workers.log
 	requirements = OpSys == "LINUX" && Arch == "x86_64" && (OpSysAndVer =?= "SL6")
+
+	queue
 `
 
 const runfilename = "CLOUDLUS_runfile.sh"
@@ -52,7 +54,7 @@ const runfile = `
 #!/bin/bash
 
 {{with .Runfile}}bash ./{{.}}{{end}}
-./cloudlus work {{.Addr}}
+./cloudlus work -addr {{.Addr}}
 `
 
 var condortmpl = template.Must(template.New("submitfile").Parse(condorfile))
