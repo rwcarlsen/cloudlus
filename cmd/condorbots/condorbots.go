@@ -37,7 +37,6 @@ const condorname = "condor.submit"
 const condorfile = `
 	universe = vanilla
 	executable = {{.Executable}}
-	arguments = $arguments $host $port
 	transfer_input_files = {{.Infiles}}
 	should_transfer_files = yes
 	when_to_transfer_output = on_exit
@@ -47,19 +46,17 @@ const condorfile = `
 	requirements = OpSys == "LINUX" && Arch == "x86_64" && (OpSysAndVer =?= "SL6")
 `
 
+const runfilename = "CLOUDLUS_runfile.sh"
+
 const runfile = `
 #!/bin/bash
-bash ./init.sh
-./cloudlus work {{.}}
+
+{{with .Runfile}}bash ./{{.}}{{end}}
+./cloudlus work {{.Addr}}
 `
 
 var condortmpl = template.Must(template.New("submitfile").Parse(condorfile))
 var runtmpl = template.Must(template.New("runfile").Parse(runfile))
-
-// TODO: add cloudlus binary to list of files to condor submit file
-// TODO: create init.sh wrapper script that is sent over that starts cloudlus
-//       worker after running init.sh.  Use this wrapper as the condor
-//       executable.
 
 func main() {
 	log.SetFlags(0)
@@ -74,35 +71,47 @@ func main() {
 		log.Fatal("must specify server address")
 	}
 
-	files := flag.Args()
-	files = append(files, "cloudlus")
+	// assemple file names to copy over
+	srcfiles := flag.Args()
+
+	path, err := exec.LookPath("cloudlus")
+	if err != nil {
+		log.Fatal(err)
+	}
+	srcfiles = append(srcfiles, path)
+
 	if *run != "" {
-		files = append(files, *run)
+		srcfiles = append(srcfiles, *run)
 	}
 
-	cc := CondorConfig{runfile, strings.Join(files, " ")}
+	dstfiles := make([]string, len(srcfiles))
+	for i := range srcfiles {
+		dstfiles[i] = filepath.Base(srcfiles[i])
+	}
+
+	// build condor submit file and condor submit executable script
+	cc := CondorConfig{runfilename, strings.Join(dstfiles, " ")}
 	var condorbuf, runbuf bytes.Buffer
-	err := condortmpl.Execute(&condorbuf, cc)
+	err = condortmpl.Execute(&condorbuf, cc)
 	if err != nil {
 		log.Fatal(err)
 	}
-	err = runtmpl.Execute(&runbuf, *addr)
+	err = runtmpl.Execute(&runbuf, struct{ Runfile, Addr string }{*run, *addr})
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	if *via == "" && *dst == "" {
-		submitlocal(&condorbuf, &runbuf)
-	} else {
-		submitssh(&condorbuf, &runbuf)
+	//fmt.Println("condor.submit contents:\n", condorbuf.String())
+	//fmt.Printf("%v contents:\n%v\n", runfilename, runbuf.String())
+
+	if *dst == "" {
+		log.Fatal("no destination specified")
 	}
+
+	submitssh(srcfiles, dstfiles, &condorbuf, &runbuf)
 }
 
-func submitlocal(submitdata, runbuf io.Reader) {
-	panic("not implemented")
-}
-
-func submitssh(submitdata, runbuf io.Reader) {
+func submitssh(srcs, dsts []string, submitdata, runbuf io.Reader) {
 	// use ssh agent
 	agentconn, err := net.Dial("unix", os.Getenv("SSH_AUTH_SOCK"))
 	if err != nil {
@@ -137,21 +146,17 @@ func submitssh(submitdata, runbuf io.Reader) {
 		log.Fatal(err)
 	}
 
-	fnames := flag.Args()
-
-	path, err := exec.LookPath("cloudlus")
+	err = copyFile(client, runbuf, runfilename)
 	if err != nil {
 		log.Fatal(err)
 	}
-	fnames = append(fnames, path)
 
-	for _, fname := range fnames {
-		fmt.Printf("copying %v\n", fname)
-		f, err := os.Open(fname)
+	for i, name := range srcs {
+		f, err := os.Open(name)
 		if err != nil {
 			log.Fatal(err)
 		}
-		err = copyFile(client, f, fname)
+		err = copyFile(client, f, dsts[i])
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -159,15 +164,20 @@ func submitssh(submitdata, runbuf io.Reader) {
 	}
 
 	for i := 0; i < *n; i++ {
+		//fmt.Printf("running command 'condor_submit %v'\n", condorname)
+		//continue
 		out, err := combined(client, "condor_submit "+condorname)
 		if err != nil {
+			fmt.Printf("%s\n", out)
 			log.Fatal(err)
 		}
-		fmt.Printf("%s\n", out)
 	}
 }
 
 func copyFile(c *ssh.Client, r io.Reader, path string) error {
+	//fmt.Printf("copying file %v\n", path)
+	//return nil
+
 	s, err := c.NewSession()
 	if err != nil {
 		return err
