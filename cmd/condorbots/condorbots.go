@@ -25,6 +25,7 @@ var (
 	dst     = flag.String("dst", "submit-3.chtc.wisc.edu:22", "condor submit node URI")
 	run     = flag.String("run", "", "name of script for condor to run")
 	addr    = flag.String("addr", "", "ip:port of cloudlus server")
+	cpy     = flag.Bool("copy", false, "true to automatically copy all needed files to submit node")
 )
 
 type CondorConfig struct {
@@ -179,6 +180,10 @@ func submitssh(srcs, dsts []string, submitdata, runbuf io.Reader) {
 func copyFile(c *ssh.Client, r io.Reader, path string) error {
 	//fmt.Printf("copying file %v\n", path)
 	//return nil
+
+	if !*cpy {
+		return nil
+	}
 
 	s, err := c.NewSession()
 	if err != nil {
