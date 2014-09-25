@@ -35,17 +35,17 @@ type CondorConfig struct {
 const condorname = "condor.submit"
 
 const condorfile = `
-	universe = vanilla
-	executable = {{.Executable}}
-	transfer_input_files = {{.Infiles}}
-	should_transfer_files = yes
-	when_to_transfer_output = on_exit
-	output = worker.$(PROCESS).output
-	error = worker.$(PROCESS).error
-	log = workers.log
-	requirements = OpSys == "LINUX" && Arch == "x86_64" && (OpSysAndVer =?= "SL6")
+universe = vanilla
+executable = {{.Executable}}
+transfer_input_files = {{.Infiles}}
+should_transfer_files = yes
+when_to_transfer_output = on_exit
+output = worker.$(PROCESS).output
+error = worker.$(PROCESS).error
+log = workers.log
+requirements = OpSys == "LINUX" && Arch == "x86_64" && (OpSysAndVer =?= "SL6")
 
-	queue
+queue
 `
 
 const runfilename = "CLOUDLUS_runfile.sh"
