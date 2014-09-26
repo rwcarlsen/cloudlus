@@ -51,10 +51,10 @@ queue
 
 const runfilename = "CLOUDLUS_runfile.sh"
 
-const runfile = `
-#!/bin/bash
+const runfile = `#!/bin/bash
 
 {{with .Runfile}}bash ./{{.}}{{end}}
+chmod a+x ./cloudlus
 ./cloudlus work -addr {{.Addr}}
 `
 
@@ -75,7 +75,7 @@ func main() {
 	}
 
 	// assemple file names to copy over
-	srcfiles := flag.Args()
+	srcfiles := append([]string{}, flag.Args()...)
 
 	path, err := exec.LookPath("cloudlus")
 	if err != nil {
@@ -93,7 +93,7 @@ func main() {
 	}
 
 	// build condor submit file and condor submit executable script
-	cc := CondorConfig{runfilename, strings.Join(dstfiles, " ")}
+	cc := CondorConfig{runfilename, strings.Join(dstfiles, ",")}
 	var condorbuf, runbuf bytes.Buffer
 	err = condortmpl.Execute(&condorbuf, cc)
 	if err != nil {

@@ -10,6 +10,7 @@ while read line; do
     cycdriver -gen $line > $job
     ((n++))
 done <$1
+
 echo "running jobs"
 
 results=$(cloudlus submit sweepjob-*.json)

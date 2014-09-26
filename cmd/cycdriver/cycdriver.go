@@ -17,11 +17,13 @@ import (
 	"github.com/rwcarlsen/cyan/query"
 )
 
-var scenfile = flag.String("scen", "scenario.json", "file containing problem scenification")
-var addr = flag.String("addr", "127.0.0.1:9875", "address to submit jobs to (otherwise, run locally)")
-var out = flag.String("out", "out.txt", "name of output file")
-var obj = flag.Bool("obj", false, "true to calculate objective instead of submit job")
-var gen = flag.Bool("gen", false, "true to just print out job file without submitting")
+var (
+	scenfile = flag.String("scen", "scenario.json", "file containing problem scenification")
+	addr     = flag.String("addr", "127.0.0.1:9875", "address to submit jobs to (otherwise, run locally)")
+	out      = flag.String("out", "out.txt", "name of output file")
+	obj      = flag.Bool("obj", false, "true to calculate objective instead of submit job")
+	gen      = flag.Bool("gen", false, "true to just print out job file without submitting")
+)
 
 const tmpDir = "cyctmp"
 
@@ -53,7 +55,7 @@ func main() {
 	// perform action
 	if *gen {
 		j := buildjob(scen)
-		data, err := json.MarshalIndent(j, "", "    ")
+		data, err := json.Marshal(j)
 		fatalif(err)
 		fmt.Printf("%s\n", data)
 	} else if !*obj {
