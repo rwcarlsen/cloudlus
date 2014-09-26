@@ -55,7 +55,7 @@ const runfile = `#!/bin/bash
 
 {{with .Runfile}}bash ./{{.}}{{end}}
 chmod a+x ./cloudlus
-./cloudlus work -addr {{.Addr}}
+./cloudlus -addr {{.Addr}} work
 `
 
 var condortmpl = template.Must(template.New("submitfile").Parse(condorfile))
