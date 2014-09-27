@@ -69,8 +69,14 @@ func main() {
 func serve(cmd string, args []string) {
 	fs := newFlagSet(cmd, "", "run a work dispatch server listening for jobs and workers")
 	host := fs.String("host", "", "server host base url")
+	rpcaddr := fs.String("rpc", "", "server rpc address (ip:port) for workers")
 	fs.Parse(args)
-	s := cloudlus.NewServer(*addr)
+
+	if *rpcaddr == "" {
+		*rpcaddr = *addr
+	}
+
+	s := cloudlus.NewServer(*addr, *rpcaddr)
 	s.Host = fulladdr(*host)
 	fmt.Printf("Listening on %v\n", *addr)
 	err := s.ListenAndServe()

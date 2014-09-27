@@ -37,9 +37,10 @@ type Server struct {
 	rpc          *RPC
 	jobinfo      map[JobId]Beat // map[Worker]Job
 	beat         chan Beat
+	rpcaddr      string
 }
 
-func NewServer(addr string) *Server {
+func NewServer(httpaddr, rpcaddr string) *Server {
 	s := &Server{
 		submitjobs:   make(chan jobSubmit),
 		submitchans:  map[[16]byte]chan *Job{},
@@ -49,6 +50,7 @@ func NewServer(addr string) *Server {
 		alljobs:      cache.NewLRUCache(500 * MB),
 		jobinfo:      map[JobId]Beat{},
 		beat:         make(chan Beat),
+		rpcaddr:      rpcaddr,
 	}
 
 	mux := http.NewServeMux()
@@ -62,17 +64,30 @@ func NewServer(addr string) *Server {
 	mux.HandleFunc("/dashboard/infile/", s.dashboardInfile)
 	mux.HandleFunc("/dashboard/output/", s.dashboardOutput)
 	mux.HandleFunc("/dashboard/default-infile", s.dashboardDefaultInfile)
-	mux.Handle(rpc.DefaultRPCPath, rpc.DefaultServer)
 
 	s.rpc = &RPC{s}
 	rpc.Register(s.rpc)
 
-	s.serv = &http.Server{Addr: addr, Handler: mux}
+	if httpaddr == rpcaddr {
+		mux.Handle(rpc.DefaultRPCPath, rpc.DefaultServer)
+	} else {
+		rpc.HandleHTTP()
+	}
+
+	s.serv = &http.Server{Addr: httpaddr, Handler: mux}
 	return s
 }
 
 func (s *Server) ListenAndServe() error {
 	go s.dispatcher()
+
+	if s.rpcaddr != s.serv.Addr {
+		go func() {
+			if err := http.ListenAndServe(s.rpcaddr, nil); err != nil {
+				log.Fatal(err)
+			}
+		}()
+	}
 	return s.serv.ListenAndServe()
 }
 
