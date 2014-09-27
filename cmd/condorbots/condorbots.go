@@ -168,16 +168,19 @@ func submitssh(srcs, dsts []string, submitdata, runbuf io.Reader) {
 		log.Fatal(err)
 	}
 
-	for i, name := range srcs {
-		f, err := os.Open(name)
-		if err != nil {
-			log.Fatal(err)
+	if *cpy {
+		for i, name := range srcs {
+
+			f, err := os.Open(name)
+			if err != nil {
+				log.Fatal(err)
+			}
+			err = copyFile(client, f, dsts[i])
+			if err != nil {
+				log.Fatal(err)
+			}
+			f.Close()
 		}
-		err = copyFile(client, f, dsts[i])
-		if err != nil {
-			log.Fatal(err)
-		}
-		f.Close()
 	}
 
 	if *n > 0 {
@@ -190,10 +193,6 @@ func submitssh(srcs, dsts []string, submitdata, runbuf io.Reader) {
 }
 
 func copyFile(c *ssh.Client, r io.Reader, path string) error {
-	if !*cpy {
-		return nil
-	}
-
 	s, err := c.NewSession()
 	if err != nil {
 		return err
