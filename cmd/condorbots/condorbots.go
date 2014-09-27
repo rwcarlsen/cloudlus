@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"net"
 	"os"
@@ -18,19 +19,21 @@ import (
 )
 
 var (
-	n       = flag.Int("n", 10, "number of bots to deploy")
 	keyfile = flag.String("keyfile", filepath.Join(os.Getenv("HOME"), ".ssh/id_rsa"), "path to ssh private key file")
 	user    = flag.String("user", "rcarlsen", "condor (and via node) ssh username")
-	via     = flag.String("via", "best-tux.cae.wisc.edu:22", "intermediate server URI (if needed)")
 	dst     = flag.String("dst", "submit-3.chtc.wisc.edu:22", "condor submit node URI")
+	via     = flag.String("via", "best-tux.cae.wisc.edu:22", "intermediate server URI (if needed)")
+	cpy     = flag.Bool("copy", false, "true to automatically copy all needed files to submit node")
+	local   = flag.Bool("local", false, "save local copies of generated files")
 	run     = flag.String("run", "", "name of script for condor to run")
 	addr    = flag.String("addr", "", "ip:port of cloudlus server")
-	cpy     = flag.Bool("copy", false, "true to automatically copy all needed files to submit node")
+	n       = flag.Int("n", 0, "number of bots to deploy")
 )
 
 type CondorConfig struct {
 	Executable string
 	Infiles    string
+	N          int
 }
 
 const condorname = "condor.submit"
@@ -46,13 +49,12 @@ error = worker.$(PROCESS).error
 log = workers.log
 requirements = OpSys == "LINUX" && Arch == "x86_64" && (OpSysAndVer =?= "SL6")
 
-queue
+queue {{.N}}
 `
 
 const runfilename = "CLOUDLUS_runfile.sh"
 
 const runfile = `#!/bin/bash
-
 {{with .Runfile}}bash ./{{.}}{{end}}
 chmod a+x ./cloudlus
 ./cloudlus -addr {{.Addr}} work
@@ -93,7 +95,7 @@ func main() {
 	}
 
 	// build condor submit file and condor submit executable script
-	cc := CondorConfig{runfilename, strings.Join(dstfiles, ",")}
+	cc := CondorConfig{runfilename, strings.Join(dstfiles, ","), *n}
 	var condorbuf, runbuf bytes.Buffer
 	err = condortmpl.Execute(&condorbuf, cc)
 	if err != nil {
@@ -104,8 +106,16 @@ func main() {
 		log.Fatal(err)
 	}
 
-	//fmt.Println("condor.submit contents:\n", condorbuf.String())
-	//fmt.Printf("%v contents:\n%v\n", runfilename, runbuf.String())
+	if *local {
+		err := ioutil.WriteFile(runfilename, runbuf.Bytes(), 0777)
+		if err != nil {
+			log.Fatal(err)
+		}
+		err = ioutil.WriteFile(condorname, condorbuf.Bytes(), 0755)
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
 
 	if *dst == "" {
 		log.Fatal("no destination specified")
@@ -115,6 +125,10 @@ func main() {
 }
 
 func submitssh(srcs, dsts []string, submitdata, runbuf io.Reader) {
+	if !*cpy && *n < 1 {
+		return
+	}
+
 	// use ssh agent
 	agentconn, err := net.Dial("unix", os.Getenv("SSH_AUTH_SOCK"))
 	if err != nil {
@@ -166,9 +180,7 @@ func submitssh(srcs, dsts []string, submitdata, runbuf io.Reader) {
 		f.Close()
 	}
 
-	for i := 0; i < *n; i++ {
-		//fmt.Printf("running command 'condor_submit %v'\n", condorname)
-		//continue
+	if *n > 0 {
 		out, err := combined(client, "condor_submit "+condorname)
 		if err != nil {
 			fmt.Printf("%s\n", out)
@@ -178,9 +190,6 @@ func submitssh(srcs, dsts []string, submitdata, runbuf io.Reader) {
 }
 
 func copyFile(c *ssh.Client, r io.Reader, path string) error {
-	//fmt.Printf("copying file %v\n", path)
-	//return nil
-
 	if !*cpy {
 		return nil
 	}
