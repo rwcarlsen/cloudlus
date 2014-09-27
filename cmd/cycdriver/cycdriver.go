@@ -22,7 +22,7 @@ var (
 	scenfile = flag.String("scen", "scenario.json", "file containing problem scenification")
 	addr     = flag.String("addr", "127.0.0.1:9875", "address to submit jobs to (otherwise, run locally)")
 	out      = flag.String("out", "out.txt", "name of output file")
-	obj      = flag.Bool("obj", false, "true to calculate objective instead of submit job")
+	obj      = flag.Bool("obj", false, "true to run job and calculate objective (i.e. workers use this flag)")
 	gen      = flag.Bool("gen", false, "true to just print out job file without submitting")
 )
 
