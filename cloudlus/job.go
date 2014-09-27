@@ -37,6 +37,7 @@ type Job struct {
 	Started   time.Time
 	Finished  time.Time
 	WorkerId  [16]byte
+	Note      string
 	dir       string
 	wd        string
 }

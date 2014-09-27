@@ -9,6 +9,7 @@ import (
 	"log"
 	"math"
 	"strconv"
+	"strings"
 
 	_ "github.com/mxk/go-sqlite/sqlite3"
 	"github.com/rwcarlsen/cloudlus/cloudlus"
@@ -77,6 +78,11 @@ func buildjob(scen *scen.Scenario) *cloudlus.Job {
 	j.AddInfile(scen.CyclusTmpl, tmpldata)
 	j.AddInfile(*scenfile, scendata)
 	j.AddOutfile(*out)
+
+	if flag.NArg() > 0 {
+		j.Note = strings.Join(flag.Args(), " ")
+	}
+
 	return j
 }
 

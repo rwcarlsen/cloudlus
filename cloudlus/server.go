@@ -348,6 +348,7 @@ func (r *RPC) Retrieve(j JobId, result **Job) error {
 var nojoberr = errors.New("no jobs available to run")
 
 func (r *RPC) Fetch(wid [16]byte, j **Job) error {
+	fmt.Printf("got work request from worker %x\n", wid)
 	req := workRequest{wid, make(chan *Job)}
 	r.s.fetchjobs <- req
 	*j = <-req.Ch
@@ -359,6 +360,7 @@ func (r *RPC) Fetch(wid [16]byte, j **Job) error {
 }
 
 func (r *RPC) Push(j *Job, unused *int) error {
+	fmt.Printf("received job %x back from worker %x\n", j.Id, j.WorkerId)
 	r.s.pushjobs <- j
 	return nil
 }
