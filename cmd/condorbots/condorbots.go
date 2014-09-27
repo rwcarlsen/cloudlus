@@ -107,11 +107,11 @@ func main() {
 	}
 
 	if *local {
-		err := ioutil.WriteFile(runfilename, runbuf.Bytes(), 0777)
+		err := ioutil.WriteFile(runfilename, runbuf.Bytes(), 0755)
 		if err != nil {
 			log.Fatal(err)
 		}
-		err = ioutil.WriteFile(condorname, condorbuf.Bytes(), 0755)
+		err = ioutil.WriteFile(condorname, condorbuf.Bytes(), 0644)
 		if err != nil {
 			log.Fatal(err)
 		}

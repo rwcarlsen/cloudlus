@@ -8,7 +8,6 @@ cyc-cde.tar.gz: sample-sim.xml
 	tar -czf cyc-cde.tar.gz cyc-cde
 	rm -rf cyc-cde
 	rm -f cde.options
-	rm cyclus
 
 cyclus_path = $(subst /,\/,$(shell which cyclus))
 
