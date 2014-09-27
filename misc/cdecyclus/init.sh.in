@@ -6,3 +6,7 @@ echo '#!/bin/bash' > cyclus
 echo "$PWD/cyc-cde/cde-exec {{CYCLUS_PATH}} \$@" >> cyclus
 chmod a+x cyclus
 
+echo '#!/bin/bash' > cycdriver
+echo "$PWD/cyc-cde/cde-exec {{CYCDRIVER_PATH}} \$@" >> cycdriver
+chmod a+x cycdriver
+
