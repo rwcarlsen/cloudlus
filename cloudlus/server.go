@@ -55,10 +55,9 @@ func NewServer(httpaddr, rpcaddr string) *Server {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", s.dashmain)
-	mux.HandleFunc("/job/submit", s.handleSubmit)
-	mux.HandleFunc("/job/submit-infile", s.handleSubmitInfile)
-	mux.HandleFunc("/job/retrieve-zip/", s.handleRetrieveZip)
-	mux.HandleFunc("/job/status/", s.handleStatus)
+	mux.HandleFunc("/api/v1/job/", s.handleJob)
+	mux.HandleFunc("/api/v1/job-infile", s.handleSubmitInfile)
+	mux.HandleFunc("/api/v1/job-outfiles/", s.handleRetrieveZip)
 	mux.HandleFunc("/dashboard", s.dashboard)
 	mux.HandleFunc("/dashboard/", s.dashboard)
 	mux.HandleFunc("/dashboard/infile/", s.dashboardInfile)
@@ -198,68 +197,89 @@ func (s *Server) dispatcher() {
 	}
 }
 
-func (s *Server) handleSubmit(w http.ResponseWriter, r *http.Request) {
-	data, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		log.Print(err)
-		return
-	}
+func httperror(w http.ResponseWriter, msg string, code int) {
+	http.Error(w, msg, http.StatusBadRequest)
+	log.Print(msg)
+}
 
-	j := &Job{}
-	if err := json.Unmarshal(data, &j); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		log.Print(err)
-		return
-	}
+func (s *Server) handleJob(w http.ResponseWriter, r *http.Request) {
+	if r.Method == "GET" || r.Method == "" {
+		idstr := r.URL.Path[len("/api/v1/job/"):]
+		j, err := s.getjob(idstr)
+		if err != nil {
+			httperror(w, err.Error(), http.StatusBadRequest)
+			return
+		}
 
+		var data []byte
+		if j.Status == StatusComplete || j.Status == StatusFailed {
+			data, err = json.Marshal(j)
+		} else {
+			// only send in+out files if
+			data, err = json.Marshal(NewJobStat(j))
+		}
+
+		if err != nil {
+			httperror(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		w.Header().Add("Content-Disposition", fmt.Sprintf("filename=\"job-%x.json\"", j.Id))
+		w.Write(data)
+	} else if r.Method == "POST" {
+		data, err := ioutil.ReadAll(r.Body)
+		if err != nil {
+			httperror(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		j := &Job{}
+		if err := json.Unmarshal(data, &j); err != nil {
+			httperror(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		s.createJob(r, w, j)
+	}
+}
+
+func (s *Server) createJob(r *http.Request, w http.ResponseWriter, j *Job) {
 	s.Start(j, nil)
 
+	j, err := s.Get(j.Id)
+	if err != nil {
+		httperror(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	data, err := json.Marshal(j)
+	if err != nil {
+		httperror(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	jid := fmt.Sprintf("%x", j.Id)
+
+	w.Header().Set("Location", r.Host+"/api/v1/job/"+jid)
 	// allow cross-domain ajax requests for job submission
 	w.Header().Add("Access-Control-Allow-Origin", "*")
-	fmt.Fprintf(w, "%x", j.Id)
+	w.WriteHeader(http.StatusCreated)
+	w.Write(data)
 }
 
 func (s *Server) handleSubmitInfile(w http.ResponseWriter, r *http.Request) {
 	data, err := ioutil.ReadAll(r.Body)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		log.Print(err)
+		httperror(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
 	j := NewJobDefault(data)
-
-	s.Run(j)
-
-	// allow cross-domain ajax requests for job submission
-	w.Header().Add("Access-Control-Allow-Origin", "*")
-	fmt.Fprintf(w, "%x", j.Id)
-}
-
-func (s *Server) handleRetrieve(w http.ResponseWriter, r *http.Request) {
-	idstr := r.URL.Path[len("/job/retrieve/"):]
-	j, err := s.getjob(idstr)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		log.Print(err)
-		return
-	}
-
-	w.Header().Add("Content-Disposition", fmt.Sprintf("filename=\"results-%x.json\"", j.Id))
-
-	data, err := json.MarshalIndent(j, "", "    ")
-
-	_, err = w.Write(data)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		log.Print(err)
-		return
-	}
+	s.createJob(r, w, j)
 }
 
 func (s *Server) handleRetrieveZip(w http.ResponseWriter, r *http.Request) {
-	idstr := r.URL.Path[len("/job/retrieve-zip/"):]
+	idstr := r.URL.Path[len("/api/v1/job-outfiles/"):]
 	j, err := s.getjob(idstr)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -313,27 +333,6 @@ func (s *Server) getjob(idstr string) (*Job, error) {
 	var id JobId
 	copy(id[:], uid)
 	return s.Get(id)
-}
-
-func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
-	idstr := r.URL.Path[len("/job/status/"):]
-
-	j, err := s.getjob(idstr)
-
-	jj := &Job{Id: j.Id, Status: j.Status}
-	data, err := json.Marshal(jj)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		log.Print(err)
-		return
-	}
-
-	_, err = w.Write(data)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		log.Print(err)
-		return
-	}
 }
 
 type RPC struct {
@@ -394,7 +393,6 @@ type workRequest struct {
 	WorkerId WorkerId
 	Ch       chan *Job
 }
-
 type Beat struct {
 	Time     time.Time
 	WorkerId WorkerId

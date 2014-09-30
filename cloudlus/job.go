@@ -208,3 +208,24 @@ func (j *Job) teardown() error {
 	}
 	return nil
 }
+
+// JobStat is holds a subset of job fields for marshalling and sending small
+// messages with current job state/status info while avoiding sending large
+// data like input and output files.
+type JobStat struct {
+	Id        JobId
+	Cmd       []string
+	Status    string
+	Submitted time.Time
+	Started   time.Time
+}
+
+func NewJobStat(j *Job) *JobStat {
+	return &JobStat{
+		Id:        j.Id,
+		Cmd:       j.Cmd,
+		Status:    j.Status,
+		Submitted: j.Submitted,
+		Started:   j.Started,
+	}
+}

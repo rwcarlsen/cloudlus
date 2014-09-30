@@ -207,16 +207,17 @@ func stat(cmd string, args []string) {
 	}
 
 	for _, arg := range fs.Args() {
-		resp, err := http.Get(fulladdr(*addr) + "/job/status/" + fs.Arg(0))
+		resp, err := http.Get(fulladdr(*addr) + "/api/v1/job/" + fs.Arg(0))
 		fatalif(err)
 		data, err := ioutil.ReadAll(resp.Body)
 		fatalif(err)
 
-		j := cloudlus.NewJob()
+		j := &cloudlus.Job{}
 		if err := json.Unmarshal(data, &j); err != nil {
 			log.Printf("[ERR] no such job %v\n", arg)
 		} else {
-			fmt.Printf("%x: %v\n", j.Id, j.Status)
+			data, _ := json.MarshalIndent(j, "", "    ")
+			fmt.Printf("%s\n", data)
 		}
 	}
 }
