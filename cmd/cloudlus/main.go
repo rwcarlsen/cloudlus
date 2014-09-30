@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
-	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -26,7 +25,6 @@ var cmds = map[string]CmdFunc{
 	"submit":        submit,
 	"submit-infile": submitInfile,
 	"retrieve":      retrieve,
-	"status":        stat,
 	"pack":          pack,
 	"unpack":        unpack,
 }
@@ -194,30 +192,6 @@ func retrieve(cmd string, args []string) {
 		err = ioutil.WriteFile(fname, saveJob(j), 0755)
 		if err != nil {
 			log.Println(err)
-		}
-	}
-}
-
-func stat(cmd string, args []string) {
-	fs := newFlagSet(cmd, "JOBID [JOBID...]", "get the status of the given job id")
-	fs.Parse(args)
-
-	if len(fs.Args()) == 0 {
-		log.Fatal("no job id specified")
-	}
-
-	for _, arg := range fs.Args() {
-		resp, err := http.Get(fulladdr(*addr) + "/api/v1/job/" + fs.Arg(0))
-		fatalif(err)
-		data, err := ioutil.ReadAll(resp.Body)
-		fatalif(err)
-
-		j := &cloudlus.Job{}
-		if err := json.Unmarshal(data, &j); err != nil {
-			log.Printf("[ERR] no such job %v\n", arg)
-		} else {
-			data, _ := json.MarshalIndent(j, "", "    ")
-			fmt.Printf("%s\n", data)
 		}
 	}
 }
