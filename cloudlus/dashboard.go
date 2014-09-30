@@ -3,7 +3,6 @@ package cloudlus
 import (
 	"fmt"
 	"html/template"
-	"log"
 	"net/http"
 	"sort"
 	"time"
@@ -26,7 +25,7 @@ var dashtmplstr = `
         {{end}}
 
         {{if eq $job.Status "complete"}}
-        <td><a href="{{$job.Host}}/job/retrieve-zip/{{$job.Id}}">Results</a></td>
+        <td><a href="{{$job.Host}}/api/v1/job-outfiles/{{$job.Id}}">Results</a></td>
         {{else}}
         <td></td>
         {{end}}
@@ -71,8 +70,7 @@ func (s *Server) dashboard(w http.ResponseWriter, r *http.Request) {
 	// allow cross-domain ajax requests for the dashboard content
 	w.Header().Add("Access-Control-Allow-Origin", "*")
 	if err := tmpl.Execute(w, jds); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		log.Print(err)
+		httperror(w, err.Error(), http.StatusInternalServerError)
 	}
 }
 
@@ -80,8 +78,7 @@ func (s *Server) dashmain(w http.ResponseWriter, r *http.Request) {
 	w.Header().Add("Access-Control-Allow-Origin", "*")
 	err := hometmpl.Execute(w, s.Host)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		log.Print(err)
+		httperror(w, err.Error(), http.StatusInternalServerError)
 	}
 }
 
@@ -89,8 +86,7 @@ func (s *Server) dashboardInfile(w http.ResponseWriter, r *http.Request) {
 	idstr := r.URL.Path[len("/dashboard/infile/"):]
 	j, err := s.getjob(idstr)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		log.Print(err)
+		httperror(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -98,8 +94,7 @@ func (s *Server) dashboardInfile(w http.ResponseWriter, r *http.Request) {
 	w.Header().Add("Content-Disposition", fmt.Sprintf("filename=\"job-id-%x-infile.xml\"", j.Id))
 	_, err = w.Write(j.Infiles[0].Data)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		log.Print(err)
+		httperror(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 }
@@ -108,21 +103,18 @@ func (s *Server) dashboardOutput(w http.ResponseWriter, r *http.Request) {
 	idstr := r.URL.Path[len("/dashboard/output/"):]
 	j, err := s.getjob(idstr)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		log.Print(err)
+		httperror(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	_, err = w.Write([]byte(j.Stdout))
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		log.Print(err)
+		httperror(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	_, err = w.Write([]byte(j.Stderr))
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		log.Print(err)
+		httperror(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 }
@@ -133,8 +125,7 @@ func (s *Server) dashboardDefaultInfile(w http.ResponseWriter, r *http.Request) 
 	w.Header().Add("Content-Type", "text/plain")
 	_, err := w.Write([]byte(defaultInfile))
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		log.Print(err)
+		httperror(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 }
@@ -280,8 +271,13 @@ const home = `
 
         function submitJob() {
             var text = $('#infile-box').val();
-            $.post(server + "/job/submit-infile", text, function(data) {
-                $('#jobid').text(data);
+            $.post(server + "/api/v1/job-infile", text, function(data) {
+                var resp = JSON.parse(data)
+				var jid = ""
+				for (var i = 0; i < resp.Id.length; i++) {
+					jid += resp.Id[i].toString(16)
+				}
+                $('#jobid').text(jid);
                 $('#dashboard').load(server + "/dashboard");
             })
         }
