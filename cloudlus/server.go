@@ -159,6 +159,13 @@ func (s *Server) dispatcher() {
 			}
 		case j := <-s.pushjobs:
 			fmt.Printf("job %x pushed by worker\n", j.Id)
+			if v, ok := s.alljobs.Get(j.Id); ok {
+				// workers nilify the Infiles to reduce network traffic
+				// we want to re-add the locally stored infiles back to keep
+				// job data complete.
+				j.Infiles = v.(*Job).Infiles
+			}
+
 			if ch, ok := s.submitchans[j.Id]; ok {
 				ch <- j
 				close(ch)

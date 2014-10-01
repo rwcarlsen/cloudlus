@@ -88,14 +88,17 @@ func (s *Server) dashboardInfile(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		httperror(w, err.Error(), http.StatusInternalServerError)
 		return
+	} else if j == nil {
+		httperror(w, "job id not found", http.StatusBadRequest)
+		return
 	}
 
 	w.Header().Add("Content-Type", "text/xml")
 	w.Header().Add("Content-Disposition", fmt.Sprintf("filename=\"job-id-%x-infile.xml\"", j.Id))
-	_, err = w.Write(j.Infiles[0].Data)
-	if err != nil {
-		httperror(w, err.Error(), http.StatusInternalServerError)
-		return
+	if len(j.Infiles) == 0 {
+		fmt.Fprint(w, "[job contains no input data]")
+	} else {
+		w.Write(j.Infiles[0].Data)
 	}
 }
 
