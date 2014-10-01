@@ -12,6 +12,7 @@ import (
 	"log"
 	"net/http"
 	"net/rpc"
+	"strings"
 	"time"
 
 	"github.com/rwcarlsen/gocache"
@@ -26,7 +27,8 @@ func (i WorkerId) MarshalJSON() ([]byte, error) {
 }
 
 func (i WorkerId) UnmarshalJSON(data []byte) error {
-	bs, err := hex.DecodeString(string(data)[1 : len(data)-1])
+	s := strings.Trim(string(data), "\"")
+	bs, err := hex.DecodeString(s)
 	if err != nil {
 		return err
 	}
@@ -45,7 +47,8 @@ func (i JobId) MarshalJSON() ([]byte, error) {
 }
 
 func (i JobId) UnmarshalJSON(data []byte) error {
-	bs, err := hex.DecodeString(string(data))
+	s := strings.Trim(string(data), "\"")
+	bs, err := hex.DecodeString(s)
 	if err != nil {
 		return err
 	}
