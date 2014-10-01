@@ -138,7 +138,7 @@ func run(jobs []*cloudlus.Job, async bool) {
 	for _, j := range jobs {
 		client.Start(j, ch)
 		if async {
-			fmt.Printf("%x\n", j.Id)
+			fmt.Printf("%v\n", j.Id)
 		}
 	}
 
@@ -150,8 +150,8 @@ func run(jobs []*cloudlus.Job, async bool) {
 				continue
 			}
 
-			fname := fmt.Sprintf("result-%x.json", j.Id)
-			err := ioutil.WriteFile(fname, saveJob(j), 0755)
+			fname := fmt.Sprintf("result-%v.json", j.Id)
+			err := ioutil.WriteFile(fname, saveJob(j), 0644)
 			if err != nil {
 				log.Println(err)
 			} else {
@@ -188,8 +188,8 @@ func retrieve(cmd string, args []string) {
 			continue
 		}
 
-		fname := fmt.Sprintf("result-%x.json", j.Id)
-		err = ioutil.WriteFile(fname, saveJob(j), 0755)
+		fname := fmt.Sprintf("result-%v.json", j.Id)
+		err = ioutil.WriteFile(fname, saveJob(j), 0644)
 		if err != nil {
 			log.Println(err)
 		}
@@ -212,12 +212,12 @@ func unpack(cmd string, args []string) {
 
 		for _, f := range j.Outfiles {
 			p := filepath.Join(dirname, f.Name)
-			err := ioutil.WriteFile(p, f.Data, 0755)
+			err := ioutil.WriteFile(p, f.Data, 0644)
 			fatalif(err)
 		}
 		for _, f := range j.Infiles {
 			p := filepath.Join(dirname, f.Name)
-			err := ioutil.WriteFile(p, f.Data, 0755)
+			err := ioutil.WriteFile(p, f.Data, 0644)
 			fatalif(err)
 		}
 		fmt.Println(dirname)
@@ -297,7 +297,7 @@ func loadJob(data []byte) *cloudlus.Job {
 }
 
 func saveJob(j *cloudlus.Job) []byte {
-	data, err := json.Marshal(j)
+	data, err := json.MarshalIndent(j, "", "    ")
 	fatalif(err)
 	return data
 }

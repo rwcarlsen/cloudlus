@@ -20,7 +20,42 @@ import (
 const MB = 1 << 20
 
 type WorkerId [16]byte
+
+func (i WorkerId) MarshalJSON() ([]byte, error) {
+	return []byte("\"" + hex.EncodeToString(i[:]) + "\""), nil
+}
+
+func (i WorkerId) UnmarshalJSON(data []byte) error {
+	bs, err := hex.DecodeString(string(data)[1 : len(data)-1])
+	if err != nil {
+		return err
+	}
+	if n := copy(i[:], bs); n < len(i) {
+		return fmt.Errorf("JSON WorkerId has invalid length %v", n)
+	}
+	return nil
+}
+
+func (i WorkerId) String() string { return hex.EncodeToString(i[:]) }
+
 type JobId [16]byte
+
+func (i JobId) MarshalJSON() ([]byte, error) {
+	return []byte("\"" + hex.EncodeToString(i[:]) + "\""), nil
+}
+
+func (i JobId) UnmarshalJSON(data []byte) error {
+	bs, err := hex.DecodeString(string(data))
+	if err != nil {
+		return err
+	}
+	if n := copy(i[:], bs); n < len(i) {
+		return fmt.Errorf("JSON JobId has invalid length %v", n)
+	}
+	return nil
+}
+
+func (i JobId) String() string { return hex.EncodeToString(i[:]) }
 
 const beatInterval = 60 * time.Second
 
@@ -108,7 +143,7 @@ func (s *Server) Get(jid JobId) (*Job, error) {
 	s.retrievejobs <- jobRequest{Id: jid, Resp: ch}
 	j := <-ch
 	if j == nil {
-		return nil, fmt.Errorf("unknown job id %x", j)
+		return nil, fmt.Errorf("unknown job id %v", j.Id)
 	}
 	return j, nil
 }
@@ -142,7 +177,7 @@ func (s *Server) dispatcher() {
 
 		select {
 		case js := <-s.submitjobs:
-			fmt.Printf("job %x submitted\n", js.J.Id)
+			fmt.Printf("job %v submitted\n", js.J.Id)
 			j := js.J
 			if js.Result != nil {
 				s.submitchans[j.Id] = js.Result
@@ -158,7 +193,7 @@ func (s *Server) dispatcher() {
 				req.Resp <- nil
 			}
 		case j := <-s.pushjobs:
-			fmt.Printf("job %x pushed by worker\n", j.Id)
+			fmt.Printf("job %v pushed by worker\n", j.Id)
 			if v, ok := s.alljobs.Get(j.Id); ok {
 				// workers nilify the Infiles to reduce network traffic
 				// we want to re-add the locally stored infiles back to keep
@@ -189,7 +224,7 @@ func (s *Server) dispatcher() {
 			if j == nil {
 				s.queue = nil
 			} else {
-				fmt.Printf("job %x fetched by worker\n", j.Id)
+				fmt.Printf("job %v fetched by worker\n", j.Id)
 				s.jobinfo[j.Id] = NewBeat(req.WorkerId, j.Id)
 			}
 
@@ -231,7 +266,7 @@ func (s *Server) handleJob(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		w.Header().Add("Content-Disposition", fmt.Sprintf("filename=\"job-%x.json\"", j.Id))
+		w.Header().Add("Content-Disposition", fmt.Sprintf("filename=\"job-%v.json\"", j.Id))
 		w.Write(data)
 	} else if r.Method == "POST" {
 		data, err := ioutil.ReadAll(r.Body)
@@ -265,7 +300,7 @@ func (s *Server) createJob(r *http.Request, w http.ResponseWriter, j *Job) {
 		return
 	}
 
-	jid := fmt.Sprintf("%x", j.Id)
+	jid := fmt.Sprintf("%v", j.Id)
 
 	w.Header().Set("Location", r.Host+"/api/v1/job/"+jid)
 	// allow cross-domain ajax requests for job submission
@@ -299,7 +334,7 @@ func (s *Server) handleRetrieveZip(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Add("Content-Disposition", fmt.Sprintf("filename=\"results-%x.zip\"", j.Id))
+	w.Header().Add("Content-Disposition", fmt.Sprintf("filename=\"results-%v.zip\"", j.Id))
 
 	// return single zip file
 	var buf bytes.Buffer
@@ -368,8 +403,8 @@ func (r *RPC) Retrieve(j JobId, result **Job) error {
 
 var nojoberr = errors.New("no jobs available to run")
 
-func (r *RPC) Fetch(wid [16]byte, j **Job) error {
-	fmt.Printf("got work request from worker %x\n", wid)
+func (r *RPC) Fetch(wid WorkerId, j **Job) error {
+	fmt.Printf("got work request from worker %v\n", wid)
 	req := workRequest{wid, make(chan *Job)}
 	r.s.fetchjobs <- req
 	*j = <-req.Ch
@@ -381,7 +416,7 @@ func (r *RPC) Fetch(wid [16]byte, j **Job) error {
 }
 
 func (r *RPC) Push(j *Job, unused *int) error {
-	fmt.Printf("received job %x back from worker %x\n", j.Id, j.WorkerId)
+	fmt.Printf("received job %v back from worker %v\n", j.Id, j.WorkerId)
 	r.s.pushjobs <- j
 	return nil
 }

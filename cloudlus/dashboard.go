@@ -57,7 +57,7 @@ func (s *Server) dashboard(w http.ResponseWriter, r *http.Request) {
 	for _, item := range s.alljobs.Items() {
 		j := item.Value.(*Job)
 		jd := JobData{
-			Id:        fmt.Sprintf("%x", j.Id),
+			Id:        fmt.Sprintf("%v", j.Id),
 			Status:    j.Status,
 			Submitted: j.Submitted,
 			Host:      s.Host,
@@ -94,7 +94,7 @@ func (s *Server) dashboardInfile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Add("Content-Type", "text/xml")
-	w.Header().Add("Content-Disposition", fmt.Sprintf("filename=\"job-id-%x-infile.xml\"", j.Id))
+	w.Header().Add("Content-Disposition", fmt.Sprintf("filename=\"job-id-%v-infile.xml\"", j.Id))
 	if len(j.Infiles) == 0 {
 		fmt.Fprint(w, "[job contains no input data]")
 	} else {
@@ -276,11 +276,7 @@ const home = `
             var text = $('#infile-box').val();
             $.post(server + "/api/v1/job-infile", text, function(data) {
                 var resp = JSON.parse(data)
-				var jid = ""
-				for (var i = 0; i < resp.Id.length; i++) {
-					jid += resp.Id[i].toString(16)
-				}
-                $('#jobid').text(jid);
+                $('#jobid').text(resp.Id);
                 $('#dashboard').load(server + "/dashboard");
             })
         }

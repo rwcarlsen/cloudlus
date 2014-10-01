@@ -36,7 +36,7 @@ type Job struct {
 	Submitted time.Time
 	Started   time.Time
 	Finished  time.Time
-	WorkerId  [16]byte
+	WorkerId  WorkerId
 	Note      string
 	dir       string
 	wd        string
@@ -127,7 +127,7 @@ func (j *Job) Execute() {
 	defer func() { j.Stderr += stderr.String() }()
 
 	cmd := exec.Command(j.Cmd[0], j.Cmd[1:]...)
-	fmt.Printf("running job %x command: %v\n", j.Id, cmd.Args)
+	fmt.Printf("running job %v command: %v\n", j.Id, cmd.Args)
 
 	cmd.Stderr = multierr
 	cmd.Stdout = multiout
