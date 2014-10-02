@@ -24,9 +24,9 @@ done <sweep.txt
 ```
 
 The job generation uses `scenario.json`, `cyclus.xml.in`, and `sweep.txt` in
-this folder.  `sweep.txt` was generated via `go run sweep.go` and a few text
-tweeks.  After generating the jobs, you can submit them all to the running
-cloudlus server:
+this folder.  `sweep.txt` was generated via `go run sweep.go -sweep` and a few
+text tweeks.  After generating the jobs, you can submit them all to the
+running cloudlus server:
 
 ```bash
 cloudlus -addr="host:port" submit sweepjob-*.json
@@ -36,6 +36,6 @@ This results in a bunch of result json files.  You can then do something with
 them like:
 
 ```bash
-go run view.go -obj result-*.json > results.txt
+go run sweep.go -obj result-*.json > results.txt
 ```
 
