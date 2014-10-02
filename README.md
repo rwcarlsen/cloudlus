@@ -97,3 +97,7 @@ Cyclus jobs can be deployed and fetched to/from the server using the
 }
 ```
 
+ The *Location* field in the response header contains the URL endpoint where
+ the submitted job status can be retrieved.  The response body contains a JSON
+ object representing the submitted job.
+
