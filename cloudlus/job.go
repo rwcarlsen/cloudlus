@@ -92,7 +92,7 @@ func (j *Job) AddInfileCached(fname string, data []byte) {
 }
 
 func (j *Job) Size() int {
-	n := 0
+	n := len(j.Stdout) + len(j.Stderr)
 	for _, f := range j.Infiles {
 		n += len(f.Data)
 	}
@@ -216,6 +216,7 @@ type JobStat struct {
 	Id        JobId
 	Cmd       []string
 	Status    string
+	Size      int
 	Stdout    string
 	Stderr    string
 	Submitted time.Time
@@ -228,6 +229,7 @@ func NewJobStat(j *Job) *JobStat {
 		Id:        j.Id,
 		Cmd:       j.Cmd,
 		Status:    j.Status,
+		Size:      j.Size(),
 		Stdout:    j.Stdout,
 		Stderr:    j.Stderr,
 		Submitted: j.Submitted,

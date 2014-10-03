@@ -17,14 +17,15 @@ and distribution of cyclus jobs to *workers* that can also be deployed with
 this command.  Their can be an arbitrary number of workers and they can live
 locally on the same machine as the server or somewhere else in the nets.
 Cyclus jobs can be deployed and fetched to/from the server using the
-`cloudlus` command.  The server also provides a simple RESTful api.  The api consists of the following endpoints:
+`cloudlus` command.  The server also provides a simple RESTful api.  The api
+consists of the following endpoints:
 
 * GET to `[host]/api/v1/job/[job-id]` returns a JSON object in the response
-  body with information about the job status and any output data+files if it
-  finished running.  If the job has not finnished running yet, you can check
-  the *Status* field of the JSON object.  A status of "complete" or "failed"
-  indicates the job has finished running.  The returned JSON object roughly
-  has the following schema:
+  body with all known information about the job including any output
+  data+files if it finished running.  If the job has not finnished running
+  yet, you can check the *Status* field of the JSON object.  A status of
+  "complete" or "failed" indicates the job has finished running.  The returned
+  JSON object roughly has the following schema:
 
 ```json
 {
@@ -60,6 +61,33 @@ Cyclus jobs can be deployed and fetched to/from the server using the
     "Note": ""
 }
 ```
+
+* GET to `[host]/api/v1/job-stat/[job-id]` returns a JSON object in the
+  response body with information about the job status.
+  output files for the job in the response body.  The returned JSON object has
+  the following schema:
+
+```json
+{
+    "Id": "b1cd52ea474d4f58849082b54b16914c",
+    "Cmd": [
+        "[command]",
+        "[arg1]",
+        "[arg2]",
+        "[...]",
+    ],
+    "Size": 123456,
+    "Status": "complete",
+    "Stdout": "standard output from the job process",
+    "Stderr": "standard error from the job process",
+    "Submitted": "2014-09-30T22:59:54.061622259-05:00",
+    "Started": "2014-09-30T23:00:02.743536714-05:00",
+    "Finished": "2014-09-30T23:00:09.029352256-05:00",
+}
+```
+
+  `Size` represents the size of the completed job in bytes including all input
+  files, output files, stderr, and stdout.
 
 * GET to `[host]/api/v1/job-outfiles/[job-id]` returns a zip-file of the
   output files for the job in the response body.
