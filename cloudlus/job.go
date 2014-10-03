@@ -216,8 +216,11 @@ type JobStat struct {
 	Id        JobId
 	Cmd       []string
 	Status    string
+	Stdout    string
+	Stderr    string
 	Submitted time.Time
 	Started   time.Time
+	Finished  time.Time
 }
 
 func NewJobStat(j *Job) *JobStat {
@@ -225,7 +228,10 @@ func NewJobStat(j *Job) *JobStat {
 		Id:        j.Id,
 		Cmd:       j.Cmd,
 		Status:    j.Status,
+		Stdout:    j.Stdout,
+		Stderr:    j.Stderr,
 		Submitted: j.Submitted,
 		Started:   j.Started,
+		Finished:  j.Finished,
 	}
 }

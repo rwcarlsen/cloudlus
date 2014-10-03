@@ -1,18 +1,11 @@
 package cloudlus
 
 import (
-	"archive/zip"
-	"bytes"
-	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"net/rpc"
-	"strings"
 	"time"
 
 	"github.com/rwcarlsen/gocache"
@@ -20,45 +13,7 @@ import (
 
 const MB = 1 << 20
 
-type WorkerId [16]byte
-
-func (i WorkerId) MarshalJSON() ([]byte, error) {
-	return []byte("\"" + hex.EncodeToString(i[:]) + "\""), nil
-}
-
-func (i *WorkerId) UnmarshalJSON(data []byte) error {
-	s := strings.Trim(string(data), "\"")
-	bs, err := hex.DecodeString(s)
-	if err != nil {
-		return err
-	}
-	if n := copy((*i)[:], bs); n < len(i) {
-		return fmt.Errorf("JSON WorkerId has invalid length %v", n)
-	}
-	return nil
-}
-
-func (i WorkerId) String() string { return hex.EncodeToString(i[:]) }
-
-type JobId [16]byte
-
-func (i JobId) MarshalJSON() ([]byte, error) {
-	return []byte("\"" + hex.EncodeToString(i[:]) + "\""), nil
-}
-
-func (i *JobId) UnmarshalJSON(data []byte) error {
-	s := strings.Trim(string(data), "\"")
-	bs, err := hex.DecodeString(s)
-	if err != nil {
-		return err
-	}
-	if n := copy((*i)[:], bs); n < len(i) {
-		return fmt.Errorf("JSON JobId has invalid length %v", n)
-	}
-	return nil
-}
-
-func (i JobId) String() string { return hex.EncodeToString(i[:]) }
+var nojoberr = errors.New("no jobs available to run")
 
 const beatInterval = 60 * time.Second
 
@@ -78,6 +33,9 @@ type Server struct {
 	rpcaddr      string
 }
 
+// TODO: Make worker RPC serving separate from submitter RPC interface serving
+// to allow for local listening only for job submission for more security.
+
 func NewServer(httpaddr, rpcaddr string) *Server {
 	s := &Server{
 		submitjobs:   make(chan jobSubmit),
@@ -94,6 +52,7 @@ func NewServer(httpaddr, rpcaddr string) *Server {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", s.dashmain)
 	mux.HandleFunc("/api/v1/job/", s.handleJob)
+	mux.HandleFunc("/api/v1/job-stat/", s.handleJobStat)
 	mux.HandleFunc("/api/v1/job-infile", s.handleSubmitInfile)
 	mux.HandleFunc("/api/v1/job-outfiles/", s.handleRetrieveZip)
 	mux.HandleFunc("/dashboard", s.dashboard)
@@ -242,188 +201,6 @@ func (s *Server) dispatcher() {
 	}
 }
 
-func httperror(w http.ResponseWriter, msg string, code int) {
-	http.Error(w, msg, http.StatusBadRequest)
-	log.Print(msg)
-}
-
-func (s *Server) handleJob(w http.ResponseWriter, r *http.Request) {
-	if r.Method == "GET" || r.Method == "" {
-		idstr := r.URL.Path[len("/api/v1/job/"):]
-		j, err := s.getjob(idstr)
-		if err != nil {
-			httperror(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-
-		var data []byte
-		if j.Status == StatusComplete || j.Status == StatusFailed {
-			data, err = json.Marshal(j)
-		} else {
-			// only send in+out files if
-			data, err = json.Marshal(NewJobStat(j))
-		}
-
-		if err != nil {
-			httperror(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-
-		w.Header().Add("Content-Disposition", fmt.Sprintf("filename=\"job-%v.json\"", j.Id))
-		w.Write(data)
-	} else if r.Method == "POST" {
-		data, err := ioutil.ReadAll(r.Body)
-		if err != nil {
-			httperror(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-
-		j := &Job{}
-		if err := json.Unmarshal(data, &j); err != nil {
-			httperror(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-
-		s.createJob(r, w, j)
-	}
-}
-
-func (s *Server) createJob(r *http.Request, w http.ResponseWriter, j *Job) {
-	s.Start(j, nil)
-
-	j, err := s.Get(j.Id)
-	if err != nil {
-		httperror(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	data, err := json.Marshal(j)
-	if err != nil {
-		httperror(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	jid := fmt.Sprintf("%v", j.Id)
-
-	w.Header().Set("Location", r.Host+"/api/v1/job/"+jid)
-	// allow cross-domain ajax requests for job submission
-	w.Header().Add("Access-Control-Allow-Origin", "*")
-	w.WriteHeader(http.StatusCreated)
-	w.Write(data)
-}
-
-func (s *Server) handleSubmitInfile(w http.ResponseWriter, r *http.Request) {
-	data, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		httperror(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	j := NewJobDefault(data)
-	s.createJob(r, w, j)
-}
-
-func (s *Server) handleRetrieveZip(w http.ResponseWriter, r *http.Request) {
-	idstr := r.URL.Path[len("/api/v1/job-outfiles/"):]
-	j, err := s.getjob(idstr)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		log.Print(err)
-		return
-	} else if j.Status != StatusComplete {
-		msg := fmt.Sprintf("job %v status: %v", idstr, j.Status)
-		http.Error(w, msg, http.StatusBadRequest)
-		log.Print(msg)
-		return
-	}
-
-	w.Header().Add("Content-Disposition", fmt.Sprintf("filename=\"results-%v.zip\"", j.Id))
-
-	// return single zip file
-	var buf bytes.Buffer
-	zipbuf := zip.NewWriter(&buf)
-	for _, fd := range j.Outfiles {
-		f, err := zipbuf.Create(fd.Name)
-		if err != nil {
-			log.Print(err)
-			return
-		}
-		_, err = f.Write(fd.Data)
-		if err != nil {
-			log.Print(err)
-			return
-		}
-	}
-	err = zipbuf.Close()
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		log.Print(err)
-		return
-	}
-
-	_, err = io.Copy(w, &buf)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		log.Print(err)
-		return
-	}
-}
-
-func (s *Server) getjob(idstr string) (*Job, error) {
-	uid, err := hex.DecodeString(idstr)
-	if err != nil {
-		return nil, fmt.Errorf("malformed job id %v", idstr)
-	}
-
-	var id JobId
-	copy(id[:], uid)
-	return s.Get(id)
-}
-
-type RPC struct {
-	s *Server
-}
-
-func (r *RPC) Heartbeat(b Beat, unused *int) error {
-	r.s.beat <- b
-	return nil
-}
-
-// Submit j via rpc and block until complete returning the result job.
-func (r *RPC) Submit(j *Job, result **Job) error {
-	*result = r.s.Run(j)
-	return nil
-}
-
-func (r *RPC) Retrieve(j JobId, result **Job) error {
-	var err error
-	*result, err = r.s.Get(j)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-var nojoberr = errors.New("no jobs available to run")
-
-func (r *RPC) Fetch(wid WorkerId, j **Job) error {
-	fmt.Printf("got work request from worker %v\n", wid)
-	req := workRequest{wid, make(chan *Job)}
-	r.s.fetchjobs <- req
-	*j = <-req.Ch
-	if *j == nil {
-		return nojoberr
-	}
-
-	return nil
-}
-
-func (r *RPC) Push(j *Job, unused *int) error {
-	fmt.Printf("received job %v back from worker %v\n", j.Id, j.WorkerId)
-	r.s.pushjobs <- j
-	return nil
-}
-
 type jobRequest struct {
 	Id   JobId
 	Resp chan *Job
@@ -437,13 +214,4 @@ type jobSubmit struct {
 type workRequest struct {
 	WorkerId WorkerId
 	Ch       chan *Job
-}
-type Beat struct {
-	Time     time.Time
-	WorkerId WorkerId
-	JobId    JobId
-}
-
-func NewBeat(w WorkerId, j JobId) Beat {
-	return Beat{Time: time.Now(), WorkerId: w, JobId: j}
 }
