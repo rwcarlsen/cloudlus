@@ -134,29 +134,31 @@ func run(jobs []*cloudlus.Job, async bool) {
 	fatalif(err)
 	defer client.Close()
 
+	if async {
+		for _, j := range jobs {
+			client.Submit(j)
+			fmt.Printf("%v\n", j.Id)
+		}
+		return
+	}
+
 	ch := make(chan *cloudlus.Job, len(jobs))
 	for _, j := range jobs {
 		client.Start(j, ch)
-		if async {
-			fmt.Printf("%v\n", j.Id)
-		}
 	}
+	for _ = range jobs {
+		j := <-ch
+		if err := client.Err(); err != nil {
+			log.Println(err)
+			continue
+		}
 
-	if !async {
-		for _ = range jobs {
-			j := <-ch
-			if err := client.Err(); err != nil {
-				log.Println(err)
-				continue
-			}
-
-			fname := fmt.Sprintf("result-%v.json", j.Id)
-			err := ioutil.WriteFile(fname, saveJob(j), 0644)
-			if err != nil {
-				log.Println(err)
-			} else {
-				fmt.Println(fname)
-			}
+		fname := fmt.Sprintf("result-%v.json", j.Id)
+		err := ioutil.WriteFile(fname, saveJob(j), 0644)
+		if err != nil {
+			log.Println(err)
+		} else {
+			fmt.Println(fname)
 		}
 	}
 }

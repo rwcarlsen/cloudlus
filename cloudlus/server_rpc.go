@@ -17,6 +17,12 @@ func (r *RPC) Submit(j *Job, result **Job) error {
 	return nil
 }
 
+// Submit j via rpc asynchronously.
+func (r *RPC) SubmitAsync(j *Job, unused *int) error {
+	r.s.Start(j, nil)
+	return nil
+}
+
 func (r *RPC) Retrieve(j JobId, result **Job) error {
 	var err error
 	*result, err = r.s.Get(j)

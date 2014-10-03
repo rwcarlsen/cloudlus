@@ -105,7 +105,7 @@ func (s *Server) Get(jid JobId) (*Job, error) {
 	s.retrievejobs <- jobRequest{Id: jid, Resp: ch}
 	j := <-ch
 	if j == nil {
-		return nil, fmt.Errorf("unknown job id %v", j.Id)
+		return nil, fmt.Errorf("unknown job id %v", jid)
 	}
 	return j, nil
 }

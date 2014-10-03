@@ -29,6 +29,11 @@ func (c *Client) Retrieve(j JobId) (*Job, error) {
 	return result, nil
 }
 
+func (c *Client) Submit(j *Job) error {
+	var unused int
+	return c.client.Call("RPC.SubmitAsync", j, &unused)
+}
+
 func (c *Client) Run(j *Job) (*Job, error) {
 	ch := c.Start(j, nil)
 	result := <-ch
@@ -40,6 +45,10 @@ func (c *Client) Run(j *Job) (*Job, error) {
 
 func (c *Client) Err() error { return c.err }
 
+// Start submits j and returns a channel where the completed job can be
+// retrieved from.  If the the program doesn't block on the channel, there is
+// no guarantee that the job will be submitted.  For asynchronous submission,
+// use the Submit method.
 func (c *Client) Start(j *Job, ch chan *Job) chan *Job {
 	if ch == nil {
 		ch = make(chan *Job, 1)
