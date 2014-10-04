@@ -54,8 +54,9 @@ func (s ByTime) Less(i, j int) bool { return s.JobList[i].Submitted.After(s.JobL
 
 func (s *Server) dashboard(w http.ResponseWriter, r *http.Request) {
 	jds := make(JobList, 0)
-	for _, item := range s.alljobs.Items() {
-		j := item.Value.(*Job)
+	items, _ := s.alljobs.Items()
+	for _, item := range items {
+		j := item.(*Job)
 		jd := JobData{
 			Id:        fmt.Sprintf("%v", j.Id),
 			Status:    j.Status,

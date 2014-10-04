@@ -8,10 +8,11 @@ import (
 	"net/rpc"
 	"time"
 
-	"github.com/rwcarlsen/gocache"
+	"github.com/rwcarlsen/lru"
 )
 
 const MB = 1 << 20
+const cacheSize = 400 * MB
 
 var nojoberr = errors.New("no jobs available to run")
 
@@ -26,7 +27,7 @@ type Server struct {
 	pushjobs     chan *Job
 	fetchjobs    chan workRequest
 	queue        []*Job
-	alljobs      *cache.LRUCache
+	alljobs      *lru.Cache
 	rpc          *RPC
 	jobinfo      map[JobId]Beat // map[Worker]Job
 	beat         chan Beat
@@ -43,7 +44,7 @@ func NewServer(httpaddr, rpcaddr string) *Server {
 		retrievejobs: make(chan jobRequest),
 		pushjobs:     make(chan *Job),
 		fetchjobs:    make(chan workRequest),
-		alljobs:      cache.NewLRUCache(500 * MB),
+		alljobs:      lru.New(cacheSize),
 		jobinfo:      map[JobId]Beat{},
 		beat:         make(chan Beat),
 		rpcaddr:      rpcaddr,
@@ -122,8 +123,8 @@ func (s *Server) dispatcher() {
 			now := time.Now()
 			for jid, b := range s.jobinfo {
 				if now.Sub(b.Time) > 2*beatInterval {
-					v, ok := s.alljobs.Get(jid)
-					if !ok {
+					v, err := s.alljobs.Get(jid.String())
+					if err != nil {
 						log.Printf("cannot find job %v for reassignment", jid)
 					} else {
 						fmt.Printf("requeuing job %v\n", jid)
@@ -147,16 +148,16 @@ func (s *Server) dispatcher() {
 			j.Status = StatusQueued
 			j.Submitted = time.Now()
 			s.queue = append(s.queue, j)
-			s.alljobs.Set(j.Id, j)
+			s.alljobs.Set(j.Id.String(), j)
 		case req := <-s.retrievejobs:
-			if v, ok := s.alljobs.Get(req.Id); ok {
+			if v, err := s.alljobs.Get(req.Id.String()); err == nil {
 				req.Resp <- v.(*Job)
 			} else {
 				req.Resp <- nil
 			}
 		case j := <-s.pushjobs:
 			fmt.Printf("job %v pushed by worker\n", j.Id)
-			if v, ok := s.alljobs.Get(j.Id); ok {
+			if v, err := s.alljobs.Get(j.Id.String()); err == nil {
 				// workers nilify the Infiles to reduce network traffic
 				// we want to re-add the locally stored infiles back to keep
 				// job data complete.
@@ -169,14 +170,14 @@ func (s *Server) dispatcher() {
 				delete(s.submitchans, j.Id)
 			}
 			delete(s.jobinfo, j.Id)
-			s.alljobs.Set(j.Id, j)
+			s.alljobs.Set(j.Id.String(), j)
 		case req := <-s.fetchjobs:
 			var j *Job
 
 			// skip jobs that were finished by a worker reassigned *from*
 			for i, job := range s.queue {
-				v, ok := s.alljobs.Get(job.Id)
-				if ok && v.(*Job).Status == StatusQueued {
+				v, err := s.alljobs.Get(job.Id.String())
+				if err == nil && v.(*Job).Status == StatusQueued {
 					j = v.(*Job)
 					s.queue = s.queue[i+1:]
 					break
