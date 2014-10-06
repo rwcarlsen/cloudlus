@@ -181,8 +181,12 @@ func (s *Scenario) Run() (dbfile string, simid []byte, err error) {
 	return cycout, simids[0], nil
 }
 
-func (s *Scenario) InitParams(vals []int) {
+func (s *Scenario) InitParams(vals []int) error {
+	if s.Nvars() != len(vals) {
+		return fmt.Errorf("expected %v variables, got %v", s.Nvars(), len(vals))
+	}
 	s.Params = make([]Param, len(vals))
+
 	for i, val := range vals {
 		f := i / s.nPeriods()
 		t := (i%s.nPeriods() + 1) * s.BuildPeriod
@@ -197,6 +201,7 @@ func (s *Scenario) InitParams(vals []int) {
 		}
 		s.Params = append(s.Params, Param{Time: 1, Proto: fac.Proto, N: fac.Ninitial})
 	}
+	return nil
 }
 
 func (s *Scenario) VarNames() []string {
@@ -282,35 +287,39 @@ func (s *Scenario) SupportConstr() (low, A, up *mat64.Dense) {
 // scenario bounds.
 func (s *Scenario) PowerConstr() (low, A, up *mat64.Dense) {
 	nperiods := s.nPeriods()
+	tmpl := []float64{}
+	tmpu := []float64{}
+	times := []int{}
 
-	tmpl := make([]float64, len(s.MinPower))
-	tmpu := make([]float64, len(s.MaxPower))
-	copy(tmpl, s.MinPower)
-	copy(tmpu, s.MaxPower)
 	// correct for initially built capacity
-	i := 0
-	for t := s.BuildPeriod; t < s.SimDur; t += s.BuildPeriod {
+	for i := range s.MaxPower {
+		if s.MinPower[i] == s.MaxPower[i] {
+			continue // skip equality constraints
+		}
+
+		t := s.BuildPeriod * (1 + i)
 		cap := 0.0
 		for _, fac := range s.Facs {
 			if fac.Alive(1, t) {
 				cap += fac.Cap * float64(fac.Ninitial)
 			}
 		}
-		tmpl[i] -= cap
-		tmpu[i] -= cap
-		i++
+		tmpl = append(tmpl, s.MinPower[i]-cap)
+		tmpu = append(tmpu, s.MaxPower[i]-cap)
+		times = append(times, t)
 	}
+	nconstr := len(tmpl)
 
-	low = mat64.NewDense(nperiods, 1, tmpl)
-	up = mat64.NewDense(nperiods, 1, tmpu)
-	A = mat64.NewDense(nperiods, s.Nvars(), nil)
+	low = mat64.NewDense(nconstr, 1, tmpl)
+	up = mat64.NewDense(nconstr, 1, tmpu)
+	A = mat64.NewDense(nconstr, s.Nvars(), nil)
 
-	for t := s.BuildPeriod; t < s.SimDur; t += s.BuildPeriod {
+	for r, t := range times {
 		for f, fac := range s.Facs {
 			for n := 1; n <= nperiods; n++ {
 				if fac.Alive(n*s.BuildPeriod, t) {
-					i := f*nperiods + (n - 1)
-					A.Set(t/s.BuildPeriod-1, i, fac.Cap)
+					c := f*nperiods + (n - 1)
+					A.Set(r, c, fac.Cap)
 				}
 			}
 		}
