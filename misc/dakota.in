@@ -49,7 +49,7 @@ interface
     fork
         analysis_driver = 'cycdriver -scen="{{.File}}" -addr="{{.Addr}}"'
     asynchronous
-        evaluation_concurrency 4
+        evaluation_concurrency 100
 
 responses
     objective_functions = 1
