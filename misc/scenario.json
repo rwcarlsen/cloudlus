@@ -1,0 +1,60 @@
+{
+    "SimDur": 121,
+	"CyclusTmpl": "cyclus.xml.in",
+	"BuildPeriod": 24,
+    "NuclideCost": {
+        "942390000": 0.40
+    },
+    "Discount": 0.05,
+	"Facs": [
+        {
+            "Proto": "lwr_reactor",
+            "CapitalCost": 500,
+            "OpCost": 1,
+            "Cap": 1, 
+            "Ninitial": 10
+        }, {
+            "Proto": "repo",
+            "CapitalCost": 5000,
+            "OpCost": 1,
+            "BuildAfter": 0,
+            "WasteDiscount": 0.05
+        }, {
+            "Proto": "separations",
+            "CapitalCost": 1000,
+            "OpCost": 5,
+            "BuildAfter": 40
+        }, {
+            "Proto": "spent_fuel_fab",
+            "CapitalCost": 100,
+            "OpCost": 1,
+            "BuildAfter": 40
+        }, {
+            "Proto": "depleted_u_source",
+            "CapitalCost": 10,
+            "OpCost": 1,
+            "BuildAfter": -1,
+            "Ninitial": 1
+        }, {
+            "Proto": "fresh_fuel_fab",
+            "CapitalCost": 10,
+            "OpCost": 1,
+            "BuildAfter": -1,
+            "Ninitial": 1
+        }
+    ],
+	"MinPower": [
+        10,
+        10,
+        10,
+        10,
+        20
+    ],
+	"MaxPower": [
+        20,
+        20,
+        20,
+        20,
+        20
+    ]
+}

@@ -21,17 +21,26 @@ import (
 var (
 	scenfile = flag.String("scen", "scenario.json", "file containing problem scenification")
 	addr     = flag.String("addr", "127.0.0.1:9875", "address to submit jobs to (otherwise, run locally)")
-	out      = flag.String("out", "out.txt", "name of output file")
+	out      = flag.String("out", "out.txt", "name of output file for the remote job")
 	obj      = flag.Bool("obj", false, "true to run job and calculate objective (i.e. workers use this flag)")
 	gen      = flag.Bool("gen", false, "true to just print out job file without submitting")
 )
 
 const tmpDir = "cyctmp"
 
+func init() {
+	log.SetFlags(0)
+	flag.Usage = func() {
+		log.Printf("Usage: cycdriver [opts] [param1 param2 ... paramN]\n")
+		log.Println("generate and run (or print) a cyclus job with the given")
+		log.Println("parameters applied to the specified scenario file")
+		flag.PrintDefaults()
+	}
+}
+
 func main() {
 	var err error
 	flag.Parse()
-	log.SetFlags(log.Lshortfile)
 
 	params := make([]int, flag.NArg())
 	for i, s := range flag.Args() {
