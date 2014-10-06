@@ -89,13 +89,16 @@ type Scenario struct {
 	// MaxPower is a series of max deployed power capacity requirements that
 	// must be maintained for each build period.
 	MaxPower []float64
+	// Params holds a set of potential build schedule values for the scenario.
+	// This usually does not need to be set by the user.
+	Params []Param
+	// Addr is the location of the cyclus simulation execution server.  An
+	// empty string "" indicates that simulations will run locally.
+	Addr string
 
-	// File is the name of the scenario file. This if for internal use and
+	// File is the name of the scenario file. This is for internal use and
 	// does not need to be filled out by the user.
 	File string
-	// Params holds a set of potential build schedule values for the scenario.
-	// This is for internal use and does not need to be specified by the user.
-	Params []Param
 	// Handle is used internally and does not need to be specified by the
 	// user.
 	Handle string
@@ -151,7 +154,7 @@ func (s *Scenario) Run() (dbfile string, simid []byte, err error) {
 	if err != nil {
 		return "", nil, err
 	}
-	err = ioutil.WriteFile(cycin, data, 0755)
+	err = ioutil.WriteFile(cycin, data, 0644)
 	if err != nil {
 		return "", nil, err
 	}

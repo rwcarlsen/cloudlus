@@ -47,7 +47,7 @@ variables
 
 interface
     fork
-        analysis_driver = 'cycdriver -scen={{.File}}'
+        analysis_driver = 'cycdriver -scen="{{.File}}" -addr="{{.Addr}}"'
     asynchronous
         evaluation_concurrency 4
 

@@ -17,6 +17,7 @@ import (
 var (
 	genInfile = flag.String("gen-infile", "", "generate the dakota input file using the named template")
 	scenfile  = flag.String("scen", "scenario.json", "name of optimization scenario file")
+	addr      = flag.String("addr", "", "address to submit jobs to (otherwise, run locally)")
 )
 
 func main() {
@@ -24,14 +25,14 @@ func main() {
 	flag.Parse()
 
 	if *genInfile != "" {
-		genDakotaFile(*genInfile)
+		genDakotaFile(*genInfile, *addr)
 		return
 	}
 
 	paramsfile := flag.Arg(0)
 	objfile := flag.Arg(1)
 
-	f, err := os.Open(objfile)
+	f, err := os.Create(objfile)
 	check(err)
 	defer f.Close()
 
@@ -40,6 +41,7 @@ func main() {
 
 	args := append([]string{"-scen", *scenfile}, params...)
 	cmd := exec.Command("cycdriver", args...)
+
 	cmd.Stderr = os.Stderr
 	cmd.Stdout = f
 
@@ -76,12 +78,13 @@ func ParseParams(fname string) ([]string, error) {
 	return vals, nil
 }
 
-func genDakotaFile(tmplName string) {
+func genDakotaFile(tmplName string, addr string) {
 	genname := filepath.Base(tmplName) + ".gen"
 
 	scen := &scen.Scenario{}
 	err := scen.Load(*scenfile)
 	check(err)
+	scen.Addr = addr
 
 	f, err := os.Create(genname)
 	check(err)
