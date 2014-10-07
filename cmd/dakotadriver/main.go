@@ -39,7 +39,7 @@ func main() {
 	params, err := ParseParams(paramsfile)
 	check(err)
 
-	args := append([]string{"-scen", *scenfile}, params...)
+	args := append([]string{"-scen", *scenfile, "-addr", *addr}, params...)
 	cmd := exec.Command("cycdriver", args...)
 
 	cmd.Stderr = os.Stderr
