@@ -282,35 +282,34 @@ func (s *Scenario) SupportConstr() (low, A, up *mat64.Dense) {
 // scenario bounds.
 func (s *Scenario) PowerConstr() (low, A, up *mat64.Dense) {
 	nperiods := s.nPeriods()
+	tmpl := make([]float64, 0, len(s.MinPower))
+	tmpu := make([]float64, 0, len(s.MaxPower))
 
-	tmpl := make([]float64, len(s.MinPower))
-	tmpu := make([]float64, len(s.MaxPower))
-	copy(tmpl, s.MinPower)
-	copy(tmpu, s.MaxPower)
 	// correct for initially built capacity
-	i := 0
-	for t := s.BuildPeriod; t < s.SimDur; t += s.BuildPeriod {
+	for i := range s.buildTimes() {
+		t := s.BuildPeriod * (1 + i)
 		cap := 0.0
 		for _, fac := range s.Facs {
 			if fac.Alive(1, t) {
 				cap += fac.Cap * float64(fac.Ninitial)
 			}
 		}
-		tmpl[i] -= cap
-		tmpu[i] -= cap
-		i++
+		tmpl = append(tmpl, s.MinPower[i]-cap)
+		tmpu = append(tmpu, s.MaxPower[i]-cap)
 	}
+	nconstr := len(tmpl)
 
-	low = mat64.NewDense(nperiods, 1, tmpl)
-	up = mat64.NewDense(nperiods, 1, tmpu)
-	A = mat64.NewDense(nperiods, s.Nvars(), nil)
+	low = mat64.NewDense(nconstr, 1, tmpl)
+	up = mat64.NewDense(nconstr, 1, tmpu)
+	A = mat64.NewDense(nconstr, s.Nvars(), nil)
 
-	for t := s.BuildPeriod; t < s.SimDur; t += s.BuildPeriod {
+	for i := range tmpl {
+		t := s.BuildPeriod * (1 + i)
 		for f, fac := range s.Facs {
 			for n := 1; n <= nperiods; n++ {
 				if fac.Alive(n*s.BuildPeriod, t) {
-					i := f*nperiods + (n - 1)
-					A.Set(t/s.BuildPeriod-1, i, fac.Cap)
+					c := f*nperiods + (n - 1)
+					A.Set(i, c, fac.Cap)
 				}
 			}
 		}
@@ -318,6 +317,82 @@ func (s *Scenario) PowerConstr() (low, A, up *mat64.Dense) {
 
 	return low, A, up
 }
+
+func (s *Scenario) PowerConstr() (low, A, up *mat64.Dense) {
+	nperiods := s.nPeriods()
+	tmpl := make([]float64, 0, len(s.MinPower))
+	tmpu := make([]float64, 0, len(s.MaxPower))
+
+	// correct for initially built capacity
+	for i := range s.buildTimes() {
+		t := s.BuildPeriod * (1 + i)
+		cap := 0.0
+		for _, fac := range s.Facs {
+			if fac.Alive(1, t) {
+				cap += fac.Cap * float64(fac.Ninitial)
+			}
+		}
+		tmpl = append(tmpl, s.MinPower[i]-cap)
+		tmpu = append(tmpu, s.MaxPower[i]-cap)
+	}
+	nconstr := len(tmpl)
+
+	low = mat64.NewDense(nconstr, 1, tmpl)
+	up = mat64.NewDense(nconstr, 1, tmpu)
+	A = mat64.NewDense(nconstr, s.Nvars(), nil)
+
+	for i := range tmpl {
+		t := s.BuildPeriod * (1 + i)
+		for f, fac := range s.Facs {
+			for n := 1; n <= nperiods; n++ {
+				if fac.Alive(n*s.BuildPeriod, t) {
+					c := f*nperiods + (n - 1)
+					A.Set(i, c, fac.Cap)
+				}
+			}
+		}
+	}
+
+	return low, A, up
+}
+
+func (s *Scenario) findEqConstr() {
+	nperiods := s.nPeriods()
+	for i := range s.MinPower {
+		if s.MinPower[i] != s.MaxPower[i] {
+			continue
+		}
+
+		t := s.BuildPeriod * (1 + i)
+		lastn, lastf := -1, -1
+		for f, fac := range s.Facs {
+			for n := 1; n <= nperiods; n++ {
+				if fac.Alive(n*s.BuildPeriod, t) {
+					c := f*nperiods + (n - 1)
+					A.Set(i, c, fac.Cap)
+					if fac.Cap != 0 {
+						lastn, lastf = n, f
+					}
+				}
+			}
+		}
+		if lastn == -1 {
+			panic("no non-zero coeffs in equality constraint")
+		}
+
+		c := lastf*nperiods + (lastn - 1)
+		eqconstr[c] = Var{lastf, lastn}
+	}
+
+	return low, A, up
+}
+
+type Var struct {
+	Fac         int
+	BuildPeriod int
+}
+
+var eqconstr = map[int]Var{} // map[constraint row] column or variable
 
 // AfterConstr builds and returns matrices representing equality
 // constraints with a parameter multiplier matrix A and upper and lower
@@ -363,6 +438,49 @@ func (s *Scenario) IneqConstr() (low, A, up *mat64.Dense) {
 	A.Stack(a1, a2)
 	up.Stack(u1, u2)
 
+	eqrows := map[int]int{} // map[row][highest-nonzero-col]
+	r, c := A.Dims()
+	for i := 0; i < r; i++ {
+		if low.At(i, 0) == up.At(i, 0) {
+			maxcol := 0
+			for j := 0; j < c; j++ {
+				if A.At(i, j) != 0 {
+					maxcol = j
+				}
+			}
+			eqrows[i] = maxcol
+		}
+	}
+
+	// do gaussian elimination on all constraint rows with the equality
+	// constraint rows as the reference row using the last highest non-zero
+	// column as the fixed variable.  This zeros the column of coefficients
+	// for the variable we are going to calculate in all constraints.
+	for eqr, maxcol := range eqrows {
+		v0 := A.At(eqr, maxcol)
+		for i := 0; i < r; i++ {
+			if i == eqr {
+				continue
+			}
+			mult := -1 * A.At(i, maxcol) / v0
+			for j := 0; j < c; j++ {
+				val := A.At(i, j)
+				newval := A.At(eqr, j)*mult + val
+				A.Set(i, j, newval)
+			}
+
+			newval := low.At(eqr, 0)*mult + low.At(i, 0)
+			low.Set(i, 0, newval)
+			newval = up.At(eqr, 0)*mult + up.At(i, 0)
+			up.Set(i, 0, newval)
+		}
+	}
+
+	// We don't need to eliminate the equality constraint rows because they
+	// will be automatically force calculated to be satisfied anyway.  But
+	// there are corner cases where they might still not be satisfied, so it
+	// is probably better to leave them.
+
 	return low, A, up
 }
 
@@ -392,7 +510,7 @@ func (s *Scenario) EqConstrTarget() (target *mat64.Dense) {
 }
 
 func (s *Scenario) Nvars() int {
-	return s.nPeriods() * len(s.Facs)
+	return s.nPeriods() * len(s.Facs) // - eqc
 }
 
 func (s *Scenario) nPeriods() int {
