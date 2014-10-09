@@ -129,3 +129,18 @@ consists of the following endpoints:
  the submitted job status can be retrieved.  The response body contains a JSON
  object representing the submitted job.
 
+ For example, to just run a command and retrieve standard out, post a request
+ to this endpoint with a JSON body like this:
+
+```json
+{
+    "Id": "[hex-encoded-random-uuid]",
+    "Cmd": [
+        "cyclus",
+        "-a"
+    ]
+}
+```
+
+ Send a GET request to `/api/v1/job` and use the text from the `Stdout` field
+ of the JSON in the response body.
