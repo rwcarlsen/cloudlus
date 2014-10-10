@@ -38,6 +38,9 @@ RUN cd cycamore-1.1.0 && mkdir -p release && cd release && cmake .. -DCMAKE_BUIL
 RUN git clone https://github.com/cyclus/kitlus && cd kitlus/kitlus && PREFIX=/usr/local make install
 RUN cd kitlus/agents && PREFIX=/usr/local make install
 
+# bump number below to force update cloudlus
+RUN echo "1"
+
 ENV GOPATH /
 RUN go get github.com/rwcarlsen/cloudlus/...
 RUN go get github.com/rwcarlsen/cyan/...
