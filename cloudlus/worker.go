@@ -13,6 +13,7 @@ type Worker struct {
 	ServerAddr string
 	FileCache  map[string][]byte
 	Wait       time.Duration
+	Whitelist  []string
 }
 
 func (w *Worker) Run() error {
@@ -55,6 +56,8 @@ func (w *Worker) dojob() (wait bool, err error) {
 	} else if err != nil {
 		return true, err
 	}
+
+	j.Whitelist(w.Whitelist...)
 
 	// add precached files
 	for name, data := range w.FileCache {

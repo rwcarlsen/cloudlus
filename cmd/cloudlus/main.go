@@ -84,8 +84,19 @@ func serve(cmd string, args []string) {
 func work(cmd string, args []string) {
 	fs := newFlagSet(cmd, "", "run a worker polling for jobs and workers")
 	wait := fs.Duration("interval", 10*time.Second, "time interval between work polls when idle")
+	whitelist := fs.String("whitelist", "", "comma-separated list of allowed commands for jobs (default allows all commands)")
 	fs.Parse(args)
-	w := &cloudlus.Worker{ServerAddr: *addr, Wait: *wait}
+
+	wl := strings.Split(*whitelist, ",")
+	cmds := []string{}
+	for _, s := range wl {
+		trimmed := strings.TrimSpace(s)
+		if len(trimmed) > 0 {
+			cmds = append(cmds, trimmed)
+		}
+	}
+
+	w := &cloudlus.Worker{ServerAddr: *addr, Wait: *wait, Whitelist: cmds}
 	w.Run()
 }
 

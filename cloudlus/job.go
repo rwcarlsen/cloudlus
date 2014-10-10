@@ -40,6 +40,7 @@ type Job struct {
 	Note      string
 	dir       string
 	wd        string
+	whitelist []string
 }
 
 type File struct {
@@ -79,6 +80,10 @@ func NewJobDefaultFile(fname string) (*Job, error) {
 	return NewJobDefault(data), nil
 }
 
+func (j *Job) Whitelist(cmds ...string) {
+	j.whitelist = append(j.whitelist, cmds...)
+}
+
 func (j *Job) AddOutfile(fname string) {
 	j.Outfiles = append(j.Outfiles, File{fname, nil, false})
 }
@@ -109,15 +114,6 @@ func (j *Job) Execute() {
 	j.Started = time.Now()
 	defer func() { j.Finished = time.Now() }()
 
-	if err := j.setup(); err != nil {
-		j.Status = StatusFailed
-		log.Print(err)
-		return
-	}
-	defer j.teardown()
-
-	var err error
-
 	// set up stderr/stdout tee's and exec command
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
@@ -125,6 +121,35 @@ func (j *Job) Execute() {
 	multierr := io.MultiWriter(os.Stderr, &stderr)
 	defer func() { j.Stdout += stdout.String() }()
 	defer func() { j.Stderr += stderr.String() }()
+
+	// make sure job is valid/acceptable
+	if len(j.Cmd) == 0 {
+		j.Status = StatusFailed
+		fmt.Fprint(multierr, "job has no command to run")
+		return
+	} else if len(j.whitelist) > 0 {
+		approved := false
+		for _, cmd := range j.whitelist {
+			if j.Cmd[0] == cmd {
+				approved = true
+				break
+			}
+		}
+		if !approved {
+			j.Status = StatusFailed
+			fmt.Fprintf(multierr, "'%v' is not a white-listed command", j.Cmd[0])
+			return
+		}
+	}
+
+	if err := j.setup(); err != nil {
+		j.Status = StatusFailed
+		fmt.Fprint(multierr, err)
+		return
+	}
+	defer j.teardown()
+
+	var err error
 
 	cmd := exec.Command(j.Cmd[0], j.Cmd[1:]...)
 	fmt.Printf("running job %v command: %v\n", j.Id, cmd.Args)
@@ -137,7 +162,7 @@ func (j *Job) Execute() {
 	go func() {
 		if err := cmd.Run(); err != nil {
 			j.Status = StatusFailed
-			log.Print(err)
+			fmt.Fprint(multierr, err)
 		} else {
 			j.Status = StatusComplete
 		}
