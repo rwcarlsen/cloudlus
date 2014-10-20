@@ -52,6 +52,7 @@ func NewServer(httpaddr, rpcaddr string) *Server {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", s.dashmain)
+	mux.HandleFunc("/api/v1/job", s.handleJob)
 	mux.HandleFunc("/api/v1/job/", s.handleJob)
 	mux.HandleFunc("/api/v1/job-stat/", s.handleJobStat)
 	mux.HandleFunc("/api/v1/job-infile", s.handleSubmitInfile)
