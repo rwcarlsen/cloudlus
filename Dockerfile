@@ -1,5 +1,5 @@
 
-FROM base/arch
+FROM base/archlinux
 
 RUN pacman -Syu --noconfirm
 
@@ -26,13 +26,18 @@ RUN pacman -S --noconfirm python2-pytables
 RUN ln -s /usr/bin/python2 /usr/local/bin/python
 
 # install cyclus and cycamore
-RUN wget https://github.com/cyclus/cyclus/archive/v1.1.1.tar.gz -O cyclus-v1.1.1.tar.gz
-RUN tar -xzf cyclus-v1.1.1.tar.gz
-RUN cd cyclus-v1.1.1 && mkdir -p release && cd release && cmake .. -DCMAKE_BUILD_TYPE=Release && make && make install
-
-RUN wget https://github.com/cyclus/cycamore/archive/v1.1.1.tar.gz -O cycamore-v1.1.1.tar.gz
-RUN tar -xzf cycamore-v1.1.1.tar.gz
-RUN cd cycamore-v1.1.1 && mkdir -p release && cd release && cmake .. -DCMAKE_BUILD_TYPE=Release && make && make install
+RUN wget https://github.com/cyclus/cyclus/archive/v1.1.1.tar.gz -O cyclus-1.1.1.tar.gz
+RUN tar -xzf cyclus-1.1.1.tar.gz && mkdir -p cyclus-1.1.1/Release
+WORKDIR cyclus-1.1.1/Release
+RUN cmake .. -DCMAKE_BUILD_TYPE=Release
+RUN make && make install
+WORKDIR /
+RUN wget https://github.com/cyclus/cycamore/archive/v1.1.1.tar.gz -O cycamore-1.1.1.tar.gz
+RUN tar -xzf cycamore-1.1.1.tar.gz && mkdir -p cycamore-1.1.1/Release
+WORKDIR cycamore-1.1.1/Release
+RUN cmake .. -DCMAKE_BUILD_TYPE=Release
+RUN make && make install
+WORKDIR /
 
 # install other modules
 RUN git clone https://github.com/cyclus/kitlus && cd kitlus/kitlus && PREFIX=/usr/local make install
@@ -44,3 +49,6 @@ RUN echo "1"
 ENV GOPATH /
 RUN go get github.com/rwcarlsen/cloudlus/...
 RUN go get github.com/rwcarlsen/cyan/...
+
+cloudlus -addr=cycrun.fuelcycle.org:80 work -interval=5s -whitelist=cyclus
+ENTRYPOINT ["/bin/cloudlus", "-addr", "cycrun.fuelcycle.org:80", "work", "-interval", "3s", "-whitelist", "cyclus"]
