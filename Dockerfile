@@ -37,8 +37,21 @@ RUN cd cycamore-1.1.1/Release && cmake .. -DCMAKE_BUILD_TYPE=Release
 RUN cd cycamore-1.1.1/Release && make && make install
 
 # install other modules
-RUN git clone https://github.com/cyclus/kitlus && cd kitlus/kitlus && PREFIX=/usr/local make install
+RUN git clone https://github.com/cyclus/kitlus
+RUN cd kitlus/kitlus && PREFIX=/usr/local make install
 RUN cd kitlus/agents && PREFIX=/usr/local make install
+
+# install aurget
+RUN wget https://aur.archlinux.org/packages/au/aurget/aurget.tar.gz
+RUN tar -xzf aurget.tar.gz
+RUN cd aurget && makepkg -si --asroot --noconfirm
+
+# install bright light
+#RUN aurget -S --noconfirm --asroot cblas
+#RUN git clone https://github.com/FlanFlanagan/Bright-lite
+#RUN mkdir -p Bright-lite/Release
+#RUN cd Bright-lite/Release && cmake .. -DCMAKE_BUILD_TYPE=Release
+#RUN cd Bright-lite/Release && make && make install
 
 # bump number below to force update cloudlus
 RUN echo "1"
