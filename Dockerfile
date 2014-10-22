@@ -28,16 +28,13 @@ RUN ln -s /usr/bin/python2 /usr/local/bin/python
 # install cyclus and cycamore
 RUN wget https://github.com/cyclus/cyclus/archive/v1.1.1.tar.gz -O cyclus-1.1.1.tar.gz
 RUN tar -xzf cyclus-1.1.1.tar.gz && mkdir -p cyclus-1.1.1/Release
-WORKDIR cyclus-1.1.1/Release
-RUN cmake .. -DCMAKE_BUILD_TYPE=Release
-RUN make && make install
-WORKDIR /
+RUN cd cyclus-1.1.1/Release && cmake .. -DCMAKE_BUILD_TYPE=Release
+RUN cd cyclus-1.1.1/Release && make && make install
+
 RUN wget https://github.com/cyclus/cycamore/archive/v1.1.1.tar.gz -O cycamore-1.1.1.tar.gz
 RUN tar -xzf cycamore-1.1.1.tar.gz && mkdir -p cycamore-1.1.1/Release
-WORKDIR cycamore-1.1.1/Release
-RUN cmake .. -DCMAKE_BUILD_TYPE=Release
-RUN make && make install
-WORKDIR /
+RUN cd cycamore-1.1.1/Release && cmake .. -DCMAKE_BUILD_TYPE=Release
+RUN cd cycamore-1.1.1/Release && make && make install
 
 # install other modules
 RUN git clone https://github.com/cyclus/kitlus && cd kitlus/kitlus && PREFIX=/usr/local make install
