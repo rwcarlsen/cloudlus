@@ -66,6 +66,7 @@ type DB struct {
 	cache     *lru.Cache
 	dblimiter *lru.Cache
 	db        *leveldb.DB
+	Log       *log.Logger
 }
 
 func NewDB(path string, cachelimit, dblimit int) (*DB, error) {
@@ -99,6 +100,7 @@ func NewDB(path string, cachelimit, dblimit int) (*DB, error) {
 	if err := it.Error(); err != nil {
 		return nil, err
 	}
+
 	fmt.Printf("[INFO] loaded %v jobs from disk database\n", count)
 	fmt.Printf("[INFO] disk job store is %v%% full\n", float64(d.dblimiter.Size())/float64(dblimit))
 
@@ -185,7 +187,11 @@ func (jp *jobProxy) OnPurge(why lru.PurgeReason) {
 		return
 	}
 
-	fmt.Printf("[PURGE] job %v removed from full disk db\n", jp.jid)
+	if jp.d.Log != nil {
+		jp.d.Log.Printf("[PURGE] job %v removed from full disk db\n", jp.jid)
+	} else {
+		fmt.Printf("[PURGE] job %v removed from full disk db\n", jp.jid)
+	}
 	err := jp.d.db.Delete(jp.jid[:], nil)
 	if err != nil {
 		log.Print(err)
