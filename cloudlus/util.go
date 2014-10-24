@@ -2,9 +2,14 @@ package cloudlus
 
 import (
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"log"
 	"strings"
 	"time"
+
+	"github.com/rwcarlsen/lru"
+	"github.com/syndtr/goleveldb/leveldb"
 )
 
 type Beat struct {
@@ -56,3 +61,85 @@ func (i *JobId) UnmarshalJSON(data []byte) error {
 }
 
 func (i JobId) String() string { return hex.EncodeToString(i[:]) }
+
+type DB struct {
+	cache     *lru.Cache
+	dblimiter *lru.Cache
+	db        *leveldb.DB
+}
+
+func NewDB(path string, cachelimit, dblimit int64) (*DB, error) {
+	d := &DB{}
+
+	d.cache = lru.New(cachelimit)
+	d.cache.OnMiss(d.cacheMiss)
+
+	d.dblimiter = lru.New(dblimit)
+	db, err := leveldb.OpenFile(path, nil)
+	if err != nil {
+		return nil, err
+	}
+	d.db = db
+	return d, nil
+}
+
+func (d *DB) Get(id JobId) (*Job, error) {
+	v, err := d.cache.Get(id.String())
+	if err != nil {
+		return nil, err
+	}
+	return v.(*Job), nil
+}
+
+func (d *DB) Put(j *Job) error {
+	data, err := json.Marshal(j)
+	if err != nil {
+		return err
+	}
+
+	err = d.db.Put(j.Id[:], data, nil)
+	if err != nil {
+		return err
+	}
+
+	d.dblimiter.Set(j.Id.String(), &jobProxy{j.Id, int64(len(data)), d})
+
+	d.cache.Set(j.Id.String(), j)
+	return nil
+}
+
+func (d *DB) Items() ([]lru.Cacheable, error) { return d.cache.Items() }
+
+func (d *DB) cacheMiss(idstr string) (lru.Cacheable, error) {
+	id, err := hex.DecodeString(idstr)
+	if err != nil {
+		return nil, err
+	}
+
+	data, err := d.db.Get(id, nil)
+	j := &Job{}
+	err = json.Unmarshal(data, &j)
+	if err != nil {
+		return nil, err
+	}
+	return j, nil
+}
+
+type jobProxy struct {
+	jid  JobId
+	size int64
+	d    *DB
+}
+
+func (jp *jobProxy) Size() int64 { return jp.size }
+
+func (jp *jobProxy) OnPurge(why lru.PurgeReason) {
+	if why != lru.CACHEFULL {
+		return
+	}
+
+	err := jp.d.db.Delete(jp.jid[:], nil)
+	if err != nil {
+		log.Print(err)
+	}
+}
