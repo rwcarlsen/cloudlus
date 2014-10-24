@@ -195,10 +195,9 @@ func (s *Server) dispatcher() {
 			} else {
 				fmt.Printf("job %v fetched by worker\n", j.Id)
 				s.jobinfo[j.Id] = NewBeat(req.WorkerId, j.Id)
+				j.Status = StatusRunning
+				s.alljobs.Put(j)
 			}
-
-			j.Status = StatusRunning
-			s.alljobs.Put(j)
 
 			req.Ch <- j
 		case b := <-s.beat:
