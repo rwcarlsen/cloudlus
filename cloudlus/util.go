@@ -68,13 +68,13 @@ type DB struct {
 	db        *leveldb.DB
 }
 
-func NewDB(path string, cachelimit, dblimit int64) (*DB, error) {
+func NewDB(path string, cachelimit, dblimit int) (*DB, error) {
 	d := &DB{}
 
-	d.cache = lru.New(cachelimit)
+	d.cache = lru.New(int64(cachelimit))
 	d.cache.OnMiss(d.cacheMiss)
 
-	d.dblimiter = lru.New(dblimit)
+	d.dblimiter = lru.New(int64(dblimit))
 	db, err := leveldb.OpenFile(path, nil)
 	if err != nil {
 		return nil, err
@@ -85,7 +85,9 @@ func NewDB(path string, cachelimit, dblimit int64) (*DB, error) {
 	// leveldb
 	it := db.NewIterator(nil, nil)
 	defer it.Release()
+	count := 0
 	for it.Next() {
+		count++
 		j := &Job{}
 		data := it.Value()
 		err := json.Unmarshal(data, &j)
@@ -97,6 +99,8 @@ func NewDB(path string, cachelimit, dblimit int64) (*DB, error) {
 	if err := it.Error(); err != nil {
 		return nil, err
 	}
+	fmt.Printf("loaded %v jobs from disk database\n", count)
+	fmt.Printf("disk job store is %v%% full\n", float64(d.dblimiter.Size())/float64(dblimit))
 
 	return d, nil
 }

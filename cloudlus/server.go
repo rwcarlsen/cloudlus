@@ -15,6 +15,8 @@ const dblimit = 7000 * MB
 
 var nojoberr = errors.New("no jobs available to run")
 
+const defaultdbpath = "./jobdb"
+
 const beatInterval = 60 * time.Second
 
 type Server struct {
@@ -36,7 +38,7 @@ type Server struct {
 // TODO: Make worker RPC serving separate from submitter RPC interface serving
 // to allow for local listening only for job submission for more security.
 
-func NewServer(dbpath string, httpaddr, rpcaddr string) *Server {
+func NewServer(httpaddr, rpcaddr string, db *DB) *Server {
 	s := &Server{
 		submitjobs:   make(chan jobSubmit),
 		submitchans:  map[[16]byte]chan *Job{},
@@ -48,9 +50,12 @@ func NewServer(dbpath string, httpaddr, rpcaddr string) *Server {
 		rpcaddr:      rpcaddr,
 	}
 
-	db, err := NewDB(dbpath, cachelimit, dblimit)
-	if err != nil {
-		panic(err)
+	var err error
+	if db == nil {
+		db, err = NewDB(defaultdbpath, cachelimit, dblimit)
+		if err != nil {
+			panic(err)
+		}
 	}
 	s.alljobs = db
 
