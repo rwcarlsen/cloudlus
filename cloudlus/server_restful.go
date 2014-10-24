@@ -27,10 +27,9 @@ func (s *Server) handleJob(w http.ResponseWriter, r *http.Request) {
 		}
 
 		var data []byte
-		if j.Status == StatusComplete || j.Status == StatusFailed {
+		if j.Done() {
 			data, err = json.Marshal(j)
 		} else {
-
 			data, err = json.Marshal(NewJobStat(j))
 		}
 
