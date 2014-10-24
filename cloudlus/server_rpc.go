@@ -1,7 +1,5 @@
 package cloudlus
 
-import "fmt"
-
 type RPC struct {
 	s *Server
 }
@@ -33,7 +31,6 @@ func (r *RPC) Retrieve(j JobId, result **Job) error {
 }
 
 func (r *RPC) Fetch(wid WorkerId, j **Job) error {
-	fmt.Printf("got work request from worker %v\n", wid)
 	req := workRequest{wid, make(chan *Job)}
 	r.s.fetchjobs <- req
 	*j = <-req.Ch
@@ -45,7 +42,6 @@ func (r *RPC) Fetch(wid WorkerId, j **Job) error {
 }
 
 func (r *RPC) Push(j *Job, unused *int) error {
-	fmt.Printf("received job %v back from worker %v\n", j.Id, j.WorkerId)
 	r.s.pushjobs <- j
 	return nil
 }

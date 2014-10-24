@@ -84,6 +84,10 @@ func (j *Job) Whitelist(cmds ...string) {
 	j.whitelist = append(j.whitelist, cmds...)
 }
 
+func (j *Job) Done() bool {
+	return j.Status == StatusComplete || j.Status == StatusFailed
+}
+
 func (j *Job) AddOutfile(fname string) {
 	j.Outfiles = append(j.Outfiles, File{fname, nil, false})
 }

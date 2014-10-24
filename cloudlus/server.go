@@ -7,14 +7,15 @@ import (
 	"net/http"
 	"net/rpc"
 	"time"
-
-	"github.com/rwcarlsen/lru"
 )
 
 const MB = 1 << 20
-const cacheSize = 400 * MB
+const cachelimit = 400 * MB
+const dblimit = 7000 * MB
 
 var nojoberr = errors.New("no jobs available to run")
+
+const defaultdbpath = "./jobdb"
 
 const beatInterval = 60 * time.Second
 
@@ -26,8 +27,8 @@ type Server struct {
 	retrievejobs chan jobRequest
 	pushjobs     chan *Job
 	fetchjobs    chan workRequest
-	queue        []*Job
-	alljobs      *lru.Cache
+	queue        []JobId
+	alljobs      *DB
 	rpc          *RPC
 	jobinfo      map[JobId]Beat // map[Worker]Job
 	beat         chan Beat
@@ -37,18 +38,31 @@ type Server struct {
 // TODO: Make worker RPC serving separate from submitter RPC interface serving
 // to allow for local listening only for job submission for more security.
 
-func NewServer(httpaddr, rpcaddr string) *Server {
+func NewServer(httpaddr, rpcaddr string, db *DB) *Server {
 	s := &Server{
 		submitjobs:   make(chan jobSubmit),
 		submitchans:  map[[16]byte]chan *Job{},
 		retrievejobs: make(chan jobRequest),
 		pushjobs:     make(chan *Job),
 		fetchjobs:    make(chan workRequest),
-		alljobs:      lru.New(cacheSize),
 		jobinfo:      map[JobId]Beat{},
 		beat:         make(chan Beat),
 		rpcaddr:      rpcaddr,
 	}
+
+	var err error
+	if db == nil {
+		db, err = NewDB(defaultdbpath, cachelimit, dblimit)
+		if err != nil {
+			panic(err)
+		}
+	}
+	s.alljobs = db
+	queue, err := db.LoadQueue()
+	if err != nil {
+		panic(err)
+	}
+	s.queue = queue
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", s.dashmain)
@@ -124,15 +138,15 @@ func (s *Server) dispatcher() {
 			now := time.Now()
 			for jid, b := range s.jobinfo {
 				if now.Sub(b.Time) > 2*beatInterval {
-					v, err := s.alljobs.Get(jid.String())
+					j, err := s.alljobs.Get(jid)
 					if err != nil {
 						log.Printf("cannot find job %v for reassignment", jid)
 					} else {
-						fmt.Printf("requeuing job %v\n", jid)
-						j := v.(*Job)
+						fmt.Printf("[REQUEUE] job %v\n", jid)
 						j.Status = StatusQueued
-						s.queue = append([]*Job{j}, s.queue...)
+						s.queue = append([]JobId{j.Id}, s.queue...)
 						delete(s.jobinfo, jid)
+						s.alljobs.Put(j)
 					}
 				}
 			}
@@ -141,28 +155,30 @@ func (s *Server) dispatcher() {
 
 		select {
 		case js := <-s.submitjobs:
-			fmt.Printf("job %v submitted\n", js.J.Id)
+			fmt.Printf("[SUBMIT] job %v\n", js.J.Id)
 			j := js.J
 			if js.Result != nil {
 				s.submitchans[j.Id] = js.Result
 			}
 			j.Status = StatusQueued
 			j.Submitted = time.Now()
-			s.queue = append(s.queue, j)
-			s.alljobs.Set(j.Id.String(), j)
+			s.queue = append(s.queue, j.Id)
+
+			s.alljobs.Put(j)
 		case req := <-s.retrievejobs:
-			if v, err := s.alljobs.Get(req.Id.String()); err == nil {
-				req.Resp <- v.(*Job)
+			if j, err := s.alljobs.Get(req.Id); err == nil {
+				fmt.Printf("[RETRIEVE] job %v\n", j.Id)
+				req.Resp <- j
 			} else {
 				req.Resp <- nil
 			}
 		case j := <-s.pushjobs:
-			fmt.Printf("job %v pushed by worker\n", j.Id)
-			if v, err := s.alljobs.Get(j.Id.String()); err == nil {
+			fmt.Printf("[PUSH] job %v\n", j.Id)
+			if jj, err := s.alljobs.Get(j.Id); err == nil {
 				// workers nilify the Infiles to reduce network traffic
 				// we want to re-add the locally stored infiles back to keep
 				// job data complete.
-				j.Infiles = v.(*Job).Infiles
+				j.Infiles = jj.Infiles
 			}
 
 			if ch, ok := s.submitchans[j.Id]; ok {
@@ -171,25 +187,28 @@ func (s *Server) dispatcher() {
 				delete(s.submitchans, j.Id)
 			}
 			delete(s.jobinfo, j.Id)
-			s.alljobs.Set(j.Id.String(), j)
+			s.alljobs.Put(j)
 		case req := <-s.fetchjobs:
 			var j *Job
+			var err error
 
 			// skip jobs that were finished by a worker reassigned *from*
-			for i, job := range s.queue {
-				v, err := s.alljobs.Get(job.Id.String())
-				if err == nil && v.(*Job).Status == StatusQueued {
-					j = v.(*Job)
+			for i, id := range s.queue {
+				j, err = s.alljobs.Get(id)
+				if err == nil && j.Status == StatusQueued {
 					s.queue = s.queue[i+1:]
 					break
 				}
 			}
 
 			if j == nil {
+				fmt.Printf("[FETCH] no work in queue (worker %v)\n", req.WorkerId)
 				s.queue = nil
 			} else {
-				fmt.Printf("job %v fetched by worker\n", j.Id)
+				fmt.Printf("[FETCH] job %v (worker %v)\n", j.Id, req.WorkerId)
 				s.jobinfo[j.Id] = NewBeat(req.WorkerId, j.Id)
+				j.Status = StatusRunning
+				s.alljobs.Put(j)
 			}
 
 			req.Ch <- j
@@ -197,6 +216,7 @@ func (s *Server) dispatcher() {
 			// make sure that this job hasn't been reassigned to another worker
 			oldb := s.jobinfo[b.JobId]
 			if oldb.WorkerId == b.WorkerId {
+				fmt.Printf("[BEAT] job %v (worker %v)\n", b.JobId, b.WorkerId)
 				s.jobinfo[b.JobId] = b
 			}
 		}
