@@ -80,6 +80,24 @@ func NewDB(path string, cachelimit, dblimit int64) (*DB, error) {
 		return nil, err
 	}
 	d.db = db
+
+	// populate dblimiter lru cache with currently existing jobs from the disk
+	// leveldb
+	it := db.NewIterator(nil, nil)
+	defer it.Release()
+	for it.Next() {
+		j := &Job{}
+		data := it.Value()
+		err := json.Unmarshal(data, &j)
+		if err != nil {
+			return nil, err
+		}
+		d.dblimiter.Set(j.Id.String(), &jobProxy{j.Id, int64(len(data)), d})
+	}
+	if err := it.Error(); err != nil {
+		return nil, err
+	}
+
 	return d, nil
 }
 
