@@ -142,7 +142,7 @@ func (s *Server) dispatcher() {
 					if err != nil {
 						log.Printf("cannot find job %v for reassignment", jid)
 					} else {
-						fmt.Printf("requeuing job %v\n", jid)
+						fmt.Printf("[REQUEUE] job %v\n", jid)
 						j.Status = StatusQueued
 						s.queue = append([]JobId{j.Id}, s.queue...)
 						delete(s.jobinfo, jid)
@@ -155,7 +155,7 @@ func (s *Server) dispatcher() {
 
 		select {
 		case js := <-s.submitjobs:
-			fmt.Printf("job %v submitted\n", js.J.Id)
+			fmt.Printf("[SUBMIT] job %v\n", js.J.Id)
 			j := js.J
 			if js.Result != nil {
 				s.submitchans[j.Id] = js.Result
@@ -167,12 +167,13 @@ func (s *Server) dispatcher() {
 			s.alljobs.Put(j)
 		case req := <-s.retrievejobs:
 			if j, err := s.alljobs.Get(req.Id); err == nil {
+				fmt.Printf("[RETRIEVE] job %v\n", j.Id)
 				req.Resp <- j
 			} else {
 				req.Resp <- nil
 			}
 		case j := <-s.pushjobs:
-			fmt.Printf("job %v pushed by worker\n", j.Id)
+			fmt.Printf("[PUSH] job %v\n", j.Id)
 			if jj, err := s.alljobs.Get(j.Id); err == nil {
 				// workers nilify the Infiles to reduce network traffic
 				// we want to re-add the locally stored infiles back to keep
@@ -201,9 +202,10 @@ func (s *Server) dispatcher() {
 			}
 
 			if j == nil {
+				fmt.Printf("[FETCH] no work in queue (worker %v)\n", req.WorkerId)
 				s.queue = nil
 			} else {
-				fmt.Printf("job %v fetched by worker\n", j.Id)
+				fmt.Printf("[FETCH] job %v (worker %v)\n", j.Id, req.WorkerId)
 				s.jobinfo[j.Id] = NewBeat(req.WorkerId, j.Id)
 				j.Status = StatusRunning
 				s.alljobs.Put(j)
@@ -214,6 +216,7 @@ func (s *Server) dispatcher() {
 			// make sure that this job hasn't been reassigned to another worker
 			oldb := s.jobinfo[b.JobId]
 			if oldb.WorkerId == b.WorkerId {
+				fmt.Printf("[BEAT] job %v (worker %v)\n", b.JobId, b.WorkerId)
 				s.jobinfo[b.JobId] = b
 			}
 		}

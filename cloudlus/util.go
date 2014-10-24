@@ -99,8 +99,8 @@ func NewDB(path string, cachelimit, dblimit int) (*DB, error) {
 	if err := it.Error(); err != nil {
 		return nil, err
 	}
-	fmt.Printf("loaded %v jobs from disk database\n", count)
-	fmt.Printf("disk job store is %v%% full\n", float64(d.dblimiter.Size())/float64(dblimit))
+	fmt.Printf("[INFO] loaded %v jobs from disk database\n", count)
+	fmt.Printf("[INFO] disk job store is %v%% full\n", float64(d.dblimiter.Size())/float64(dblimit))
 
 	return d, nil
 }
@@ -116,9 +116,13 @@ func (d *DB) LoadQueue() ([]JobId, error) {
 		if err != nil {
 			return nil, err
 		}
-		if !j.Done() {
-			queue = append(queue, j.Id)
+		if j.Done() {
+			continue
 		}
+
+		j.Status = StatusQueued
+		queue = append(queue, j.Id)
+		d.Put(j)
 	}
 	if err := it.Error(); err != nil {
 		return nil, err
@@ -181,6 +185,7 @@ func (jp *jobProxy) OnPurge(why lru.PurgeReason) {
 		return
 	}
 
+	fmt.Printf("[PURGE] job %v removed from full disk db\n", jp.jid)
 	err := jp.d.db.Delete(jp.jid[:], nil)
 	if err != nil {
 		log.Print(err)
