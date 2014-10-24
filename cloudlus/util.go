@@ -105,6 +105,27 @@ func NewDB(path string, cachelimit, dblimit int) (*DB, error) {
 	return d, nil
 }
 
+func (d *DB) LoadQueue() ([]JobId, error) {
+	it := d.db.NewIterator(nil, nil)
+	defer it.Release()
+	queue := []JobId{}
+	for it.Next() {
+		j := &Job{}
+		data := it.Value()
+		err := json.Unmarshal(data, &j)
+		if err != nil {
+			return nil, err
+		}
+		if !j.Done() {
+			queue = append(queue, j.Id)
+		}
+	}
+	if err := it.Error(); err != nil {
+		return nil, err
+	}
+	return queue, nil
+}
+
 func (d *DB) Get(id JobId) (*Job, error) {
 	v, err := d.cache.Get(id.String())
 	if err != nil {

@@ -58,6 +58,11 @@ func NewServer(httpaddr, rpcaddr string, db *DB) *Server {
 		}
 	}
 	s.alljobs = db
+	queue, err := db.LoadQueue()
+	if err != nil {
+		panic(err)
+	}
+	s.queue = queue
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", s.dashmain)
