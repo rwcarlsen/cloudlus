@@ -181,7 +181,7 @@ func run(jobs []*cloudlus.Job, async bool) {
 }
 
 func retrieve(cmd string, args []string) {
-	fs := newFlagSet(cmd, "[JOBID...]", "retrieve the result tar file for the given job id")
+	fs := newFlagSet(cmd, "[JOBID...]", "retrieve job result json files for the given job ids")
 	fs.Parse(args)
 
 	if len(fs.Args()) == 0 {

@@ -3,22 +3,103 @@ Cloudlus
 =========
 
 This is a collection of tools for running Cyclus simulations in the cloud and
-in high-throughput computing environments.  After installing the Go
-toolchain (http://golang.org/doc/install) - likely available as a standard
-package in your favorite package manager - all you need to do is:
+in high-throughput computing environments.  After installing the Go toolchain
+(http://golang.org/doc/install) and setting your `GOPATH` - likely available
+as a standard package in your favorite package manager - all you need to do
+is:
 
 ```bash
 go get github.com/rwcarlsen/cloudlus/...
 ```
 
-This provides a few basic comands.  The `cloudlus` command provides the
-ability to run a remote execution server.  This server handles the dispatch
-and distribution of cyclus jobs to *workers* that can also be deployed with
-this command.  Their can be an arbitrary number of workers and they can live
+You'll want `GOPATH/bin` to be in your `PATH`. You will then be able to use a
+few cli tools described below.
+
+The primary tool provided is the `cloudlus` command. It provides the ability
+to run a remote execution server.  This server handles the dispatch and
+distribution of cyclus jobs to *workers* that can also be deployed with this
+command.  There can be an arbitrary number of workers and they can live
 locally on the same machine as the server or somewhere else in the nets.
 Cyclus jobs can be deployed and fetched to/from the server using the
-`cloudlus` command.  The server also provides a simple RESTful api.  The api
-consists of the following endpoints:
+`cloudlus` command.  The server also provides a simple RESTful api.
+
+CLI tools
+----------
+
+`cloudlus` is the primary command/tool provided by this package.
+With its several subcommands, it can be used to:
+
+* Deploy a remote execution server.
+
+* Deploy remote execution workers that fetch work and push results to a
+deployed server.
+
+* Submit/retrieve jobs to/from a running remote execution server.
+
+All subcommands have a "global" option flag `-addr=[ip:port]`.  This
+specifies the remote execution server address.  By default, workers will run
+*any* command sent to them - there is no sandboxing. It is recommended that
+either you provide a whitelist of approved commands or run workers in a
+sandboxed/container type environment.
+
+To run a remote execution server:
+
+```bash
+cloudlus -addr=0.0.0.0:80 serve -host=my.domain.com -cache=200 -dblimit=1000
+```
+
+This runs a remote execution server on port 80 with a 200 MB in-memory job
+cache and an on-disk job results database of up to 1 GB.  Job results are
+purged on an LRU basis.  If the server dies, or is restarted, it reloads job
+history from the existing on-disk database and requeues previously unfinished
+jobs.  The server provides a super-simple dashboard at `[host]/` that show the
+most recent jobs and their status.  Stdout+stderr can be viewed for each job
+by clicking the corresponding link in the *status* column.  A job's output
+files can be retrieved as a zip file by clicking the corresponding link in the
+*output* column.  If the job was a default cyclus input file run, clicking on
+the job-id link shows the input file.
+
+To run a worker for the server:
+
+```bash
+cloudlus -addr=my.domain.com:80 work -interval=3s -whitelist=cyclus
+```
+
+This worker will poll the remote execution server at `my.domain.com` every 3
+seconds for work when idle.  And the worker will only run the `cyclus`
+command. Jobs with other commands will be rejected.
+
+Jobs can also be submitted:
+
+```bash
+cloudlus submit job1.json job2.json
+```
+
+This will submit 2 jobs, for which there must be existing json files.  The
+structure of these files exactly corresponds to the REST api request body for
+submitting jobs (described below).  There is also a shortcut for directly
+submitting Cyclus input files to run as jobs:
+
+```bash
+cloudlus submit-infile my-sim.xml
+```
+
+By default commands for submitting jobs are synchronous and won't finish until
+the job is complete and results are returned.  Results are downloaded into
+files named uniquely using the submitted job id's in the form
+`result-[jobid].json`.
+
+Output files from these results can be unpacked into directories named in the
+form `files-[jobid]` using the unpack command:
+
+```bash
+cloudlus unpack result-[jobid].json result-[anotherjobid].json
+```
+
+REST api
+----------
+
+The api consists of the following endpoints:
 
 * GET to `[host]/api/v1/job/[job-id]` returns a JSON object in the response
   body with all known information about the job including any output
