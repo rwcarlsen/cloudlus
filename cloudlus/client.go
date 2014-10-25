@@ -1,6 +1,9 @@
 package cloudlus
 
-import "net/rpc"
+import (
+	"net/rpc"
+	"strings"
+)
 
 type Client struct {
 	client *rpc.Client
@@ -8,6 +11,9 @@ type Client struct {
 }
 
 func Dial(addr string) (*Client, error) {
+	if !strings.Contains(addr, ":") {
+		addr += ":80"
+	}
 	client, err := rpc.DialHTTP("tcp", addr)
 	if err != nil {
 		return nil, err
