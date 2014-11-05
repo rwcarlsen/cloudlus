@@ -8,8 +8,10 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/rwcarlsen/cloudlus/cloudlus"
@@ -83,6 +85,19 @@ func serve(cmd string, args []string) {
 	s := cloudlus.NewServer(*addr, *rpcaddr, db)
 	s.Host = fulladdr(*host)
 	fmt.Printf("Listening on %v\n", *addr)
+
+	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		<-sigs
+		err := s.Close()
+		if err != nil {
+			log.Print(err)
+		}
+		fmt.Println("jobs saved successfully")
+		os.Exit(1)
+	}()
+
 	err = s.ListenAndServe()
 	fatalif(err)
 }

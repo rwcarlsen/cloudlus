@@ -35,6 +35,7 @@ type Server struct {
 	jobinfo      map[JobId]Beat // map[Worker]Job
 	beat         chan Beat
 	rpcaddr      string
+	kill         chan struct{}
 }
 
 // TODO: Make worker RPC serving separate from submitter RPC interface serving
@@ -51,6 +52,7 @@ func NewServer(httpaddr, rpcaddr string, db *DB) *Server {
 		beat:         make(chan Beat),
 		rpcaddr:      rpcaddr,
 		log:          log.New(os.Stdout, "", log.LstdFlags),
+		kill:         make(chan struct{}),
 	}
 
 	var err error
@@ -107,6 +109,11 @@ func (s *Server) ListenAndServe() error {
 	return s.serv.ListenAndServe()
 }
 
+func (s *Server) Close() error {
+	close(s.kill)
+	return s.alljobs.Close()
+}
+
 func (s *Server) Run(j *Job) *Job {
 	ch := s.Start(j, nil)
 	return <-ch
@@ -158,6 +165,8 @@ func (s *Server) dispatcher() {
 		}
 
 		select {
+		case <-s.kill:
+			return
 		case js := <-s.submitjobs:
 			s.log.Printf("[SUBMIT] job %v\n", js.J.Id)
 			j := js.J

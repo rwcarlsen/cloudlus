@@ -107,6 +107,10 @@ func NewDB(path string, cachelimit, dblimit int) (*DB, error) {
 	return d, nil
 }
 
+func (d *DB) Close() error {
+	return d.db.Close()
+}
+
 func (d *DB) LoadQueue() ([]JobId, error) {
 	it := d.db.NewIterator(nil, nil)
 	defer it.Release()
