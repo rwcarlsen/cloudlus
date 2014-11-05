@@ -67,7 +67,7 @@ func main() {
 	log.SetFlags(0)
 	flag.Usage = func() {
 		fmt.Println("Usage: condor [FILE...]")
-		fmt.Println("Copy listed files to condor submit node and possibly submit a job.\n")
+		fmt.Print("Copy listed files to condor submit node and possibly submit a job.\n\n")
 		flag.PrintDefaults()
 	}
 	flag.Parse()
