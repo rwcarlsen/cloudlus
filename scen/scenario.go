@@ -12,14 +12,10 @@ import (
 
 	"code.google.com/p/go-uuid/uuid"
 
-	"github.com/gonum/blas/goblas"
+	_ "github.com/gonum/blas/native"
 	"github.com/gonum/matrix/mat64"
 	"github.com/rwcarlsen/cyan/post"
 )
-
-func init() {
-	mat64.Register(goblas.Blas{})
-}
 
 // Facility represents a cyclus agent prototype that could be built by the
 // optimizer.
