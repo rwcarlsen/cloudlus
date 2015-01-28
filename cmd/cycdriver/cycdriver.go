@@ -109,7 +109,7 @@ func submitjob(scen *scen.Scenario, j *cloudlus.Job) {
 }
 
 func runjob(scen *scen.Scenario) {
-	dbfile, simid, err := scen.Run()
+	dbfile, simid, err := scen.Run(nil, nil)
 	val, err := scen.CalcObjective(dbfile, simid)
 	check(err)
 

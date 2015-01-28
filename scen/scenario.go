@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"math"
 	"os"
@@ -15,6 +16,7 @@ import (
 
 	_ "github.com/gonum/blas/native"
 	"github.com/gonum/matrix/mat64"
+	_ "github.com/mxk/go-sqlite/sqlite3"
 	"github.com/rwcarlsen/cyan/nuc"
 	"github.com/rwcarlsen/cyan/post"
 	"github.com/rwcarlsen/cyan/query"
@@ -143,7 +145,7 @@ func (s *Scenario) GenCyclusInfile() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func (s *Scenario) Run() (dbfile string, simid []byte, err error) {
+func (s *Scenario) Run(stdout, stderr io.Writer) (dbfile string, simid []byte, err error) {
 	// generate cyclus input file and run cyclus
 	ui := uuid.NewRandom()
 	cycin := ui.String() + ".cyclus.xml"
@@ -161,6 +163,13 @@ func (s *Scenario) Run() (dbfile string, simid []byte, err error) {
 	cmd := exec.Command("cyclus", cycin, "-o", cycout)
 	cmd.Stderr = os.Stderr
 	cmd.Stdout = os.Stdout
+	if stdout != nil {
+		cmd.Stdout = stdout
+	}
+	if stderr != nil {
+		cmd.Stderr = stderr
+	}
+
 	if err := cmd.Run(); err != nil {
 		return "", nil, err
 	}
