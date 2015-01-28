@@ -11,9 +11,14 @@ import (
 	"strconv"
 	"strings"
 
-	_ "github.com/mxk/go-sqlite/sqlite3"
+	"github.com/gonum/matrix/mat64"
 	"github.com/rwcarlsen/cloudlus/cloudlus"
 	"github.com/rwcarlsen/cloudlus/scen"
+	"github.com/rwcarlsen/optim"
+	"github.com/rwcarlsen/optim/mesh"
+	"github.com/rwcarlsen/optim/pattern"
+	"github.com/rwcarlsen/optim/pop"
+	"github.com/rwcarlsen/optim/pswarm"
 )
 
 var (
@@ -48,22 +53,76 @@ func main() {
 	err = scen.Load(*scenfile)
 	check(err)
 
-	if n := len(params); n != scen.Nvars() && n != 0 {
-		log.Fatalf("expected %v vars, got %v as args", scen.Nvars(), n)
-	} else {
-		scen.InitParams(params)
+	// create and initialize solver
+	lb := scen.LowerBounds().Col(nil, 0)
+	ub := scen.UpperBounds().Col(nil, 0)
+	low, A, up := scen.IneqConstr()
+	it := buildIter(low, A, up, lb, ub)
+
+	pobj := &optim.ObjectivePenalty{
+		Obj:    &objective{scen},
+		A:      A,
+		Low:    low,
+		Up:     up,
+		Weight: 1,
 	}
 
-	// add pswarm initialization and iteration code here
+	m := mesh.NewBounded(&mesh.Infinite{StepSize: 4}, lb, ub)
+
+	// solve and print results
+	best, niter, neval, err := optim.Solve(it, pobj, m, *maxiter, *maxeval)
+	if err != nil {
+		log.Print(err)
+	}
+	fmt.Printf("best: %v\n", best)
+	fmt.Printf("%v optimizer iterations\n", niter)
+	fmt.Printf("%v objective evaluations\n", neval)
 }
 
-func runjob(scen *scen.Scenario) (obj float64, err error) {
+func buildIter(low, A, up *mat64.Dense, lb, ub []float64) optim.Iterator {
+	minv := make([]float64, len(lb))
+	maxv := make([]float64, len(lb))
+	for i := range lb {
+		minv[i] = (ub[i] - lb[i]) / 20
+		maxv[i] = minv[i] * 4
+	}
+
+	n := 10 + 7*len(lb)
+	if n > *maxiter/1000 {
+		n = *maxiter / 1000
+	}
+
+	points, _, _ := pop.NewConstr(n, n*1000, lb, ub, low, A, up)
+	pop := pswarm.NewPopulation(points, minv, maxv)
+	ev := optim.NewCacheEvaler(optim.ParallelEvaler{})
+	swarm := pswarm.NewIterator(ev, nil, pop, pswarm.LinInertia(0.9, 0.4, *maxiter))
+	return pattern.NewIterator(ev, pop[0].Point, pattern.SearchIter(swarm))
+}
+
+type objective struct {
+	s *scen.Scenario
+}
+
+func (o *objective) Objective(v []float64) (float64, error) {
+	if n := len(v); n != o.s.Nvars() {
+		panic(fmt.Sprintf("expected %v vars, got %v as args", o.s.Nvars(), n))
+	}
+
+	params := make([]int, len(v))
+	for i := range v {
+		params[i] = int(math.Ceil(v[i] + .5))
+	}
+
+	o.s.InitParams(params)
 	if *addr == "" {
-		dbfile, simid, err := scen.Run()
-		return scen.CalcObjective(dbfile, simid)
+		dbfile, simid, err := o.s.Run()
+		if err != nil {
+			return math.Inf(1), err
+		}
+		return o.s.CalcObjective(dbfile, simid)
 	} else {
-		j := buildjob(scen)
-		return submitjob(scen, j)
+		j := buildjob(o.s)
+		return submitjob(o.s, j)
 	}
 }
 
