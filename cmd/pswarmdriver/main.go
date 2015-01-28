@@ -31,8 +31,8 @@ var (
 	runlog    = flag.String("runlog", "run.log", "file to log local cyclus run output")
 	addr      = flag.String("addr", "", "address to submit jobs to (otherwise, run locally)")
 	out       = flag.String("out", "out.txt", "name of output file for the remote job")
-	maxeval   = flag.Int("maxeval", 50000, "max number of objective evaluations")
-	maxiter   = flag.Int("maxiter", 5000, "max number of optimizer iterations")
+	maxeval   = flag.Int("maxeval", 10000, "max number of objective evaluations")
+	maxiter   = flag.Int("maxiter", 300, "max number of optimizer iterations")
 	penalty   = flag.Float64("penalty", 0.5, "fractional penalty for constraint violations")
 )
 
@@ -89,7 +89,7 @@ func main() {
 	}
 	loggedpobj := &optim.ObjectiveLogger{Obj: pobj, W: f2}
 
-	m := mesh.NewBounded(&mesh.Infinite{StepSize: 4}, lb, ub)
+	m := mesh.StepLimit{mesh.NewBounded(&mesh.Infinite{StepSize: 4}, lb, ub), 1}
 
 	// solve and print results
 	best := optim.Point{}
@@ -118,10 +118,11 @@ func buildIter(low, A, up *mat64.Dense, lb, ub []float64) optim.Iterator {
 		maxv[i] = minv[i] * 4
 	}
 
-	n := 10 + 7*len(lb)
-	if n > *maxiter/1000 {
-		n = *maxiter / 1000
+	n := *maxeval / *maxiter
+	if n < 20 {
+		n = 20
 	}
+	fmt.Printf("swarming with %v particles\n", n)
 
 	points, _, _ := pop.NewConstr(n, n*1000, lb, ub, low, A, up)
 	pop := pswarm.NewPopulation(points, minv, maxv)
