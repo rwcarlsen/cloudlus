@@ -126,7 +126,7 @@ func main() {
 			log.Print(err)
 		}
 		fmt.Fprintf(f3, "%v:  %v\n", niter, best)
-		fmt.Printf("iteration %v best:  %v\n", niter, best)
+		fmt.Printf("iteration %v (%v evals) best point:  %v\n", niter, n, best)
 	}
 	fmt.Printf("best: %v\n", best)
 	fmt.Printf("%v optimizer iterations\n", niter)
