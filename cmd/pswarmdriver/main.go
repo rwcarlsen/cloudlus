@@ -30,11 +30,12 @@ var (
 	bestlog   = flag.String("bestlog", "best.log", "file to log function evaluations to")
 	runlog    = flag.String("runlog", "run.log", "file to log local cyclus run output")
 	addr      = flag.String("addr", "", "address to submit jobs to (otherwise, run locally)")
-	out       = flag.String("out", "out.txt", "name of output file for the remote job")
 	maxeval   = flag.Int("maxeval", 10000, "max number of objective evaluations")
 	maxiter   = flag.Int("maxiter", 300, "max number of optimizer iterations")
 	penalty   = flag.Float64("penalty", 0.5, "fractional penalty for constraint violations")
 )
+
+const outfile = "objective.out"
 
 func init() {
 	log.SetFlags(0)
@@ -143,7 +144,7 @@ func (o *objective) Objective(v []float64) (float64, error) {
 
 	params := make([]int, len(v))
 	for i := range v {
-		params[i] = int(math.Ceil(v[i] + .5))
+		params[i] = int(math.Floor(v[i] + .5)) // round to nearest int
 	}
 
 	o.s.InitParams(params)
@@ -166,10 +167,10 @@ func buildjob(scen *scen.Scenario) *cloudlus.Job {
 	tmpldata, err := ioutil.ReadFile(scen.CyclusTmpl)
 	check(err)
 
-	j := cloudlus.NewJobCmd("cycdriver", "-obj", "-out", *out, "-scen", *scenfile)
+	j := cloudlus.NewJobCmd("cycdriver", "-obj", "-out", outfile, "-scen", *scenfile)
 	j.AddInfile(scen.CyclusTmpl, tmpldata)
 	j.AddInfile(*scenfile, scendata)
-	j.AddOutfile(*out)
+	j.AddOutfile(outfile)
 
 	if flag.NArg() > 0 {
 		j.Note = strings.Join(flag.Args(), " ")
@@ -191,7 +192,7 @@ func submitjob(scen *scen.Scenario, j *cloudlus.Job) (float64, error) {
 	}
 
 	for _, f := range j.Outfiles {
-		if f.Name == *out {
+		if f.Name == outfile {
 			s := fmt.Sprintf("%s", f.Data)
 			val, err := strconv.ParseFloat(s, 64)
 			if err != nil {
