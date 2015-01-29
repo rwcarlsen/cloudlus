@@ -10,8 +10,10 @@ import (
 	"log"
 	"math"
 	"os"
+	"os/signal"
 	"strconv"
 	"strings"
+	"syscall"
 
 	"github.com/gonum/matrix/mat64"
 	"github.com/rwcarlsen/cloudlus/cloudlus"
@@ -61,12 +63,6 @@ func main() {
 	err = scen.Load(*scenfile)
 	check(err)
 
-	// create and initialize solver
-	lb := scen.LowerBounds().Col(nil, 0)
-	ub := scen.UpperBounds().Col(nil, 0)
-	low, A, up := scen.IneqConstr()
-	it := buildIter(low, A, up, lb, ub)
-
 	f1, err := os.Create(*objlog)
 	check(err)
 	defer f1.Close()
@@ -80,6 +76,12 @@ func main() {
 	check(err)
 	defer f4.Close()
 
+	// create and initialize solver
+	lb := scen.LowerBounds().Col(nil, 0)
+	ub := scen.UpperBounds().Col(nil, 0)
+	low, A, up := scen.IneqConstr()
+	it, ev := buildIter(low, A, up, lb, ub)
+
 	loggedobj := &optim.ObjectiveLogger{Obj: &objective{scen, f4}, W: f1}
 	pobj := &optim.ObjectivePenalty{
 		Obj:    loggedobj,
@@ -90,11 +92,30 @@ func main() {
 	}
 	loggedpobj := &optim.ObjectiveLogger{Obj: pobj, W: f2}
 
-	m := mesh.StepLimit{mesh.NewBounded(&mesh.Infinite{StepSize: 4}, lb, ub), 1}
+	m := mesh.Integer{mesh.NewBounded(&mesh.Infinite{StepSize: 4}, lb, ub)}
 
-	// solve and print results
+	// these are defined here so that signals goroutine can close over them
 	best := optim.Point{}
 	neval, niter := 0, 0
+
+	// handle signals
+	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		<-sigs
+		f1.Close()
+		f2.Close()
+		f3.Close()
+		f4.Close()
+		fmt.Println("\n*** optimizer killed early ***")
+		fmt.Printf("best: %v\n", best)
+		fmt.Printf("%v optimizer iterations\n", niter)
+		fmt.Printf("%v objective evaluations\n", neval)
+		fmt.Printf("%v cached objective uses\n", ev.UseCount)
+		os.Exit(1)
+	}()
+
+	// solve and print results
 	fmt.Fprintf(f3, "Iteration #: f[bestpos] = bestobj\n")
 	for neval < *maxeval && niter < *maxiter {
 		var n int
@@ -105,19 +126,24 @@ func main() {
 			log.Print(err)
 		}
 		fmt.Fprintf(f3, "%v:  %v\n", niter, best)
+		fmt.Printf("iteration %v best:  %v\n", niter, best)
 	}
 	fmt.Printf("best: %v\n", best)
 	fmt.Printf("%v optimizer iterations\n", niter)
 	fmt.Printf("%v objective evaluations\n", neval)
+	fmt.Printf("%v cached objective uses\n", ev.UseCount)
 }
 
-func buildIter(low, A, up *mat64.Dense, lb, ub []float64) optim.Iterator {
+func buildIter(low, A, up *mat64.Dense, lb, ub []float64) (optim.Iterator, *optim.CacheEvaler) {
 	minv := make([]float64, len(lb))
 	maxv := make([]float64, len(lb))
+	maxmaxv := 0.0
 	for i := range lb {
 		minv[i] = (ub[i] - lb[i]) / 20
 		maxv[i] = minv[i] * 4
+		maxmaxv += maxv[i] * maxv[i]
 	}
+	maxmaxv = math.Sqrt(maxmaxv)
 
 	n := *maxeval / *maxiter
 	if n < 20 {
@@ -128,8 +154,11 @@ func buildIter(low, A, up *mat64.Dense, lb, ub []float64) optim.Iterator {
 	points, _, _ := pop.NewConstr(n, n*1000, lb, ub, low, A, up)
 	pop := pswarm.NewPopulation(points, minv, maxv)
 	ev := optim.NewCacheEvaler(optim.ParallelEvaler{})
-	swarm := pswarm.NewIterator(ev, nil, pop, pswarm.LinInertia(0.9, 0.4, *maxiter))
-	return pattern.NewIterator(ev, pop[0].Point, pattern.SearchIter(swarm))
+	swarm := pswarm.NewIterator(ev, nil, pop,
+		pswarm.LinInertia(0.9, 0.4, *maxiter),
+		pswarm.Vmax(maxmaxv),
+	)
+	return pattern.NewIterator(ev, pop[0].Point, pattern.SearchIter(swarm)), ev
 }
 
 type objective struct {
@@ -144,7 +173,7 @@ func (o *objective) Objective(v []float64) (float64, error) {
 
 	params := make([]int, len(v))
 	for i := range v {
-		params[i] = int(math.Floor(v[i] + .5)) // round to nearest int
+		params[i] = int(v[i])
 	}
 
 	o.s.InitParams(params)
