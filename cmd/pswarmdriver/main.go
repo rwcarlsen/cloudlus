@@ -29,11 +29,12 @@ import (
 
 var (
 	scenfile  = flag.String("scen", "scenario.json", "file containing problem scenification")
+	npar      = flag.Int("npar", 0, "number of particles (0 => choose automatically)")
+	addr      = flag.String("addr", "", "address to submit jobs to (otherwise, run locally)")
 	objlog    = flag.String("objlog", "obj.log", "file to log function evaluations")
 	penobjlog = flag.String("penobjlog", "penalized-obj.log", "file to log penalized function evaluations")
 	bestlog   = flag.String("bestlog", "best.log", "file to log function evaluations to")
 	runlog    = flag.String("runlog", "run.log", "file to log local cyclus run output")
-	addr      = flag.String("addr", "", "address to submit jobs to (otherwise, run locally)")
 	maxeval   = flag.Int("maxeval", 10000, "max number of objective evaluations")
 	maxiter   = flag.Int("maxiter", 300, "max number of optimizer iterations")
 	penalty   = flag.Float64("penalty", 0.5, "fractional penalty for constraint violations")
@@ -159,13 +160,20 @@ func buildIter(low, A, up *mat64.Dense, lb, ub []float64) (optim.Iterator, *opti
 	if n < 20 {
 		n = 20
 	}
+	if *npar != 0 {
+		n = *npar
+	}
 
-	points, nbad, _ := pop.NewConstr(n, 10000000, lb, ub, low, A, up)
+	points, nbad, _ := pop.NewConstr(n/2, 1000000, lb, ub, low, A, up)
+	points2 := pop.New(n-n/2, lb, ub)
 
 	fmt.Printf("swarming with %v particles\n", n)
-	fmt.Printf("initial population includes %v infeasible solutions/particles\n", nbad)
+	fmt.Printf("initial population includes at least %v feasible particles\n", n/2-nbad)
 
+	// try to make up to half of the population feasible.
+	// the other half is just within the bounded box - for diversity
 	pop := pswarm.NewPopulation(points, minv, maxv)
+	pop = append(pop, pswarm.NewPopulation(points2, minv, maxv)...)
 	ev := optim.NewCacheEvaler(optim.ParallelEvaler{})
 	swarm := pswarm.NewIterator(ev, nil, pop,
 		pswarm.LinInertia(0.9, 0.4, *maxiter),
