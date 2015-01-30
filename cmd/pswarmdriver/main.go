@@ -92,7 +92,7 @@ func main() {
 	}
 	loggedpobj := &optim.ObjectiveLogger{Obj: pobj, W: f2}
 
-	m := mesh.Integer{mesh.NewBounded(&mesh.Infinite{StepSize: 4}, lb, ub)}
+	m := mesh.Integer{mesh.NewBounded(&mesh.Infinite{StepSize: 2}, lb, ub)}
 
 	// these are defined here so that signals goroutine can close over them
 	best := optim.Point{}
@@ -145,20 +145,26 @@ func buildIter(low, A, up *mat64.Dense, lb, ub []float64) (optim.Iterator, *opti
 	}
 	maxmaxv = math.Sqrt(maxmaxv)
 
-	n := *maxeval / *maxiter
+	n := 10 + 5*len(lb)
 	if n < 20 {
 		n = 20
 	}
-	fmt.Printf("swarming with %v particles\n", n)
 
-	points, _, _ := pop.NewConstr(n, n*1000, lb, ub, low, A, up)
+	points, nbad, _ := pop.NewConstr(n, 1000000, lb, ub, low, A, up)
+
+	fmt.Printf("swarming with %v particles\n", n)
+	fmt.Printf("initial population includes %v infeasible solutions/particles", nbad)
+
 	pop := pswarm.NewPopulation(points, minv, maxv)
 	ev := optim.NewCacheEvaler(optim.ParallelEvaler{})
 	swarm := pswarm.NewIterator(ev, nil, pop,
 		pswarm.LinInertia(0.9, 0.4, *maxiter),
 		pswarm.Vmax(maxmaxv),
 	)
-	return pattern.NewIterator(ev, pop[0].Point, pattern.SearchIter(swarm)), ev
+	return pattern.NewIterator(ev, pop[0].Point,
+		pattern.SearchIter(swarm),
+		pattern.NfailGrow(-1), // never grow mesh
+	), ev
 }
 
 type objective struct {
