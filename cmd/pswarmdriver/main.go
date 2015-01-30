@@ -1,6 +1,7 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -16,6 +17,7 @@ import (
 	"syscall"
 
 	"github.com/gonum/matrix/mat64"
+	_ "github.com/mxk/go-sqlite/sqlite3"
 	"github.com/rwcarlsen/cloudlus/cloudlus"
 	"github.com/rwcarlsen/cloudlus/scen"
 	"github.com/rwcarlsen/optim"
@@ -35,6 +37,7 @@ var (
 	maxeval   = flag.Int("maxeval", 10000, "max number of objective evaluations")
 	maxiter   = flag.Int("maxiter", 300, "max number of optimizer iterations")
 	penalty   = flag.Float64("penalty", 0.5, "fractional penalty for constraint violations")
+	swarmdb   = flag.String("swarmdb", "swarm.sqlite", "fractional penalty for constraint violations")
 )
 
 const outfile = "objective.out"
@@ -48,9 +51,16 @@ func init() {
 	}
 }
 
+var db *sql.DB
+
 func main() {
 	var err error
 	flag.Parse()
+
+	os.Remove(*swarmdb)
+	db, err = sql.Open("sqlite3", *swarmdb)
+	check(err)
+	defer db.Close()
 
 	params := make([]int, flag.NArg())
 	for i, s := range flag.Args() {
@@ -150,16 +160,17 @@ func buildIter(low, A, up *mat64.Dense, lb, ub []float64) (optim.Iterator, *opti
 		n = 20
 	}
 
-	points, nbad, _ := pop.NewConstr(n, 1000000, lb, ub, low, A, up)
+	points, nbad, _ := pop.NewConstr(n, 10000000, lb, ub, low, A, up)
 
 	fmt.Printf("swarming with %v particles\n", n)
-	fmt.Printf("initial population includes %v infeasible solutions/particles", nbad)
+	fmt.Printf("initial population includes %v infeasible solutions/particles\n", nbad)
 
 	pop := pswarm.NewPopulation(points, minv, maxv)
 	ev := optim.NewCacheEvaler(optim.ParallelEvaler{})
 	swarm := pswarm.NewIterator(ev, nil, pop,
 		pswarm.LinInertia(0.9, 0.4, *maxiter),
 		pswarm.Vmax(maxmaxv),
+		pswarm.DB(db),
 	)
 	return pattern.NewIterator(ev, pop[0].Point,
 		pattern.SearchIter(swarm),
