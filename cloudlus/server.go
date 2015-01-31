@@ -18,7 +18,9 @@ var nojoberr = errors.New("no jobs available to run")
 
 const defaultdbpath = "./jobdb"
 
-const beatInterval = 60 * time.Second
+const beatInterval = 4 * time.Second
+const beatLimit = 2 * beatInterval
+const beatCheckFreq = beatInterval / 3
 
 type Server struct {
 	log          *log.Logger
@@ -138,7 +140,7 @@ func (s *Server) Get(jid JobId) (*Job, error) {
 }
 
 func (s *Server) dispatcher() {
-	beatcheck := time.NewTicker(beatInterval)
+	beatcheck := time.NewTicker(beatCheckFreq)
 	defer beatcheck.Stop()
 
 	for {
@@ -148,7 +150,7 @@ func (s *Server) dispatcher() {
 		case <-beatcheck.C:
 			now := time.Now()
 			for jid, b := range s.jobinfo {
-				if now.Sub(b.Time) > 2*beatInterval {
+				if now.Sub(b.Time) > beatLimit {
 					j, err := s.alljobs.Get(jid)
 					if err != nil {
 						log.Printf("cannot find job %v for reassignment", jid)

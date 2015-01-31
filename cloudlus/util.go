@@ -10,6 +10,7 @@ import (
 
 	"github.com/rwcarlsen/lru"
 	"github.com/syndtr/goleveldb/leveldb"
+	"github.com/syndtr/goleveldb/leveldb/storage"
 )
 
 type Beat struct {
@@ -76,11 +77,19 @@ func NewDB(path string, cachelimit, dblimit int) (*DB, error) {
 	d.cache.OnMiss(d.cacheMiss)
 
 	d.dblimiter = lru.New(int64(dblimit))
-	db, err := leveldb.OpenFile(path, nil)
-	if err != nil {
-		return nil, err
+
+	var err error
+	var db *leveldb.DB
+	if path == "" { // use in-memory db
+		db, err = leveldb.Open(storage.NewMemStorage(), nil)
+		d.db = db
+	} else {
+		db, err = leveldb.OpenFile(path, nil)
+		if err != nil {
+			return nil, err
+		}
+		d.db = db
 	}
-	d.db = db
 
 	// populate dblimiter lru cache with currently existing jobs from the disk
 	// leveldb

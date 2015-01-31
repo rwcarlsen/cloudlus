@@ -73,23 +73,7 @@ func (w *Worker) dojob() (wait bool, err error) {
 
 	done := make(chan struct{})
 	defer close(done)
-
-	tick := time.NewTicker(beatInterval)
-	defer tick.Stop()
-
-	go func() {
-		for {
-			select {
-			case <-tick.C:
-				err := client.Heartbeat(w.Id, j.Id)
-				if err != nil {
-					log.Print(err)
-				}
-			case <-done:
-				return
-			}
-		}
-	}()
+	client.Heartbeat(w.Id, j.Id, done)
 
 	// run job
 	j.Execute()

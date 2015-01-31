@@ -1,8 +1,10 @@
 package cloudlus
 
 import (
+	"log"
 	"net/rpc"
 	"strings"
+	"time"
 )
 
 type Client struct {
@@ -21,9 +23,25 @@ func Dial(addr string) (*Client, error) {
 	return &Client{client: client}, nil
 }
 
-func (c *Client) Heartbeat(w WorkerId, j JobId) error {
-	var unused int
-	return c.client.Call("RPC.Heartbeat", NewBeat(w, j), &unused)
+func (c *Client) Heartbeat(w WorkerId, j JobId, done chan struct{}) {
+	go func() {
+		var unused int
+		tick := time.NewTicker(beatInterval)
+		defer tick.Stop()
+
+		for {
+			select {
+			case <-tick.C:
+				err := c.client.Call("RPC.Heartbeat", NewBeat(w, j), &unused)
+				if err != nil {
+					log.Print(err)
+					return
+				}
+			case <-done:
+				return
+			}
+		}
+	}()
 }
 
 func (c *Client) Retrieve(j JobId) (*Job, error) {
