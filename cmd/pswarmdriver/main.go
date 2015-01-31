@@ -53,10 +53,17 @@ func init() {
 }
 
 var db *sql.DB
+var client *cloudlus.Client
 
 func main() {
 	var err error
 	flag.Parse()
+
+	if *addr != "" {
+		client, err = cloudlus.Dial(*addr)
+		check(err)
+		defer client.Close()
+	}
 
 	os.Remove(*swarmdb)
 	db, err = sql.Open("sqlite3", *swarmdb)
@@ -234,12 +241,7 @@ func buildjob(scen *scen.Scenario) *cloudlus.Job {
 }
 
 func submitjob(scen *scen.Scenario, j *cloudlus.Job) (float64, error) {
-	client, err := cloudlus.Dial(*addr)
-	if err != nil {
-		return math.Inf(1), err
-	}
-	defer client.Close()
-
+	var err error
 	j, err = client.Run(j)
 	if err != nil {
 		return math.Inf(1), err
