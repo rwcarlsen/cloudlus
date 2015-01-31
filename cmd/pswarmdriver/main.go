@@ -208,16 +208,19 @@ func (o *objective) Objective(v []float64) (float64, error) {
 		params[i] = int(v[i])
 	}
 
-	o.s.InitParams(params)
+	scencopyval := *o.s
+	scencopy := &scencopyval
+	scencopy.Params = nil
+	scencopy.InitParams(params)
 	if *addr == "" {
-		dbfile, simid, err := o.s.Run(o.runlog, o.runlog)
+		dbfile, simid, err := scencopy.Run(o.runlog, o.runlog)
 		if err != nil {
 			return math.Inf(1), err
 		}
-		return o.s.CalcObjective(dbfile, simid)
+		return scencopy.CalcObjective(dbfile, simid)
 	} else {
-		j := buildjob(o.s)
-		return submitjob(o.s, j)
+		j := buildjob(scencopy)
+		return submitjob(scencopy, j)
 	}
 }
 
