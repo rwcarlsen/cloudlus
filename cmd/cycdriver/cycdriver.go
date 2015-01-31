@@ -49,10 +49,10 @@ func main() {
 	err = scen.Load(*scenfile)
 	check(err)
 
-	if n := len(params); n != scen.Nvars() && n != 0 {
-		log.Fatalf("expected %v vars, got %v as args", scen.Nvars(), n)
-	} else {
+	if len(params) == scen.Nvars() {
 		scen.InitParams(params)
+	} else if len(params) != 0 {
+		log.Fatalf("expected %v vars, got %v as args", scen.Nvars(), len(params))
 	}
 
 	// perform action
