@@ -14,9 +14,19 @@ type Worker struct {
 	FileCache  map[string][]byte
 	Wait       time.Duration
 	Whitelist  []string
+	// lastjob is last time a job was completed.
+	lastjob time.Time
+	// MaxIdle is the length of time a worker will wait without receiving a
+	// job before it shuts itself down.  If MaxIdle is zero, the worker runs
+	// forever.
+	MaxIdle time.Duration
 }
 
 func (w *Worker) Run() error {
+	uid := uuid.NewRandom()
+	copy(w.Id[:], uid)
+
+	w.lastjob = time.Now()
 	w.FileCache = map[string][]byte{}
 
 	wd, err := os.Getwd()
@@ -24,9 +34,6 @@ func (w *Worker) Run() error {
 		return err
 	}
 	os.Setenv("PATH", os.Getenv("PATH")+":"+wd)
-
-	uid := uuid.NewRandom()
-	copy(w.Id[:], uid)
 
 	if w.Wait == 0 {
 		w.Wait = 10 * time.Second
@@ -36,6 +43,10 @@ func (w *Worker) Run() error {
 		wait, err := w.dojob()
 		if err != nil {
 			log.Print(err)
+		}
+		if w.MaxIdle > 0 && time.Now().Sub(w.lastjob) > w.MaxIdle {
+			log.Printf("no jobs received for %v, shutting down", w.MaxIdle)
+			return nil
 		}
 		if wait {
 			<-time.After(w.Wait)
@@ -80,5 +91,7 @@ func (w *Worker) dojob() (wait bool, err error) {
 	j.WorkerId = w.Id
 	j.Infiles = nil // don't need to send back input files
 
-	return false, client.Push(w, j)
+	err = client.Push(w, j)
+	w.lastjob = time.Now()
+	return false, err
 }
