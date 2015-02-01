@@ -12,6 +12,44 @@ const addr = "127.0.0.1:45687"
 
 const workerpoll = 1 * time.Second
 
+func TestCacheLimit(t *testing.T) {
+	cachesize := 1000000
+	db, _ := NewDB("", cachesize, dblimit)
+	s := NewServer(addr, addr, db)
+	go s.ListenAndServe()
+	defer s.Close()
+
+	j := NewJobCmd("date")
+	jsize := int(j.Size())
+	njobsmax := cachesize / jsize
+
+	for i := 0; i < 2*njobsmax; i++ {
+		j := NewJobCmd("date")
+		s.Start(j, nil)
+	}
+
+	size := s.alljobs.cache.Size()
+	if size > int64(cachesize) {
+		t.Errorf("cache over full: expected %v bytes, got %v", cachesize, size)
+	} else {
+		t.Logf("cache has %v bytes", size)
+	}
+
+	for i := 0; i < njobsmax; i++ {
+		j := NewJobCmd("date")
+		s.Start(j, nil)
+	}
+
+	newsize := s.alljobs.cache.Size()
+	diff := size - newsize
+	if diff < 0 {
+		diff = -diff
+	}
+	if diff > int64(jsize) {
+		t.Errorf("cache should be full: expected ~%v bytes, got %v", cachesize, newsize)
+	}
+}
+
 func TestWorkerFailure(t *testing.T) {
 	kill1 := make(chan struct{})
 	kill2 := make(chan struct{})
@@ -26,7 +64,7 @@ func TestWorkerFailure(t *testing.T) {
 
 	// submit job
 	j := NewJobCmd("date")
-	go s.Run(j)
+	s.Start(j, nil)
 
 	// wait for it to be running
 	<-time.After(2 * workerpoll)
