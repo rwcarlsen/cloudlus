@@ -8,57 +8,19 @@ import (
 	"code.google.com/p/go-uuid/uuid"
 )
 
-const addr = "127.0.0.1:45687"
+const testaddr = "127.0.0.1:45687"
 
 const workerpoll = 1 * time.Second
-
-func TestCacheLimit(t *testing.T) {
-	cachesize := 1000000
-	db, _ := NewDB("", cachesize, dblimit)
-	s := NewServer(addr, addr, db)
-	go s.ListenAndServe()
-	defer s.Close()
-
-	j := NewJobCmd("date")
-	jsize := int(j.Size())
-	njobsmax := cachesize / jsize
-
-	for i := 0; i < 2*njobsmax; i++ {
-		j := NewJobCmd("date")
-		s.Start(j, nil)
-	}
-
-	size := s.alljobs.cache.Size()
-	if size > int64(cachesize) {
-		t.Errorf("cache over full: expected %v bytes, got %v", cachesize, size)
-	} else {
-		t.Logf("cache has %v bytes", size)
-	}
-
-	for i := 0; i < njobsmax; i++ {
-		j := NewJobCmd("date")
-		s.Start(j, nil)
-	}
-
-	newsize := s.alljobs.cache.Size()
-	diff := size - newsize
-	if diff < 0 {
-		diff = -diff
-	}
-	if diff > int64(jsize) {
-		t.Errorf("cache should be full: expected ~%v bytes, got %v", cachesize, newsize)
-	}
-}
 
 func TestWorkerFailure(t *testing.T) {
 	kill1 := make(chan struct{})
 	kill2 := make(chan struct{})
-	w1 := &badWorker{ServerAddr: addr}
+	w1 := &badWorker{ServerAddr: testaddr}
 	go w1.Run(kill1)
 
 	// empty path for in-memory db
-	db, err := NewDB("", cachelimit, dblimit)
-	s := NewServer(addr, addr, db)
+	db, err := NewDB("", dblimit)
+	s := NewServer(testaddr, testaddr, db)
 	go s.ListenAndServe()
 	defer s.Close()
 
@@ -78,7 +40,7 @@ func TestWorkerFailure(t *testing.T) {
 	}
 
 	close(kill1)
-	w2 := &goodWorker{ServerAddr: addr}
+	w2 := &goodWorker{ServerAddr: testaddr}
 	go w2.Run(kill2)
 	<-time.After((beatLimit + beatCheckFreq + workerpoll) * 2)
 

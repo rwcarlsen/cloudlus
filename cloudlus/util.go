@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rwcarlsen/lru"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/storage"
 )
@@ -64,19 +63,15 @@ func (i *JobId) UnmarshalJSON(data []byte) error {
 func (i JobId) String() string { return hex.EncodeToString(i[:]) }
 
 type DB struct {
-	cache     *lru.Cache
-	dblimiter *lru.Cache
-	db        *leveldb.DB
-	Log       *log.Logger
+	db       *leveldb.DB
+	Log      *log.Logger
+	limit    int64 // max number of bytes for the leveldb db
+	purgeAge time.Duration
 }
 
-func NewDB(path string, cachelimit, dblimit int) (*DB, error) {
-	d := &DB{}
-
-	d.cache = lru.New(int64(cachelimit))
-	d.cache.OnMiss(d.cacheMiss)
-
-	d.dblimiter = lru.New(int64(dblimit))
+func NewDB(path string, dblimit int) (*DB, error) {
+	d := &DB{purgeAge: 1 * time.Hour}
+	d.limit = int64(dblimit)
 
 	var err error
 	var db *leveldb.DB
@@ -90,40 +85,76 @@ func NewDB(path string, cachelimit, dblimit int) (*DB, error) {
 		}
 		d.db = db
 	}
+	return d, nil
+}
 
-	// populate dblimiter lru cache with currently existing jobs from the disk
-	// leveldb
-	it := db.NewIterator(nil, nil)
+func (d *DB) CollectGarbage() error {
+	it := d.db.NewIterator(nil, nil)
 	defer it.Release()
+
 	count := 0
+	purgecount := 0
+	var size int64
+	now := time.Now()
+
 	for it.Next() {
-		count++
 		j := &Job{}
 		data := it.Value()
 		err := json.Unmarshal(data, &j)
 		if err != nil {
-			return nil, err
+			return err
 		}
-		d.dblimiter.Set(j.Id.String(), &jobProxy{j.Id, int64(len(data)), d})
+
+		if size > d.limit && j.Done() && now.Sub(j.Finished) > d.purgeAge {
+			d.db.Delete(it.Key(), nil)
+			purgecount++
+		} else {
+			size += int64(len(it.Value()))
+			count++
+		}
 	}
 	if err := it.Error(); err != nil {
-		return nil, err
+		return err
 	}
 
-	fmt.Printf("[INFO] loaded %v jobs from disk database\n", count)
-	fmt.Printf("[INFO] disk job store is %v%% full\n", float64(d.dblimiter.Size())/float64(dblimit))
+	d.Log.Printf("[INFO] purged %v old jobs from the disk db", purgecount)
+	d.Log.Printf("[INFO] disk db holds %v jobs", count)
+	return nil
+}
 
-	return d, nil
+func (d *DB) Size() (int64, error) {
+	it := d.db.NewIterator(nil, nil)
+	defer it.Release()
+
+	var size int64
+	for it.Next() {
+		size += int64(len(it.Value()))
+	}
+	if err := it.Error(); err != nil {
+		return 0, err
+	}
+	return size, nil
+}
+
+func (d *DB) DiskSize() (int64, error) {
+	sizes, err := d.db.SizeOf(nil)
+	if err != nil {
+		return 0, err
+	}
+	return int64(sizes.Sum()), nil
 }
 
 func (d *DB) Close() error {
 	return d.db.Close()
 }
 
-func (d *DB) LoadQueue() ([]JobId, error) {
+// Current returns the all jobs from the database that aren't completed - e.g.
+// queued or running.
+func (d *DB) Current() ([]*Job, error) {
 	it := d.db.NewIterator(nil, nil)
 	defer it.Release()
-	queue := []JobId{}
+
+	queue := []*Job{}
 	for it.Next() {
 		j := &Job{}
 		data := it.Value()
@@ -131,13 +162,10 @@ func (d *DB) LoadQueue() ([]JobId, error) {
 		if err != nil {
 			return nil, err
 		}
-		if j.Done() {
-			continue
-		}
 
-		j.Status = StatusQueued
-		queue = append(queue, j.Id)
-		d.Put(j)
+		if !j.Done() {
+			queue = append(queue, j)
+		}
 	}
 	if err := it.Error(); err != nil {
 		return nil, err
@@ -145,40 +173,37 @@ func (d *DB) LoadQueue() ([]JobId, error) {
 	return queue, nil
 }
 
+// Recent returns all completed jobs (including failed ones).
+// completed within dur of now.
+func (d *DB) Recent(dur time.Duration) ([]*Job, error) {
+	it := d.db.NewIterator(nil, nil)
+	defer it.Release()
+
+	jobs := []*Job{}
+	now := time.Now()
+	for it.Next() {
+		j := &Job{}
+		data := it.Value()
+		err := json.Unmarshal(data, &j)
+		if err != nil {
+			return nil, err
+		}
+
+		if j.Done() && now.Sub(j.Finished) < dur {
+			jobs = append(jobs, j)
+		}
+	}
+	if err := it.Error(); err != nil {
+		return nil, err
+	}
+	return jobs, nil
+}
+
 func (d *DB) Get(id JobId) (*Job, error) {
-	v, err := d.cache.Get(id.String())
+	data, err := d.db.Get(id[:], nil)
 	if err != nil {
 		return nil, err
 	}
-	return v.(*Job), nil
-}
-
-func (d *DB) Put(j *Job) error {
-	data, err := json.Marshal(j)
-	if err != nil {
-		return err
-	}
-
-	err = d.db.Put(j.Id[:], data, nil)
-	if err != nil {
-		return err
-	}
-
-	d.dblimiter.Set(j.Id.String(), &jobProxy{j.Id, int64(len(data)), d})
-
-	d.cache.Set(j.Id.String(), j)
-	return nil
-}
-
-func (d *DB) Items() ([]lru.Cacheable, error) { return d.cache.Items() }
-
-func (d *DB) cacheMiss(idstr string) (lru.Cacheable, error) {
-	id, err := hex.DecodeString(idstr)
-	if err != nil {
-		return nil, err
-	}
-
-	data, err := d.db.Get(id, nil)
 	j := &Job{}
 	err = json.Unmarshal(data, &j)
 	if err != nil {
@@ -187,26 +212,10 @@ func (d *DB) cacheMiss(idstr string) (lru.Cacheable, error) {
 	return j, nil
 }
 
-type jobProxy struct {
-	jid  JobId
-	size int64
-	d    *DB
-}
-
-func (jp *jobProxy) Size() int64 { return jp.size }
-
-func (jp *jobProxy) OnPurge(why lru.PurgeReason) {
-	if why != lru.CACHEFULL {
-		return
-	}
-
-	if jp.d.Log != nil {
-		jp.d.Log.Printf("[PURGE] job %v removed from full disk db\n", jp.jid)
-	} else {
-		fmt.Printf("[PURGE] job %v removed from full disk db\n", jp.jid)
-	}
-	err := jp.d.db.Delete(jp.jid[:], nil)
+func (d *DB) Put(j *Job) error {
+	data, err := json.Marshal(j)
 	if err != nil {
-		log.Print(err)
+		return err
 	}
+	return d.db.Put(j.Id[:], data, nil)
 }

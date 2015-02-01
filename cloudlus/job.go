@@ -41,6 +41,7 @@ type Job struct {
 	dir       string
 	wd        string
 	whitelist []string
+	log       io.Writer
 }
 
 type File struct {
@@ -108,10 +109,13 @@ func (j *Job) Size() int64 {
 	for _, f := range j.Outfiles {
 		n += len(f.Data)
 	}
-	return int64(n) + 12 * 8
+	return int64(n) + 12*8
 }
 
 func (j *Job) Execute() {
+	if j.log == nil {
+		j.log = os.Stdout
+	}
 	if j.Timeout == 0 {
 		j.Timeout = DefaultTimeout
 	}
@@ -121,8 +125,8 @@ func (j *Job) Execute() {
 	// set up stderr/stdout tee's and exec command
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
-	multiout := io.MultiWriter(os.Stdout, &stdout)
-	multierr := io.MultiWriter(os.Stderr, &stderr)
+	multiout := io.MultiWriter(j.log, &stdout)
+	multierr := io.MultiWriter(j.log, &stderr)
 	defer func() { j.Stdout += stdout.String() }()
 	defer func() { j.Stderr += stderr.String() }()
 
@@ -156,7 +160,7 @@ func (j *Job) Execute() {
 	var err error
 
 	cmd := exec.Command(j.Cmd[0], j.Cmd[1:]...)
-	fmt.Printf("running job %v command: %v\n", j.Id, cmd.Args)
+	fmt.Fprintf(j.log, "running job %v command: %v\n", j.Id, cmd.Args)
 
 	cmd.Stderr = multierr
 	cmd.Stdout = multiout

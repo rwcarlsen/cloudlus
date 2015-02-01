@@ -18,6 +18,9 @@ var nojoberr = errors.New("no jobs available to run")
 
 const defaultdbpath = "./jobdb"
 
+// CollectFreq if the duration between old job purging from db.
+var CollectFreq = 1 * time.Minute
+
 const beatInterval = 4 * time.Second
 const beatLimit = 2 * beatInterval
 const beatCheckFreq = beatInterval / 3
@@ -59,18 +62,20 @@ func NewServer(httpaddr, rpcaddr string, db *DB) *Server {
 
 	var err error
 	if db == nil {
-		db, err = NewDB(defaultdbpath, cachelimit, dblimit)
+		db, err = NewDB(defaultdbpath, dblimit)
 		if err != nil {
 			panic(err)
 		}
 	}
 	s.alljobs = db
 	s.alljobs.Log = s.log
-	queue, err := db.LoadQueue()
+	q, err := db.Current()
 	if err != nil {
 		panic(err)
 	}
-	s.queue = queue
+	for _, j := range q {
+		s.queue = append(s.queue, j.Id)
+	}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", s.dashmain)
@@ -100,6 +105,20 @@ func NewServer(httpaddr, rpcaddr string, db *DB) *Server {
 
 func (s *Server) ListenAndServe() error {
 	go s.dispatcher()
+	go func() {
+		for {
+			select {
+			case <-s.kill:
+				return
+			default:
+				err := s.alljobs.CollectGarbage()
+				if err != nil {
+					s.log.Print(err)
+				}
+			}
+			<-time.After(CollectFreq)
+		}
+	}()
 
 	if s.rpcaddr != s.serv.Addr {
 		go func() {

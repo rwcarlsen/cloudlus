@@ -8,6 +8,16 @@ import (
 	"code.google.com/p/go-uuid/uuid"
 )
 
+var devnull *os.File
+
+func init() {
+	var err error
+	devnull, err = os.Open(os.DevNull)
+	if err != nil {
+		panic(err.Error())
+	}
+}
+
 type Worker struct {
 	Id         WorkerId
 	ServerAddr string
@@ -20,6 +30,7 @@ type Worker struct {
 	// job before it shuts itself down.  If MaxIdle is zero, the worker runs
 	// forever.
 	MaxIdle time.Duration
+	nolog   bool
 }
 
 func (w *Worker) Run() error {
@@ -87,6 +98,9 @@ func (w *Worker) dojob() (wait bool, err error) {
 	client.Heartbeat(w.Id, j.Id, done)
 
 	// run job
+	if w.nolog {
+		j.log = devnull
+	}
 	j.Execute()
 	j.WorkerId = w.Id
 	j.Infiles = nil // don't need to send back input files
