@@ -11,39 +11,79 @@ func nolog(s *Server) {
 	s.log = log.New(devnull, "", 0)
 }
 
-func TestDbLimit(t *testing.T) {
-	CollectFreq = 1 * time.Second
+type test struct {
+	Status string
+	Purge  bool // true if GC should purge jobs
+}
+
+func TestGC(t *testing.T) {
+	tests := []test{
+		{StatusComplete, true},
+		{StatusFailed, true},
+		{StatusRunning, false},
+		{StatusQueued, false},
+	}
 
 	dblimit := 10000
-	db, _ := NewDB("", dblimit)
-	db.purgeAge = 0 * time.Second
-	s := NewServer(testaddr, testaddr, db)
-	nolog(s)
-	go s.ListenAndServe()
-	defer s.Close()
-
-	w := &Worker{Wait: 1 * time.Second, ServerAddr: testaddr, nolog: true}
-	go w.Run()
-
-	j := NewJobCmd("date")
+	j := NewJobCmd("echo", "1")
 	jsize := int(j.Size())
 	njobsmax := dblimit / jsize
 
-	for i := 0; i < 2*njobsmax; i++ {
-		j := NewJobCmd("echo", "1")
-		j.log = devnull
-		s.Run(j)
+	for _, test := range tests {
+		db, _ := NewDB("", dblimit)
+		db.PurgeAge = 0 * time.Second
+		t.Logf("Testing '%v' jobs", test.Status)
+
+		for k := 0; k < 2*njobsmax; k++ {
+			j := NewJobCmd("echo", "1")
+			j.Status = test.Status
+			err := db.Put(j)
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
+
+		nadd, err := db.Count()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if nadd != 2*njobsmax {
+			t.Fatalf("    jobs not added correctly to db: expected %v, got %v", 2*njobsmax, nadd)
+		}
+
+		beforesize, err := db.Size()
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		npurged, nremain, err := db.GC()
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		aftersize, err := db.Size()
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		upper := int64(dblimit) + 2*int64(jsize)
+		lower := int64(dblimit) - 2*int64(jsize)
+
+		t.Logf("    %v jobs purged, %v jobs remain", npurged, nremain)
+		if test.Purge {
+			if beforesize < upper {
+				t.Errorf("    didn't overfill db prior to GC: expected >%v bytes, got %v", upper, beforesize)
+			} else if aftersize > upper {
+				t.Errorf("    GC failed to purge enough jobs: expected <%v bytes, got %v", upper, aftersize)
+			} else if aftersize < lower {
+				t.Errorf("    GC purged too many jobs: expected >%v bytes, got %v", lower, aftersize)
+			} else {
+				t.Logf("    db has %v bytes", aftersize)
+			}
+		} else {
+			if npurged != 0 {
+				t.Errorf("    no jobs should have been purged but %v were", npurged)
+			}
+		}
 	}
-
-	<-time.After(2 * time.Second) // wait for db to purge old jobs
-
-	size, _ := s.alljobs.Size()
-	if size > int64(dblimit)+2*int64(jsize) {
-		t.Errorf("db over full: expected ~%v bytes, got %v", dblimit, size)
-	} else if size < int64(dblimit)-2*int64(jsize) {
-		t.Errorf("db over purged: expected ~%v bytes, got %v", dblimit, size)
-	} else {
-		t.Logf("db has %v bytes", size)
-	}
-
 }

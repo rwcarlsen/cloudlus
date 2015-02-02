@@ -109,6 +109,7 @@ func main() {
 	neval, niter := 0, 0
 
 	// handle signals
+	start := time.Now()
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
@@ -116,7 +117,7 @@ func main() {
 		f1.Close()
 		f4.Close()
 		fmt.Println("\n*** optimizer killed early ***")
-		final(best, niter, neval, ev.UseCount)
+		final(best, niter, neval, ev.UseCount, start)
 		os.Exit(1)
 	}()
 
@@ -132,13 +133,13 @@ func main() {
 		fmt.Printf("iteration %v (%v evals) best point:  %v\n", niter, n, best)
 	}
 
-	final(best, niter, neval, ev.UseCount)
+	final(best, niter, neval, ev.UseCount, start)
 }
 
 func final(best optim.Point, niter, neval, cache int, start time.Time) {
 	_, err := db.Exec("CREATE TABLE IF NOT EXISTS optiminfo (start INTEGER,end INTEGER,niter INTEGER,neval INTEGER,ncacheuses INTEGER);")
 	check(err)
-	_, err := db.Exec("INSERT INTO optiminfo (?,?,?,?,?);", start, time.Now(), niter, neval, cache)
+	_, err = db.Exec("INSERT INTO optiminfo (?,?,?,?,?);", start, time.Now(), niter, neval, cache)
 	check(err)
 
 	fmt.Printf("best: %v\n", best)
@@ -166,16 +167,13 @@ func buildIter(low, A, up *mat64.Dense, lb, ub []float64) (optim.Iterator, *opti
 		n = *npar
 	}
 
-	points, nbad, _ := pop.NewConstr(n/2, 1000000, lb, ub, low, A, up)
-	points2 := pop.New(n-n/2, lb, ub)
+	points, nbad, _ := pop.NewConstr(n, 1000000, lb, ub, low, A, up)
 
-	fmt.Printf("swarming with %v particles\n", n)
-	fmt.Printf("initial population includes at least %v feasible particles\n", n/2-nbad)
+	fmt.Printf("swarming with %v particles (%v are feasible)\n", n, n-nbad)
 
 	// try to make up to half of the population feasible.
 	// the other half is just within the bounded box - for diversity
 	pop := pswarm.NewPopulation(points, minv, maxv)
-	pop = append(pop, pswarm.NewPopulation(points2, minv, maxv)...)
 	ev := optim.NewCacheEvaler(optim.ParallelEvaler{})
 	swarm := pswarm.NewIterator(ev, nil, pop,
 		pswarm.LinInertia(0.9, 0.4, *maxiter),

@@ -18,8 +18,8 @@ var nojoberr = errors.New("no jobs available to run")
 
 const defaultdbpath = "./jobdb"
 
-// CollectFreq if the duration between old job purging from db.
-var CollectFreq = 1 * time.Minute
+// defaultCollectFreq if the duration between old job purging from db.
+var defaultCollectFreq = 1 * time.Minute
 
 const beatInterval = 4 * time.Second
 const beatLimit = 2 * beatInterval
@@ -29,6 +29,7 @@ type Server struct {
 	log          *log.Logger
 	serv         *http.Server
 	Host         string
+	CollectFreq  time.Duration
 	submitjobs   chan jobSubmit
 	submitchans  map[[16]byte]chan *Job
 	retrievejobs chan jobRequest
@@ -58,6 +59,7 @@ func NewServer(httpaddr, rpcaddr string, db *DB) *Server {
 		rpcaddr:      rpcaddr,
 		log:          log.New(os.Stdout, "", log.LstdFlags),
 		kill:         make(chan struct{}),
+		CollectFreq:  defaultCollectFreq,
 	}
 
 	var err error
@@ -68,7 +70,6 @@ func NewServer(httpaddr, rpcaddr string, db *DB) *Server {
 		}
 	}
 	s.alljobs = db
-	s.alljobs.Log = s.log
 	q, err := db.Current()
 	if err != nil {
 		panic(err)
@@ -111,12 +112,13 @@ func (s *Server) ListenAndServe() error {
 			case <-s.kill:
 				return
 			default:
-				err := s.alljobs.CollectGarbage()
+				npurged, nremain, err := s.alljobs.GC()
 				if err != nil {
 					s.log.Print(err)
 				}
+				s.log.Printf("[INFO] purged %v old jobs from db, %v remain", npurged, nremain)
 			}
-			<-time.After(CollectFreq)
+			<-time.After(s.CollectFreq)
 		}
 	}()
 
