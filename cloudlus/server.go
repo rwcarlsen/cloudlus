@@ -42,6 +42,18 @@ type Server struct {
 	beat         chan Beat
 	rpcaddr      string
 	kill         chan struct{}
+	Stats        *Stats
+}
+
+type Stats struct {
+	Started     time.Time
+	NSubmitted  int
+	NCompleted  int
+	NFailed     int
+	NPurged     int
+	NRequeued   int
+	CurrQueued  int
+	CurrRunning int
 }
 
 // TODO: Make worker RPC serving separate from submitter RPC interface serving
@@ -60,6 +72,7 @@ func NewServer(httpaddr, rpcaddr string, db *DB) *Server {
 		log:          log.New(os.Stdout, "", log.LstdFlags),
 		kill:         make(chan struct{}),
 		CollectFreq:  defaultCollectFreq,
+		Stats:        &Stats{},
 	}
 
 	var err error
@@ -105,6 +118,7 @@ func NewServer(httpaddr, rpcaddr string, db *DB) *Server {
 }
 
 func (s *Server) ListenAndServe() error {
+	s.Stats.Started = time.Now()
 	go s.dispatcher()
 	go func() {
 		for {
@@ -113,6 +127,7 @@ func (s *Server) ListenAndServe() error {
 				return
 			default:
 				npurged, nremain, err := s.alljobs.GC()
+				s.Stats.NPurged += npurged
 				if err != nil {
 					s.log.Print(err)
 				}
@@ -176,6 +191,7 @@ func (s *Server) dispatcher() {
 					if err != nil {
 						log.Printf("cannot find job %v for reassignment", jid)
 					} else {
+						s.Stats.NRequeued++
 						s.log.Printf("[REQUEUE] job %v\n", jid)
 						j.Status = StatusQueued
 						s.queue = append([]JobId{j.Id}, s.queue...)
@@ -187,10 +203,14 @@ func (s *Server) dispatcher() {
 		default: // don't block
 		}
 
+		s.Stats.CurrQueued = len(s.queue)
+		s.Stats.CurrRunning = len(s.jobinfo)
+
 		select {
 		case <-s.kill:
 			return
 		case js := <-s.submitjobs:
+			s.Stats.NSubmitted++
 			s.log.Printf("[SUBMIT] job %v\n", js.J.Id)
 			j := js.J
 			if js.Result != nil {
@@ -209,6 +229,12 @@ func (s *Server) dispatcher() {
 				req.Resp <- nil
 			}
 		case j := <-s.pushjobs:
+			if j.Status == StatusFailed {
+				s.Stats.NFailed++
+			} else if j.Status == StatusComplete {
+				s.Stats.NCompleted++
+			}
+
 			s.log.Printf("[PUSH] job %v\n", j.Id)
 			if jj, err := s.alljobs.Get(j.Id); err == nil {
 				// workers nilify the Infiles to reduce network traffic

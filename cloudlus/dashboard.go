@@ -78,7 +78,7 @@ func (s *Server) dashboard(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) dashmain(w http.ResponseWriter, r *http.Request) {
 	w.Header().Add("Access-Control-Allow-Origin", "*")
-	err := hometmpl.Execute(w, s.Host)
+	err := hometmpl.Execute(w, s)
 	if err != nil {
 		httperror(w, err.Error(), http.StatusInternalServerError)
 	}
@@ -248,6 +248,11 @@ const home = `
 			background-color:#F0C2B2;
 		}
 
+		#stats,#since {
+			width:80%;
+			margin:auto;
+			text-align:left;
+		}
 		#infile-form {
 			width:80%;
 			margin:auto;
@@ -267,12 +272,42 @@ const home = `
     <br><button onclick="submitJob()">Submit</button><label>    Job Id: </label><label id="jobid"></label>
     </div>
 
+    <div id="stats">
+		<ul>
+			<li>
+				{{.Stats.CurrRunning}} jobs currently running
+			</li>
+			<li>
+				{{.Stats.CurrQueued}} jobs currently queued
+			</li>
+			<li>
+				{{.Stats.NRequeued}} jobs requeued
+			</li>
+			<li>
+				{{.Stats.NSubmitted}} jobs received
+			</li>
+			<li>
+				{{.Stats.NCompleted}} jobs completed
+			</li>
+			<li>
+				{{.Stats.NFailed}} jobs failed
+			</li>
+			<li>
+				{{.Stats.NPurged}} old jobs purged.
+			</li>
+		</ul>
+	</div>
+
     <br>
     <div id="dashboard"></div>
     <br>
 
+	<div id="since">
+	<i>Server running since {{.Stats.Started}}</i>
+	</div>
+
     <script> 
-        var server = "{{.}}"
+        var server = "{{.Host}}"
 
         function submitJob() {
             var text = $('#infile-box').val();
