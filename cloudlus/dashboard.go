@@ -54,23 +54,13 @@ type BySubmitted struct{ JobList }
 
 func (s BySubmitted) Less(i, j int) bool { return s.JobList[i].Submitted.After(s.JobList[j].Submitted) }
 
-type ByFinished struct{ JobList }
-
-func (s ByFinished) Less(i, j int) bool { return s.JobList[i].Finished.After(s.JobList[j].Finished) }
-
 func (s *Server) dashboard(w http.ResponseWriter, r *http.Request) {
-	jds := []JobData{}
 	jobs, _ := s.alljobs.Current()
-
-	completed, _ := s.alljobs.Recent(24 * time.Hour)
-	if len(completed) > ncompleted {
-		sort.Sort(ByFinished{completed})
-		completed = completed[:ncompleted]
-	}
-
+	completed, _ := s.alljobs.Recent(ncompleted, 24*time.Hour)
 	jobs = append(jobs, completed...)
 	sort.Sort(BySubmitted{jobs})
 
+	jds := []JobData{}
 	for _, j := range jobs {
 		jd := JobData{
 			Id:        fmt.Sprintf("%v", j.Id),

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/petar/GoLLRB/llrb"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/storage"
 )
@@ -193,13 +194,20 @@ func (d *DB) Current() ([]*Job, error) {
 	return queue, nil
 }
 
-// Recent returns all completed jobs (including failed ones).
-// completed within dur of now.
-func (d *DB) Recent(dur time.Duration) ([]*Job, error) {
+type item struct{ *Job }
+
+func (j item) Less(than llrb.Item) bool {
+	j2 := than.(item)
+	return j.Finished.Before(j2.Finished)
+}
+
+// Recent returns up to n of the most recently completed jobs (including
+// failed ones) completed within dur of now.
+func (d *DB) Recent(n int, dur time.Duration) ([]*Job, error) {
 	it := d.db.NewIterator(nil, nil)
 	defer it.Release()
 
-	jobs := []*Job{}
+	tree := llrb.New()
 	now := time.Now()
 	for it.Next() {
 		j := &Job{}
@@ -210,12 +218,22 @@ func (d *DB) Recent(dur time.Duration) ([]*Job, error) {
 		}
 
 		if j.Done() && now.Sub(j.Finished) < dur {
-			jobs = append(jobs, j)
+			tree.InsertNoReplace(item{j})
+			for tree.Len() > n {
+				tree.DeleteMin()
+			}
 		}
 	}
 	if err := it.Error(); err != nil {
 		return nil, err
 	}
+
+	jobs := []*Job{}
+	for i := 0; i < tree.Len(); i++ {
+		j := tree.DeleteMax().(item).Job
+		jobs = append(jobs, j)
+	}
+
 	return jobs, nil
 }
 
