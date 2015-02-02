@@ -139,7 +139,7 @@ func main() {
 func final(best optim.Point, niter, neval, cache int, start time.Time) {
 	_, err := db.Exec("CREATE TABLE IF NOT EXISTS optiminfo (start INTEGER,end INTEGER,niter INTEGER,neval INTEGER,ncacheuses INTEGER);")
 	check(err)
-	_, err = db.Exec("INSERT INTO optiminfo (?,?,?,?,?);", start, time.Now(), niter, neval, cache)
+	_, err = db.Exec("INSERT INTO optiminfo VALUES (?,?,?,?,?);", start, time.Now(), niter, neval, cache)
 	check(err)
 
 	fmt.Printf("best: %v\n", best)
