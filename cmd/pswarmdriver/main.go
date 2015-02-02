@@ -15,6 +15,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/gonum/matrix/mat64"
 	_ "github.com/mxk/go-sqlite/sqlite3"
@@ -28,17 +29,15 @@ import (
 )
 
 var (
-	scenfile  = flag.String("scen", "scenario.json", "file containing problem scenification")
-	npar      = flag.Int("npar", 0, "number of particles (0 => choose automatically)")
-	addr      = flag.String("addr", "", "address to submit jobs to (otherwise, run locally)")
-	objlog    = flag.String("objlog", "obj.log", "file to log function evaluations")
-	penobjlog = flag.String("penobjlog", "penalized-obj.log", "file to log penalized function evaluations")
-	bestlog   = flag.String("bestlog", "best.log", "file to log function evaluations to")
-	runlog    = flag.String("runlog", "run.log", "file to log local cyclus run output")
-	maxeval   = flag.Int("maxeval", 10000, "max number of objective evaluations")
-	maxiter   = flag.Int("maxiter", 300, "max number of optimizer iterations")
-	penalty   = flag.Float64("penalty", 0.5, "fractional penalty for constraint violations")
-	swarmdb   = flag.String("swarmdb", "swarm.sqlite", "fractional penalty for constraint violations")
+	scenfile = flag.String("scen", "scenario.json", "file containing problem scenification")
+	npar     = flag.Int("npar", 0, "number of particles (0 => choose automatically)")
+	addr     = flag.String("addr", "", "address to submit jobs to (otherwise, run locally)")
+	objlog   = flag.String("objlog", "obj.log", "file to log unpenalized objective values")
+	runlog   = flag.String("runlog", "run.log", "file to log local cyclus run output")
+	maxeval  = flag.Int("maxeval", 10000, "max number of objective evaluations")
+	maxiter  = flag.Int("maxiter", 300, "max number of optimizer iterations")
+	penalty  = flag.Float64("penalty", 0.5, "fractional penalty for constraint violations")
+	swarmdb  = flag.String("swarmdb", "swarm.sqlite", "fractional penalty for constraint violations")
 )
 
 const outfile = "objective.out"
@@ -84,12 +83,6 @@ func main() {
 	f1, err := os.Create(*objlog)
 	check(err)
 	defer f1.Close()
-	f2, err := os.Create(*penobjlog)
-	check(err)
-	defer f2.Close()
-	f3, err := os.Create(*bestlog)
-	check(err)
-	defer f3.Close()
 	f4, err := os.Create(*runlog)
 	check(err)
 	defer f4.Close()
@@ -108,7 +101,6 @@ func main() {
 		Up:     up,
 		Weight: 1,
 	}
-	loggedpobj := &optim.ObjectiveLogger{Obj: pobj, W: f2}
 
 	m := mesh.Integer{mesh.NewBounded(&mesh.Infinite{StepSize: 2}, lb, ub)}
 
@@ -122,34 +114,37 @@ func main() {
 	go func() {
 		<-sigs
 		f1.Close()
-		f2.Close()
-		f3.Close()
 		f4.Close()
 		fmt.Println("\n*** optimizer killed early ***")
-		fmt.Printf("best: %v\n", best)
-		fmt.Printf("%v optimizer iterations\n", niter)
-		fmt.Printf("%v objective evaluations\n", neval)
-		fmt.Printf("%v cached objective uses\n", ev.UseCount)
+		final(best, niter, neval, ev.UseCount)
 		os.Exit(1)
 	}()
 
 	// solve and print results
-	fmt.Fprintf(f3, "Iteration #: f[bestpos] = bestobj\n")
 	for neval < *maxeval && niter < *maxiter {
 		var n int
-		best, n, err = it.Iterate(loggedpobj, m)
+		best, n, err = it.Iterate(pobj, m)
 		neval += n
 		niter++
 		if err != nil {
 			log.Print(err)
 		}
-		fmt.Fprintf(f3, "%v:  %v\n", niter, best)
 		fmt.Printf("iteration %v (%v evals) best point:  %v\n", niter, n, best)
 	}
+
+	final(best, niter, neval, ev.UseCount)
+}
+
+func final(best optim.Point, niter, neval, cache int, start time.Time) {
+	_, err := db.Exec("CREATE TABLE IF NOT EXISTS optiminfo (start INTEGER,end INTEGER,niter INTEGER,neval INTEGER,ncacheuses INTEGER);")
+	check(err)
+	_, err := db.Exec("INSERT INTO optiminfo (?,?,?,?,?);", start, time.Now(), niter, neval, cache)
+	check(err)
+
 	fmt.Printf("best: %v\n", best)
 	fmt.Printf("%v optimizer iterations\n", niter)
 	fmt.Printf("%v objective evaluations\n", neval)
-	fmt.Printf("%v cached objective uses\n", ev.UseCount)
+	fmt.Printf("%v cached objective uses\n", cache)
 }
 
 func buildIter(low, A, up *mat64.Dense, lb, ub []float64) (optim.Iterator, *optim.CacheEvaler) {
