@@ -36,6 +36,8 @@ var dashtmplstr = `
 var tmpl = template.Must(template.New("dashtable").Parse(dashtmplstr))
 var hometmpl = template.Must(template.New("home").Parse(home))
 
+const ncompleted = 100
+
 type JobData struct {
 	Id        string
 	Status    string
@@ -43,20 +45,32 @@ type JobData struct {
 	Host      string
 }
 
-type JobList []JobData
+type JobList []*Job
 
 func (s JobList) Len() int      { return len(s) }
 func (s JobList) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
 
-type ByTime struct{ JobList }
+type BySubmitted struct{ JobList }
 
-func (s ByTime) Less(i, j int) bool { return s.JobList[i].Submitted.After(s.JobList[j].Submitted) }
+func (s BySubmitted) Less(i, j int) bool { return s.JobList[i].Submitted.After(s.JobList[j].Submitted) }
+
+type ByFinished struct{ JobList }
+
+func (s ByFinished) Less(i, j int) bool { return s.JobList[i].Finished.After(s.JobList[j].Finished) }
 
 func (s *Server) dashboard(w http.ResponseWriter, r *http.Request) {
-	jds := make(JobList, 0)
+	jds := []JobData{}
 	jobs, _ := s.alljobs.Current()
+
 	completed, _ := s.alljobs.Recent(24 * time.Hour)
+	if len(completed) > ncompleted {
+		sort.Sort(ByFinished{completed})
+		completed = completed[:ncompleted]
+	}
+
 	jobs = append(jobs, completed...)
+	sort.Sort(BySubmitted{jobs})
+
 	for _, j := range jobs {
 		jd := JobData{
 			Id:        fmt.Sprintf("%v", j.Id),
@@ -66,8 +80,6 @@ func (s *Server) dashboard(w http.ResponseWriter, r *http.Request) {
 		}
 		jds = append(jds, jd)
 	}
-
-	sort.Sort(ByTime{jds})
 
 	// allow cross-domain ajax requests for the dashboard content
 	w.Header().Add("Access-Control-Allow-Origin", "*")
