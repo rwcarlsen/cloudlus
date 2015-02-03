@@ -10,6 +10,7 @@ import (
 	"io/ioutil"
 	"log"
 	"math"
+	"math/rand"
 	"os"
 	"os/signal"
 	"strconv"
@@ -32,6 +33,7 @@ var (
 	scenfile = flag.String("scen", "scenario.json", "file containing problem scenification")
 	npar     = flag.Int("npar", 0, "number of particles (0 => choose automatically)")
 	addr     = flag.String("addr", "", "address to submit jobs to (otherwise, run locally)")
+	seed     = flag.Int("seed", 1, "seed for random number generator")
 	objlog   = flag.String("objlog", "obj.log", "file to log unpenalized objective values")
 	runlog   = flag.String("runlog", "run.log", "file to log local cyclus run output")
 	maxeval  = flag.Int("maxeval", 10000, "max number of objective evaluations")
@@ -57,6 +59,7 @@ var client *cloudlus.Client
 func main() {
 	var err error
 	flag.Parse()
+	optim.Rand = rand.New(rand.NewSource(int64(*seed)))
 
 	if *addr != "" {
 		client, err = cloudlus.Dial(*addr)
