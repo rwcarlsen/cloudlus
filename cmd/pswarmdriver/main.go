@@ -38,7 +38,7 @@ var (
 	runlog       = flag.String("runlog", "run.log", "file to log local cyclus run output")
 	maxeval      = flag.Int("maxeval", 10000, "max number of objective evaluations")
 	maxiter      = flag.Int("maxiter", 300, "max number of optimizer iterations")
-	maxnoimprove = flag.Int("maxnoimprove", 50, "max iterations with no objective improvement")
+	maxnoimprove = flag.Int("maxnoimprove", 20, "max iterations with no objective improvement")
 	penalty      = flag.Float64("penalty", 0.5, "fractional penalty for constraint violations")
 	swarmdb      = flag.String("swarmdb", "swarm.sqlite", "fractional penalty for constraint violations")
 )
