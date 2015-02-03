@@ -183,6 +183,7 @@ func buildIter(low, A, up *mat64.Dense, lb, ub []float64) (optim.Iterator, *opti
 	return pattern.NewIterator(ev, pop[0].Point,
 		pattern.SearchIter(swarm),
 		pattern.NfailGrow(-1), // never grow mesh
+		pattern.DB(db),
 	), ev
 }
 
