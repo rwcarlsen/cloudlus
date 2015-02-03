@@ -30,16 +30,17 @@ import (
 )
 
 var (
-	scenfile = flag.String("scen", "scenario.json", "file containing problem scenification")
-	npar     = flag.Int("npar", 0, "number of particles (0 => choose automatically)")
-	addr     = flag.String("addr", "", "address to submit jobs to (otherwise, run locally)")
-	seed     = flag.Int("seed", 1, "seed for random number generator")
-	objlog   = flag.String("objlog", "obj.log", "file to log unpenalized objective values")
-	runlog   = flag.String("runlog", "run.log", "file to log local cyclus run output")
-	maxeval  = flag.Int("maxeval", 10000, "max number of objective evaluations")
-	maxiter  = flag.Int("maxiter", 300, "max number of optimizer iterations")
-	penalty  = flag.Float64("penalty", 0.5, "fractional penalty for constraint violations")
-	swarmdb  = flag.String("swarmdb", "swarm.sqlite", "fractional penalty for constraint violations")
+	scenfile     = flag.String("scen", "scenario.json", "file containing problem scenification")
+	npar         = flag.Int("npar", 0, "number of particles (0 => choose automatically)")
+	addr         = flag.String("addr", "", "address to submit jobs to (otherwise, run locally)")
+	seed         = flag.Int("seed", 1, "seed for random number generator")
+	objlog       = flag.String("objlog", "obj.log", "file to log unpenalized objective values")
+	runlog       = flag.String("runlog", "run.log", "file to log local cyclus run output")
+	maxeval      = flag.Int("maxeval", 10000, "max number of objective evaluations")
+	maxiter      = flag.Int("maxiter", 300, "max number of optimizer iterations")
+	maxnoimprove = flag.Int("maxnoimprove", 50, "max iterations with no objective improvement")
+	penalty      = flag.Float64("penalty", 0.5, "fractional penalty for constraint violations")
+	swarmdb      = flag.String("swarmdb", "swarm.sqlite", "fractional penalty for constraint violations")
 )
 
 const outfile = "objective.out"
@@ -107,9 +108,15 @@ func main() {
 
 	m := mesh.Integer{mesh.NewBounded(&mesh.Infinite{StepSize: 2}, lb, ub)}
 
-	// these are defined here so that signals goroutine can close over them
-	best := optim.Point{}
-	neval, niter := 0, 0
+	// this is here so that signals goroutine can close over it
+	solv := &optim.Solver{
+		Iter:         it,
+		Obj:          pobj,
+		Mesh:         m,
+		MaxIter:      *maxiter,
+		MaxEval:      *maxeval,
+		MaxNoImprove: *maxnoimprove,
+	}
 
 	// handle signals
 	start := time.Now()
@@ -120,34 +127,31 @@ func main() {
 		f1.Close()
 		f4.Close()
 		fmt.Println("\n*** optimizer killed early ***")
-		final(best, niter, neval, ev.UseCount, start)
+		final(solv, ev.UseCount, start)
 		os.Exit(1)
 	}()
 
 	// solve and print results
-	for neval < *maxeval && niter < *maxiter {
-		var n int
-		best, n, err = it.Iterate(pobj, m)
-		neval += n
-		niter++
-		if err != nil {
-			log.Print(err)
-		}
-		fmt.Printf("iteration %v (%v evals) best point:  %v\n", niter, n, best)
+	for solv.Next() {
+		fmt.Printf("iteration %v (%v evals) best point:  %v\n", solv.Niter(), solv.Neval(), solv.Best())
 	}
 
-	final(best, niter, neval, ev.UseCount, start)
+	final(solv, ev.UseCount, start)
 }
 
-func final(best optim.Point, niter, neval, cache int, start time.Time) {
+func final(s *optim.Solver, cache int, start time.Time) {
 	_, err := db.Exec("CREATE TABLE IF NOT EXISTS optiminfo (start INTEGER,end INTEGER,niter INTEGER,neval INTEGER,ncacheuses INTEGER);")
 	check(err)
-	_, err = db.Exec("INSERT INTO optiminfo VALUES (?,?,?,?,?);", start, time.Now(), niter, neval, cache)
+	_, err = db.Exec("INSERT INTO optiminfo VALUES (?,?,?,?,?);", start, time.Now(), s.Niter(), s.Neval(), cache)
 	check(err)
 
-	fmt.Printf("best: %v\n", best)
-	fmt.Printf("%v optimizer iterations\n", niter)
-	fmt.Printf("%v objective evaluations\n", neval)
+	if err := s.Err(); err != nil {
+		log.Print(err)
+	}
+
+	fmt.Printf("best: %v\n", s.Best())
+	fmt.Printf("%v optimizer iterations\n", s.Niter())
+	fmt.Printf("%v objective evaluations\n", s.Neval())
 	fmt.Printf("%v cached objective uses\n", cache)
 }
 
