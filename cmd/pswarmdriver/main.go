@@ -133,7 +133,7 @@ func main() {
 
 	// solve and print results
 	for solv.Next() {
-		fmt.Printf("iteration %v (%v evals) best point:  %v\n", solv.Niter(), solv.Neval(), solv.Best())
+		fmt.Printf("Iter %v (%v evals):  %v\n", solv.Niter(), solv.Neval(), solv.Best())
 	}
 
 	final(solv, ev.UseCount, start)
