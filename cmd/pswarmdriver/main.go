@@ -156,15 +156,10 @@ func final(s *optim.Solver, cache int, start time.Time) {
 }
 
 func buildIter(low, A, up *mat64.Dense, lb, ub []float64) (optim.Iterator, *optim.CacheEvaler) {
-	minv := make([]float64, len(lb))
-	maxv := make([]float64, len(lb))
-	maxmaxv := 0.0
+	vmax := make([]float64, len(lb))
 	for i := range lb {
-		minv[i] = (ub[i] - lb[i]) / 20
-		maxv[i] = minv[i] * 4
-		maxmaxv += maxv[i] * maxv[i]
+		vmax[i] = (ub[i] - lb[i]) / 2
 	}
-	maxmaxv = math.Sqrt(maxmaxv)
 
 	n := 10 + 5*len(lb)
 	if n < 20 {
@@ -180,7 +175,7 @@ func buildIter(low, A, up *mat64.Dense, lb, ub []float64) (optim.Iterator, *opti
 
 	// try to make up to half of the population feasible.
 	// the other half is just within the bounded box - for diversity
-	pop := pswarm.NewPopulation(points, minv, maxv)
+	pop := pswarm.NewPopulation(points, vmax)
 	ev := optim.NewCacheEvaler(optim.ParallelEvaler{})
 	//cognition, social := 1.0, 1.0
 	swarm := pswarm.NewIterator(ev, pop,
