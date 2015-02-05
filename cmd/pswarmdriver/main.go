@@ -40,7 +40,7 @@ var (
 	maxiter      = flag.Int("maxiter", 300, "max number of optimizer iterations")
 	maxnoimprove = flag.Int("maxnoimprove", 20, "max iterations with no objective improvement")
 	penalty      = flag.Float64("penalty", 0.5, "fractional penalty for constraint violations")
-	swarmdb      = flag.String("swarmdb", "swarm.sqlite", "fractional penalty for constraint violations")
+	dbname       = flag.String("db", "pswarm.sqlite", "name for database containing optimizer work")
 )
 
 const outfile = "objective.out"
@@ -68,8 +68,8 @@ func main() {
 		defer client.Close()
 	}
 
-	os.Remove(*swarmdb)
-	db, err = sql.Open("sqlite3", *swarmdb)
+	os.Remove(*dbname)
+	db, err = sql.Open("sqlite3", *dbname)
 	check(err)
 	defer db.Close()
 
@@ -106,7 +106,7 @@ func main() {
 		Weight: 1,
 	}
 
-	m := mesh.Integer{mesh.NewBounded(&mesh.Infinite{StepSize: 2}, lb, ub)}
+	m := &mesh.Integer{mesh.NewBounded(&mesh.Infinite{StepSize: 2}, lb, ub)}
 
 	// this is here so that signals goroutine can close over it
 	solv := &optim.Solver{
@@ -182,14 +182,13 @@ func buildIter(low, A, up *mat64.Dense, lb, ub []float64) (optim.Iterator, *opti
 	// the other half is just within the bounded box - for diversity
 	pop := pswarm.NewPopulation(points, minv, maxv)
 	ev := optim.NewCacheEvaler(optim.ParallelEvaler{})
-	swarm := pswarm.NewIterator(ev, nil, pop,
-		pswarm.LinInertia(0.9, 0.4, *maxiter),
-		pswarm.Vmax(maxmaxv),
+	//cognition, social := 1.0, 1.0
+	swarm := pswarm.NewIterator(ev, pop,
+		pswarm.VmaxBounds(lb, ub),
 		pswarm.DB(db),
 	)
 	return pattern.NewIterator(ev, pop[0].Point,
 		pattern.SearchIter(swarm),
-		pattern.NsuccessGrow(-1), // never grow mesh
 		pattern.DB(db),
 	), ev
 }
