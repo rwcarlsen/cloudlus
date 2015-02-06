@@ -38,7 +38,7 @@ var (
 	runlog       = flag.String("runlog", "run.log", "file to log local cyclus run output")
 	maxeval      = flag.Int("maxeval", 10000, "max number of objective evaluations")
 	maxiter      = flag.Int("maxiter", 300, "max number of optimizer iterations")
-	maxnoimprove = flag.Int("maxnoimprove", 20, "max iterations with no objective improvement")
+	maxnoimprove = flag.Int("maxnoimprove", 30, "max iterations with no objective improvement")
 	penalty      = flag.Float64("penalty", 0.5, "fractional penalty for constraint violations")
 	dbname       = flag.String("db", "pswarm.sqlite", "name for database containing optimizer work")
 )
@@ -161,7 +161,7 @@ func buildIter(low, A, up *mat64.Dense, lb, ub []float64) (optim.Iterator, *opti
 		vmax[i] = (ub[i] - lb[i]) / 2
 	}
 
-	n := 30 + 3*len(lb)
+	n := 20 + 5*len(lb)
 	if n < 20 {
 		n = 20
 	}
