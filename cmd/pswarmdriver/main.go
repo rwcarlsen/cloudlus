@@ -161,7 +161,7 @@ func buildIter(low, A, up *mat64.Dense, lb, ub []float64) (optim.Iterator, *opti
 		vmax[i] = (ub[i] - lb[i]) / 2
 	}
 
-	n := 10 + 5*len(lb)
+	n := 30 + 3*len(lb)
 	if n < 20 {
 		n = 20
 	}
@@ -179,7 +179,7 @@ func buildIter(low, A, up *mat64.Dense, lb, ub []float64) (optim.Iterator, *opti
 	ev := optim.NewCacheEvaler(optim.ParallelEvaler{})
 	//cognition, social := 1.0, 1.0
 	swarm := pswarm.NewIterator(ev, pop,
-		pswarm.VmaxBounds(lb, ub),
+		pswarm.Vmax(vmax),
 		pswarm.DB(db),
 	)
 	return pattern.NewIterator(ev, pop[0].Point,
