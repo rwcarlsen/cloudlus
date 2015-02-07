@@ -26,7 +26,7 @@ import (
 	"github.com/rwcarlsen/optim/mesh"
 	"github.com/rwcarlsen/optim/pattern"
 	"github.com/rwcarlsen/optim/pop"
-	"github.com/rwcarlsen/optim/pswarm"
+	"github.com/rwcarlsen/optim/swarm"
 )
 
 var (
@@ -158,12 +158,12 @@ func final(s *optim.Solver, cache int, start time.Time) {
 func buildIter(low, A, up *mat64.Dense, lb, ub []float64) (optim.Iterator, *optim.CacheEvaler) {
 	vmax := make([]float64, len(lb))
 	for i := range lb {
-		vmax[i] = (ub[i] - lb[i]) / 2
+		vmax[i] = (ub[i] - lb[i]) / 4
 	}
 
-	n := 20 + 5*len(lb)
-	if n < 20 {
-		n = 20
+	n := 30 + 1*len(lb)
+	if n < 30 {
+		n = 30
 	}
 	if *npar != 0 {
 		n = *npar
@@ -175,12 +175,12 @@ func buildIter(low, A, up *mat64.Dense, lb, ub []float64) (optim.Iterator, *opti
 
 	// try to make up to half of the population feasible.
 	// the other half is just within the bounded box - for diversity
-	pop := pswarm.NewPopulation(points, vmax)
+	pop := swarm.NewPopulation(points, vmax)
 	ev := optim.NewCacheEvaler(optim.ParallelEvaler{})
 	//cognition, social := 1.0, 1.0
-	swarm := pswarm.NewIterator(ev, pop,
-		pswarm.Vmax(vmax),
-		pswarm.DB(db),
+	swarm := swarm.NewIterator(ev, pop,
+		swarm.VmaxBounds(lb, ub),
+		swarm.DB(db),
 	)
 	return pattern.NewIterator(ev, pop[0].Point,
 		pattern.SearchIter(swarm),
