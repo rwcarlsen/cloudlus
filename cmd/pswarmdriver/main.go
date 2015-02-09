@@ -25,7 +25,6 @@ import (
 	"github.com/rwcarlsen/optim"
 	"github.com/rwcarlsen/optim/mesh"
 	"github.com/rwcarlsen/optim/pattern"
-	"github.com/rwcarlsen/optim/pop"
 	"github.com/rwcarlsen/optim/swarm"
 )
 
@@ -169,7 +168,7 @@ func buildIter(low, A, up *mat64.Dense, lb, ub []float64) (optim.Iterator, *opti
 		n = *npar
 	}
 
-	points, nbad, _ := pop.NewConstr(n, 1000000, lb, ub, low, A, up)
+	points, nbad, _ := optim.RandPopConstr(n, 1000000, lb, ub, low, A, up)
 
 	fmt.Printf("swarming with %v particles (%v are feasible)\n", n, n-nbad)
 
@@ -183,7 +182,7 @@ func buildIter(low, A, up *mat64.Dense, lb, ub []float64) (optim.Iterator, *opti
 		swarm.DB(db),
 	)
 	return pattern.NewIterator(ev, pop[0].Point,
-		pattern.SearchIter(swarm),
+		pattern.SearchIter(swarm, pattern.NoShare),
 		pattern.DB(db),
 	), ev
 }
