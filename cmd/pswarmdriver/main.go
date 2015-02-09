@@ -172,11 +172,8 @@ func buildIter(low, A, up *mat64.Dense, lb, ub []float64) (optim.Iterator, *opti
 
 	fmt.Printf("swarming with %v particles (%v are feasible)\n", n, n-nbad)
 
-	// try to make up to half of the population feasible.
-	// the other half is just within the bounded box - for diversity
-	pop := swarm.NewPopulation(points, vmax)
 	ev := optim.NewCacheEvaler(optim.ParallelEvaler{})
-	//cognition, social := 1.0, 1.0
+	pop := swarm.NewPopulation(points, vmax)
 	swarm := swarm.NewIterator(ev, pop,
 		swarm.VmaxBounds(lb, ub),
 		swarm.DB(db),
