@@ -1,15 +1,16 @@
 package cloudlus
 
 import (
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
 
-	"github.com/petar/GoLLRB/llrb"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/storage"
+	"github.com/syndtr/goleveldb/leveldb/util"
 )
 
 type Beat struct {
@@ -114,6 +115,7 @@ func (d *DB) GC() (npurged, nremain int, err error) {
 
 		if size > d.Limit && j.Done() && now.Sub(j.Finished) > d.PurgeAge {
 			d.db.Delete(it.Key(), nil)
+			d.db.Delete(finishKey(j), nil)
 			npurged++
 		} else {
 			size += int64(len(it.Value()))
@@ -194,44 +196,34 @@ func (d *DB) Current() ([]*Job, error) {
 	return queue, nil
 }
 
-type item struct{ *Job }
-
-func (j item) Less(than llrb.Item) bool {
-	j2 := than.(item)
-	return j.Finished.Before(j2.Finished)
-}
-
 // Recent returns up to n of the most recently completed jobs (including
 // failed ones) completed within dur of now.
 func (d *DB) Recent(n int, dur time.Duration) ([]*Job, error) {
-	it := d.db.NewIterator(nil, nil)
+	it := d.db.NewIterator(util.BytesPrefix([]byte(finishPrefix)), nil)
 	defer it.Release()
 
-	tree := llrb.New()
-	now := time.Now()
+	// the last iterated over jobs are the most recent
+	ids := []JobId{}
 	for it.Next() {
-		j := &Job{}
-		data := it.Value()
-		err := json.Unmarshal(data, &j)
-		if err != nil {
-			return nil, err
-		}
-
-		if j.Done() && now.Sub(j.Finished) < dur {
-			tree.InsertNoReplace(item{j})
-			for tree.Len() > n {
-				tree.DeleteMin()
-			}
-		}
+		var id JobId
+		copy(id[:], it.Value())
+		ids = append(ids, id)
 	}
 	if err := it.Error(); err != nil {
 		return nil, err
 	}
 
-	jobs := []*Job{}
-	for i := 0; i < tree.Len(); i++ {
-		j := tree.DeleteMax().(item).Job
-		jobs = append(jobs, j)
+	if len(ids) > n {
+		ids = ids[len(ids)-n:]
+	}
+
+	jobs := make([]*Job, len(ids))
+	for i, id := range ids {
+		j, err := d.Get(id)
+		if err != nil {
+			return nil, err
+		}
+		jobs[i] = j
 	}
 
 	return jobs, nil
@@ -250,10 +242,25 @@ func (d *DB) Get(id JobId) (*Job, error) {
 	return j, nil
 }
 
+const finishPrefix = "finish-"
+
+func finishKey(j *Job) []byte {
+	data := make([]byte, 8)
+	binary.BigEndian.PutUint64(data, uint64(j.Finished.Unix()))
+	key := append([]byte(finishPrefix), data...)
+	return append(key, j.Id[:]...)
+}
+
 func (d *DB) Put(j *Job) error {
 	data, err := json.Marshal(j)
 	if err != nil {
 		return err
 	}
+
+	err = d.db.Put(finishKey(j), j.Id[:], nil)
+	if err != nil {
+		return err
+	}
+
 	return d.db.Put(j.Id[:], data, nil)
 }

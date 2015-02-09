@@ -246,7 +246,8 @@ func submitjob(scen *scen.Scenario, j *cloudlus.Job) (float64, error) {
 			s := fmt.Sprintf("%s", f.Data)
 			val, err := strconv.ParseFloat(s, 64)
 			if err != nil {
-				return math.Inf(1), fmt.Errorf("job returned invalid objective string '%v'", s)
+				log.Printf("job returned invalid objective string '%v'", s)
+				return math.Inf(1), nil
 			} else {
 				return val, nil
 			}
