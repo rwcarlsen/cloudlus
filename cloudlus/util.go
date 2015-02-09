@@ -116,6 +116,7 @@ func (d *DB) GC() (npurged, nremain int, err error) {
 		if size > d.Limit && j.Done() && now.Sub(j.Finished) > d.PurgeAge {
 			d.db.Delete(it.Key(), nil)
 			d.db.Delete(finishKey(j), nil)
+			d.db.Delete(currentKey(j), nil)
 			npurged++
 		} else {
 			size += int64(len(it.Value()))
@@ -174,26 +175,29 @@ func (d *DB) Close() error { return d.db.Close() }
 // Current returns the all jobs from the database that aren't completed - e.g.
 // queued or running.
 func (d *DB) Current() ([]*Job, error) {
-	it := d.db.NewIterator(nil, nil)
+	it := d.db.NewIterator(util.BytesPrefix([]byte(currPrefix)), nil)
 	defer it.Release()
 
-	queue := []*Job{}
+	ids := []JobId{}
 	for it.Next() {
-		j := &Job{}
-		data := it.Value()
-		err := json.Unmarshal(data, &j)
-		if err != nil {
-			return nil, err
-		}
-
-		if !j.Done() {
-			queue = append(queue, j)
-		}
+		var id JobId
+		copy(id[:], it.Value())
+		ids = append(ids, id)
 	}
 	if err := it.Error(); err != nil {
 		return nil, err
 	}
-	return queue, nil
+
+	jobs := make([]*Job, len(ids))
+	for i, id := range ids {
+		j, err := d.Get(id)
+		if err != nil {
+			return nil, err
+		}
+		jobs[i] = j
+	}
+
+	return jobs, nil
 }
 
 // Recent returns up to n of the most recently completed jobs (including
@@ -243,6 +247,7 @@ func (d *DB) Get(id JobId) (*Job, error) {
 }
 
 const finishPrefix = "finish-"
+const currPrefix = "curr-"
 
 func finishKey(j *Job) []byte {
 	data := make([]byte, 8)
@@ -251,12 +256,27 @@ func finishKey(j *Job) []byte {
 	return append(key, j.Id[:]...)
 }
 
+func currentKey(j *Job) []byte {
+	return append([]byte(currPrefix), j.Id[:]...)
+}
+
 func (d *DB) Put(j *Job) error {
 	data, err := json.Marshal(j)
 	if err != nil {
 		return err
 	}
 
+	// current index
+	if j.Done() {
+		d.db.Delete(currentKey(j), nil)
+	} else {
+		err = d.db.Put(currentKey(j), j.Id[:], nil)
+		if err != nil {
+			return err
+		}
+	}
+
+	// time finished index
 	err = d.db.Put(finishKey(j), j.Id[:], nil)
 	if err != nil {
 		return err
