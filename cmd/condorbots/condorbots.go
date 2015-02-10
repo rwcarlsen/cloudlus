@@ -155,6 +155,11 @@ func submitssh(srcs, dsts []string, submitdata, runbuf io.Reader) {
 		if err != nil {
 			log.Fatal(err)
 		}
+	} else {
+		client, err = ssh.Dial("tcp", *dst, config)
+		if err != nil {
+			log.Fatal(err)
+		}
 	}
 
 	// copy files
