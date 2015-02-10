@@ -320,9 +320,13 @@ func (d *DB) Put(j *Job) error {
 	}
 
 	// time finished index
-	err = d.db.Put(finishKey(j), j.Id[:], nil)
-	if err != nil {
-		return err
+	if j.Done() && j.Finished.Unix() >= 0 {
+		// TODO: test that we don't add entries for unfinished jobs - they have a
+		// negative unix time and mess up the iteration order.
+		err = d.db.Put(finishKey(j), j.Id[:], nil)
+		if err != nil {
+			return err
+		}
 	}
 
 	return d.db.Put(j.Id[:], data, nil)
