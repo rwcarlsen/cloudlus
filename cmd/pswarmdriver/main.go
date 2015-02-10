@@ -179,7 +179,7 @@ func buildIter(low, A, up *mat64.Dense, lb, ub []float64) (optim.Iterator, *opti
 		swarm.DB(db),
 	)
 	return pattern.NewIterator(ev, pop[0].Point,
-		pattern.SearchIter(swarm, pattern.NoShare),
+		pattern.SearchIter(swarm, pattern.Share),
 		pattern.DB(db),
 	), ev
 }
