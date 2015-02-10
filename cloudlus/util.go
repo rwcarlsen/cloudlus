@@ -243,8 +243,8 @@ func (d *DB) Current() ([]*Job, error) {
 }
 
 // Recent returns up to n of the most recently completed jobs (including
-// failed ones) completed within dur of now.
-func (d *DB) Recent(n int, dur time.Duration) ([]*Job, error) {
+// failed ones).
+func (d *DB) Recent(n int) ([]*Job, error) {
 	it := d.db.NewIterator(util.BytesPrefix([]byte(finishPrefix)), nil)
 	defer it.Release()
 

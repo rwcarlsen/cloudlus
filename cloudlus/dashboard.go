@@ -56,7 +56,7 @@ func (s BySubmitted) Less(i, j int) bool { return s.JobList[i].Submitted.After(s
 
 func (s *Server) dashboard(w http.ResponseWriter, r *http.Request) {
 	jobs, _ := s.alljobs.Current()
-	completed, _ := s.alljobs.Recent(ncompleted, 24*time.Hour)
+	completed, _ := s.alljobs.Recent(ncompleted)
 	jobs = append(jobs, completed...)
 	sort.Sort(BySubmitted{jobs})
 
