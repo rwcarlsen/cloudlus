@@ -1,6 +1,7 @@
 package cloudlus
 
 import (
+	"bytes"
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
@@ -106,6 +107,11 @@ func (d *DB) GC() (npurged, nremain int, err error) {
 	now := time.Now()
 
 	for it.Next() {
+		// TODO: test that non-job key entries are properly skipped
+		if notjob(it.Key()) {
+			continue
+		}
+
 		j := &Job{}
 		data := it.Value()
 		err := json.Unmarshal(data, &j)
@@ -171,6 +177,42 @@ func (d *DB) DiskSize() (int64, error) {
 }
 
 func (d *DB) Close() error { return d.db.Close() }
+
+func notjob(key []byte) bool {
+	pfx1 := []byte(finishPrefix)
+	pfx2 := []byte(currPrefix)
+	if bytes.Equal(key[:len(pfx1)], pfx1) {
+		return true
+	} else if bytes.Equal(key[:len(pfx2)], pfx2) {
+		return true
+	}
+	return false
+}
+
+// Failed returns the all jobs from the database that failed.
+func (d *DB) Failed() ([]*Job, error) {
+	it := d.db.NewIterator(nil, nil)
+	defer it.Release()
+
+	jobs := []*Job{}
+	for it.Next() {
+		// TODO: test that non-job key entries are properly skipped
+		if notjob(it.Key()) {
+			continue
+		}
+
+		j := &Job{}
+		err := json.Unmarshal(it.Value(), &j)
+		if err != nil {
+			return nil, err
+		}
+		jobs = append(jobs, j)
+	}
+	if err := it.Error(); err != nil {
+		return nil, err
+	}
+	return jobs, nil
+}
 
 // Current returns the all jobs from the database that aren't completed - e.g.
 // queued or running.
@@ -253,6 +295,7 @@ func finishKey(j *Job) []byte {
 	data := make([]byte, 8)
 	binary.BigEndian.PutUint64(data, uint64(j.Finished.Unix()))
 	key := append([]byte(finishPrefix), data...)
+	key = append(key, '-')
 	return append(key, j.Id[:]...)
 }
 
