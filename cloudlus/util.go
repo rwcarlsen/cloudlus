@@ -77,7 +77,7 @@ type DB struct {
 
 // NewDB returns a new database with a
 func NewDB(path string, dblimit int) (*DB, error) {
-	d := &DB{PurgeAge: 1 * time.Hour}
+	d := &DB{PurgeAge: 30 * time.Minute}
 	d.Limit = int64(dblimit)
 
 	var err error
@@ -98,17 +98,24 @@ func NewDB(path string, dblimit int) (*DB, error) {
 // GC runs garbage collection if the database is larger than the specified
 // DB.Limit.  Jobs older than DB.PurgeAge are removed if they have been
 // completed.  The number of removed jobs and the number of jobs still in the
-// database is returned along with any error that occured.
+// database is returned along with any error that occured.  sometimes, -1 may
+// be returned for nremain - this means that the jobs count is unknown because
+// GC didn't occur.
 func (d *DB) GC() (npurged, nremain int, err error) {
+	size, err := d.Size()
+	if err != nil {
+		return 0, -1, err
+	} else if size < int64(d.Limit) {
+		return 0, -1, nil
+	}
+
 	it := d.db.NewIterator(nil, nil)
 	defer it.Release()
 
-	var size int64
 	now := time.Now()
-
 	for it.Next() {
-		// TODO: test that non-job key entries are properly skipped
 		if notjob(it.Key()) {
+			// TODO: test that non-job key entries are properly skipped
 			continue
 		}
 
@@ -116,16 +123,15 @@ func (d *DB) GC() (npurged, nremain int, err error) {
 		data := it.Value()
 		err := json.Unmarshal(data, &j)
 		if err != nil {
-			return npurged, nremain, err
+			return npurged, -1, err
 		}
 
-		if size > d.Limit && j.Done() && now.Sub(j.Finished) > d.PurgeAge {
+		if j.Done() && now.Sub(j.Finished) > d.PurgeAge {
 			d.db.Delete(it.Key(), nil)
 			d.db.Delete(finishKey(j), nil)
 			d.db.Delete(currentKey(j), nil)
 			npurged++
 		} else {
-			size += int64(len(it.Value()))
 			nremain++
 		}
 	}
@@ -159,21 +165,15 @@ func (d *DB) Count() (int, error) {
 
 	njobs := 0
 	for it.Next() {
+		if notjob(it.Key()) {
+			continue
+		}
 		njobs++
 	}
 	if err := it.Error(); err != nil {
 		return 0, err
 	}
 	return njobs, nil
-}
-
-// DiskSize returns the approximate size of the database on disk.
-func (d *DB) DiskSize() (int64, error) {
-	sizes, err := d.db.SizeOf(nil)
-	if err != nil {
-		return 0, err
-	}
-	return int64(sizes.Sum()), nil
 }
 
 func (d *DB) Close() error { return d.db.Close() }

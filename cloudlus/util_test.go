@@ -11,17 +11,53 @@ func nolog(s *Server) {
 	s.log = log.New(devnull, "", 0)
 }
 
+const (
+	partial = "partial"
+	full    = "all"
+	none    = "none"
+)
+
 type test struct {
-	Status string
-	Purge  bool // true if GC should purge jobs
+	Statuss   []string
+	PurgeType string // partial, full, or none
+}
+
+func TestDB_Count(t *testing.T) {
+	db, _ := NewDB("", dblimit)
+
+	njobs := 200
+
+	for i := 0; i < njobs/2; i++ {
+		j := NewJobCmd("echo", "1")
+		j.Status = StatusComplete
+		if err := db.Put(j); err != nil {
+			t.Fatal(err)
+		}
+		j = NewJobCmd("echo", "1")
+		j.Status = StatusRunning
+		if err := db.Put(j); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	n, err := db.Count()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	if n != njobs {
+		t.Errorf("DB gives wrong job count: want %v, got %v.", njobs, n)
+		t.Errorf("  - This is likely caused by not skipping index prefixes properly.")
+	}
 }
 
 func TestGC(t *testing.T) {
 	tests := []test{
-		{StatusComplete, true},
-		{StatusFailed, true},
-		{StatusRunning, false},
-		{StatusQueued, false},
+		{[]string{StatusComplete}, full},
+		{[]string{StatusFailed}, full},
+		{[]string{StatusRunning}, none},
+		{[]string{StatusQueued}, none},
+		{[]string{StatusComplete, StatusQueued}, partial},
 	}
 
 	dblimit := 10000
@@ -32,13 +68,12 @@ func TestGC(t *testing.T) {
 	for _, test := range tests {
 		db, _ := NewDB("", dblimit)
 		db.PurgeAge = 0 * time.Second
-		t.Logf("Testing '%v' jobs", test.Status)
+		t.Logf("Testing '%v' jobs", test.Statuss)
 
 		for k := 0; k < 2*njobsmax; k++ {
 			j := NewJobCmd("echo", "1")
-			j.Status = test.Status
-			err := db.Put(j)
-			if err != nil {
+			j.Status = test.Statuss[k%len(test.Statuss)]
+			if err := db.Put(j); err != nil {
 				t.Fatal(err)
 			}
 		}
@@ -46,9 +81,9 @@ func TestGC(t *testing.T) {
 		nadd, err := db.Count()
 		if err != nil {
 			t.Fatal(err)
-		}
-		if nadd != 2*njobsmax {
-			t.Fatalf("    jobs not added correctly to db: expected %v, got %v", 2*njobsmax, nadd)
+		} else if nadd != 2*njobsmax {
+			t.Errorf("    jobs not added correctly to db: expected %v, got %v", 2*njobsmax, nadd)
+			continue
 		}
 
 		beforesize, err := db.Size()
@@ -61,26 +96,23 @@ func TestGC(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		aftersize, err := db.Size()
-		if err != nil {
-			t.Fatal(err)
+		upper := int64(dblimit) + 2*int64(jsize)
+
+		t.Logf("    %v jobs purged, %v jobs remain, db limit = %v bytes", npurged, nremain, dblimit)
+		if beforesize < upper {
+			t.Errorf("    didn't overfill db prior to GC: expected > %v bytes, got %v", upper, beforesize)
 		}
 
-		upper := int64(dblimit) + 2*int64(jsize)
-		lower := int64(dblimit) - 2*int64(jsize)
-
-		t.Logf("    %v jobs purged, %v jobs remain", npurged, nremain)
-		if test.Purge {
-			if beforesize < upper {
-				t.Errorf("    didn't overfill db prior to GC: expected >%v bytes, got %v", upper, beforesize)
-			} else if aftersize > upper {
-				t.Errorf("    GC failed to purge enough jobs: expected <%v bytes, got %v", upper, aftersize)
-			} else if aftersize < lower {
-				t.Errorf("    GC purged too many jobs: expected >%v bytes, got %v", lower, aftersize)
-			} else {
-				t.Logf("    db has %v bytes", aftersize)
+		switch test.PurgeType {
+		case partial:
+			if npurged >= nadd || npurged <= 0 {
+				t.Errorf("    GC purged wrong # jobs: want 0 < n < %v, got %v", nadd, npurged)
 			}
-		} else {
+		case full:
+			if npurged != nadd {
+				t.Errorf("    GC purged wrong # jobs: want %v, got %v", nadd, npurged)
+			}
+		case none:
 			if npurged != 0 {
 				t.Errorf("    no jobs should have been purged but %v were", npurged)
 			}

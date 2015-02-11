@@ -19,7 +19,7 @@ var nojoberr = errors.New("no jobs available to run")
 const defaultdbpath = "./jobdb"
 
 // defaultCollectFreq if the duration between old job purging from db.
-var defaultCollectFreq = 1 * time.Minute
+var defaultCollectFreq = 2 * time.Minute
 
 const beatInterval = 4 * time.Second
 const beatLimit = 2 * beatInterval
