@@ -105,7 +105,8 @@ func main() {
 		Weight: 1,
 	}
 
-	m := &mesh.Integer{mesh.NewBounded(&mesh.Infinite{StepSize: 2}, lb, ub)}
+	stackA, b, _ := optim.StackConstrBoxed(lb, ub, low, A, up)
+	m := &mesh.Integer{&mesh.Constr{Mesh: &mesh.Infinite{StepSize: 2}, A: stackA, B: b}}
 
 	// this is here so that signals goroutine can close over it
 	solv := &optim.Solver{
@@ -157,7 +158,7 @@ func final(s *optim.Solver, cache int, start time.Time) {
 func buildIter(low, A, up *mat64.Dense, lb, ub []float64) (optim.Iterator, *optim.CacheEvaler) {
 	vmax := make([]float64, len(lb))
 	for i := range lb {
-		vmax[i] = (ub[i] - lb[i]) / 4
+		vmax[i] = (ub[i] - lb[i])
 	}
 
 	n := 30 + 1*len(lb)
@@ -168,9 +169,9 @@ func buildIter(low, A, up *mat64.Dense, lb, ub []float64) (optim.Iterator, *opti
 		n = *npar
 	}
 
-	points, nbad, _ := optim.RandPopConstr(n, 1000000, lb, ub, low, A, up)
+	points := optim.RandPopConstr(n, lb, ub, low, A, up)
 
-	fmt.Printf("swarming with %v particles (%v are feasible)\n", n, n-nbad)
+	fmt.Printf("swarming with %v particles\n", n)
 
 	ev := optim.NewCacheEvaler(optim.ParallelEvaler{})
 	pop := swarm.NewPopulation(points, vmax)
