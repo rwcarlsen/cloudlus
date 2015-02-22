@@ -175,11 +175,13 @@ func buildIter(low, A, up *mat64.Dense, lb, ub []float64) (optim.Iterator, *opti
 
 	ev := optim.NewCacheEvaler(optim.ParallelEvaler{})
 	pop := swarm.NewPopulation(points, vmax)
-	swarm := swarm.NewIterator(ev, pop,
+	swarm := swarm.New(pop,
+		swarm.Evaler(ev),
 		swarm.VmaxBounds(lb, ub),
 		swarm.DB(db),
 	)
-	return pattern.NewIterator(ev, pop[0].Point,
+	return pattern.New(pop[0].Point,
+		pattern.Evaler(ev),
 		pattern.SearchIter(swarm, pattern.Share),
 		pattern.DB(db),
 	), ev
