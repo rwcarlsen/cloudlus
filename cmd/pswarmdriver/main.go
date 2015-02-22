@@ -110,7 +110,7 @@ func main() {
 
 	// this is here so that signals goroutine can close over it
 	solv := &optim.Solver{
-		Iter:         it,
+		Method:       it,
 		Obj:          pobj,
 		Mesh:         m,
 		MaxIter:      *maxiter,
@@ -155,7 +155,7 @@ func final(s *optim.Solver, cache int, start time.Time) {
 	fmt.Printf("%v cached objective uses\n", cache)
 }
 
-func buildIter(low, A, up *mat64.Dense, lb, ub []float64) (optim.Iterator, *optim.CacheEvaler) {
+func buildIter(low, A, up *mat64.Dense, lb, ub []float64) (optim.Method, *optim.CacheEvaler) {
 	vmax := make([]float64, len(lb))
 	for i := range lb {
 		vmax[i] = (ub[i] - lb[i])
@@ -182,7 +182,7 @@ func buildIter(low, A, up *mat64.Dense, lb, ub []float64) (optim.Iterator, *opti
 	)
 	return pattern.New(pop[0].Point,
 		pattern.Evaler(ev),
-		pattern.SearchIter(swarm, pattern.Share),
+		pattern.SearchMethod(swarm, pattern.Share),
 		pattern.DB(db),
 	), ev
 }
