@@ -23,7 +23,6 @@ import (
 	"github.com/rwcarlsen/cloudlus/cloudlus"
 	"github.com/rwcarlsen/cloudlus/scen"
 	"github.com/rwcarlsen/optim"
-	"github.com/rwcarlsen/optim/mesh"
 	"github.com/rwcarlsen/optim/pattern"
 	"github.com/rwcarlsen/optim/swarm"
 )
@@ -106,7 +105,7 @@ func main() {
 	}
 
 	stackA, b, _ := optim.StackConstrBoxed(lb, ub, low, A, up)
-	m := &mesh.Integer{&mesh.Constr{Mesh: &mesh.Infinite{StepSize: 2}, A: stackA, B: b}}
+	m := &optim.IntMesh{&optim.ConstrMesh{Mesh: &optim.InfMesh{StepSize: 2}, A: stackA, B: b}}
 
 	// this is here so that signals goroutine can close over it
 	solv := &optim.Solver{
