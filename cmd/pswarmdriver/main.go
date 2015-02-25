@@ -161,25 +161,23 @@ func buildIter(low, A, up *mat64.Dense, lb, ub []float64) (optim.Method, *optim.
 	}
 
 	n := 30 + 1*len(lb)
-	if n < 30 {
-		n = 30
-	}
 	if *npar != 0 {
 		n = *npar
+	} else if n < 30 {
+		n = 30
 	}
 
 	points := optim.RandPopConstr(n, lb, ub, low, A, up)
-
 	fmt.Printf("swarming with %v particles\n", n)
 
 	ev := optim.NewCacheEvaler(optim.ParallelEvaler{})
-	pop := swarm.NewPopulation(points, vmax)
-	swarm := swarm.New(pop,
+	swarm := swarm.New(
+		swarm.NewPopulation(points, vmax),
 		swarm.Evaler(ev),
 		swarm.VmaxBounds(lb, ub),
 		swarm.DB(db),
 	)
-	return pattern.New(pop[0].Point,
+	return pattern.New(points[0],
 		pattern.Evaler(ev),
 		pattern.SearchMethod(swarm, pattern.Share),
 		pattern.DB(db),
