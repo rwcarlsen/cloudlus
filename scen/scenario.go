@@ -45,16 +45,12 @@ type Facility struct {
 	// Ninitial is the number of this facility type deployed at simulation
 	// start.
 	Ninitial int
+	Initial  []Param
 }
 
 // Alive returns whether or not a facility built at the specified time is
 // still operating/active at t.
-func (f *Facility) Alive(built, t int) bool {
-	if built > t {
-		return false
-	}
-	return built+f.Life >= t || f.Life <= 0
-}
+func (f *Facility) Alive(built, t int) bool { return Alive(build, t, f.Life) }
 
 // Available returns true if the facility type can be built at time t.
 func (f *Facility) Available(t int) bool {
@@ -65,6 +61,15 @@ type Param struct {
 	Time  int
 	Proto string
 	N     int
+}
+
+// Alive returns whether or not a facility built at the specified time is
+// still operating/active at t.
+func Alive(built, t, life int) bool {
+	if built > t {
+		return false
+	}
+	return built+life >= t || life <= 0
 }
 
 type Scenario struct {
