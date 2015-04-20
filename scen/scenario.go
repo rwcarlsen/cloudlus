@@ -57,6 +57,7 @@ type Param struct {
 	Time  int
 	Proto string
 	N     int
+	Life  int
 }
 
 // Alive returns whether or not a facility with the given lifetime and built
@@ -72,6 +73,9 @@ type Scenario struct {
 	// deployments actually begin.  This allows facilities and other initial
 	// conditions to be set up and run before the deploying begins.
 	BuildOffset int
+	// TrailingDur is the number of timesteps of the simulation duration that
+	// are reserved for wind-down - no new deployments will be made.
+	TrailingDur int
 	// CyclusTmpl is the path to the text templated cyclus input file.
 	CyclusTmpl string
 	// BuildPeriod is the number of timesteps between timesteps in which
@@ -104,6 +108,23 @@ type Scenario struct {
 	// Handle is used internally and does not need to be specified by the
 	// user.
 	Handle string
+}
+
+func (s *Scenario) ExpandParams() []Param {
+	lifes := map[string]int{}
+	for _, fac := range s.Facs {
+		lifes[fac.Proto] = fac.Life
+	}
+
+	params := []Param{}
+	for _, p := range s.Params {
+		life := lifes[p.Proto]
+		if p.Life > 0 {
+			life = p.Life
+		}
+		params = append(params, Param{p.Time, p.Proto, p.N, life})
+	}
+	return params
 }
 
 // Validate returns an error if the scenario is ill-configured.
@@ -247,7 +268,10 @@ func (s *Scenario) UpperBounds() *mat64.Dense {
 			if !fac.Available(t) {
 				up.Set(f*nperiods+n, 0, 0)
 			} else if fac.Cap != 0 {
-				v := (s.MaxPower[n]/fac.Cap + 1)
+				v := s.MaxPower[n]/fac.Cap*.2 + 1
+				if v < 10 {
+					v = 10
+				}
 				for _, ifac := range s.Params {
 					if ifac.Proto == fac.Proto && Alive(ifac.Time, t, fac.Life) {
 						v -= float64(ifac.N)
@@ -439,7 +463,7 @@ func (s *Scenario) periodTimes() []int {
 }
 
 func (s *Scenario) nPeriods() int {
-	return (s.SimDur-s.BuildOffset-2)/s.BuildPeriod + 1
+	return (s.SimDur-s.BuildOffset-s.TrailingDur-2)/s.BuildPeriod + 1
 }
 
 func findLine(data []byte, pos int64) (line, col int) {
