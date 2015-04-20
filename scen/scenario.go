@@ -42,15 +42,11 @@ type Facility struct {
 	// WasteDiscount represents the fraction is discounted from the waste cost
 	// for this facility.
 	WasteDiscount float64
-	// Ninitial is the number of this facility type deployed at simulation
-	// start.
-	Ninitial int
-	Initial  []Param
 }
 
 // Alive returns whether or not a facility built at the specified time is
 // still operating/active at t.
-func (f *Facility) Alive(built, t int) bool { return Alive(build, t, f.Life) }
+func (f *Facility) Alive(built, t int) bool { return Alive(built, t, f.Life) }
 
 // Available returns true if the facility type can be built at time t.
 func (f *Facility) Available(t int) bool {
@@ -63,8 +59,8 @@ type Param struct {
 	N     int
 }
 
-// Alive returns whether or not a facility built at the specified time is
-// still operating/active at t.
+// Alive returns whether or not a facility with the given lifetime and built
+// at the specified time is still operating/active at t.
 func Alive(built, t, life int) bool {
 	if built > t {
 		return false
@@ -75,6 +71,10 @@ func Alive(built, t, life int) bool {
 type Scenario struct {
 	// SimDur is the simulation duration in timesteps (months)
 	SimDur int
+	// BuildOffset is the number of timesteps after simulation start at which
+	// deployments actually begin.  This allows facilities and other initial
+	// conditions to be set up and run before the deploying begins.
+	BuildOffset int
 	// CyclusTmpl is the path to the text templated cyclus input file.
 	CyclusTmpl string
 	// BuildPeriod is the number of timesteps between timesteps in which
@@ -101,7 +101,6 @@ type Scenario struct {
 	// Addr is the location of the cyclus simulation execution server.  An
 	// empty string "" indicates that simulations will run locally.
 	Addr string
-
 	// File is the name of the scenario file. This is for internal use and
 	// does not need to be filled out by the user.
 	File string
@@ -195,20 +194,10 @@ func (s *Scenario) Run(stdout, stderr io.Writer) (dbfile string, simid []byte, e
 }
 
 func (s *Scenario) InitParams(vals []int) {
-	s.Params = make([]Param, len(vals))
 	for i, val := range vals {
 		f := i / s.nPeriods()
-		t := (i%s.nPeriods() + 1) * s.BuildPeriod
-		s.Params[i].Time = t
-		s.Params[i].Proto = s.Facs[f].Proto
-		s.Params[i].N = val
-	}
-
-	for _, fac := range s.Facs {
-		if fac.Ninitial == 0 {
-			continue
-		}
-		s.Params = append(s.Params, Param{Time: 1, Proto: fac.Proto, N: fac.Ninitial})
+		t := s.timeOf(i % s.nPeriods())
+		s.Params = append(s.Params, Param{Proto: s.Facs[f].Proto, Time: t, N: val})
 	}
 }
 
@@ -216,9 +205,9 @@ func (s *Scenario) VarNames() []string {
 	nperiods := s.nPeriods()
 	names := make([]string, s.Nvars())
 	for f := range s.Facs {
-		for n := 0; n < nperiods; n++ {
+		for n, t := range s.periodTimes() {
 			i := f*nperiods + n
-			names[i] = fmt.Sprintf("b_f%v_t%v", f, n)
+			names[i] = fmt.Sprintf("f%v_t%v", f, t)
 		}
 	}
 	return names
@@ -232,14 +221,15 @@ func (s *Scenario) UpperBounds() *mat64.Dense {
 	nperiods := s.nPeriods()
 	up := mat64.NewDense(s.Nvars(), 1, nil)
 	for f, fac := range s.Facs {
-		for n := 0; n < nperiods; n++ {
-			v := (s.MaxPower[n]/fac.Cap + 1)
-			t := s.BuildPeriod + n*s.BuildPeriod
+		for n, t := range s.periodTimes() {
 			if !fac.Available(t) {
 				up.Set(f*nperiods+n, 0, 0)
 			} else if fac.Cap != 0 {
-				if fac.Alive(1, t) {
-					v -= float64(fac.Ninitial)
+				v := (s.MaxPower[n]/fac.Cap + 1)
+				for _, ifac := range s.Params {
+					if ifac.Proto == fac.Proto && Alive(ifac.Time, t, fac.Life) {
+						v -= float64(ifac.N)
+					}
 				}
 				if v < 0 {
 					v = 0
@@ -268,18 +258,18 @@ func (s *Scenario) SupportConstr() (low, A, up *mat64.Dense) {
 	up = mat64.NewDense(nperiods, 1, tmp)
 	up.Apply(func(r, c int, v float64) float64 { return 1e200 }, up)
 
-	for t := s.BuildPeriod; t < s.SimDur; t += s.BuildPeriod {
+	for nt, t := range s.periodTimes() {
 		for f, fac := range s.Facs {
-			for n := 0; n < nperiods; n++ {
-				if !fac.Alive(n*s.BuildPeriod+1, t) {
+			for ntbuilt, tbuilt := range s.periodTimes() {
+				if !fac.Alive(tbuilt, t) {
 					continue
 				}
 
-				i := f*nperiods + n
+				i := f*nperiods + ntbuilt
 				if fac.Cap == 0 {
-					A.Set(t/s.BuildPeriod-1, i, -1)
+					A.Set(nt, i, -1)
 				} else {
-					A.Set(t/s.BuildPeriod-1, i, 2)
+					A.Set(nt, i, 2)
 				}
 			}
 		}
@@ -302,11 +292,13 @@ func (s *Scenario) PowerConstr() (low, A, up *mat64.Dense) {
 	copy(tmpu, s.MaxPower)
 	// correct for initially built capacity
 	i := 0
-	for t := s.BuildPeriod; t < s.SimDur; t += s.BuildPeriod {
+	for _, t := range s.periodTimes() {
 		cap := 0.0
 		for _, fac := range s.Facs {
-			if fac.Alive(1, t) {
-				cap += fac.Cap * float64(fac.Ninitial)
+			for _, ifac := range s.Params {
+				if ifac.Proto == fac.Proto && Alive(ifac.Time, t, fac.Life) {
+					cap += fac.Cap * float64(ifac.N)
+				}
 			}
 		}
 		tmpl[i] -= cap
@@ -318,12 +310,12 @@ func (s *Scenario) PowerConstr() (low, A, up *mat64.Dense) {
 	up = mat64.NewDense(nperiods, 1, tmpu)
 	A = mat64.NewDense(nperiods, s.Nvars(), nil)
 
-	for t := s.BuildPeriod; t < s.SimDur; t += s.BuildPeriod {
+	for n, t := range s.periodTimes() {
 		for f, fac := range s.Facs {
-			for n := 1; n <= nperiods; n++ {
-				if fac.Alive(n*s.BuildPeriod, t) {
-					i := f*nperiods + (n - 1)
-					A.Set(t/s.BuildPeriod-1, i, fac.Cap)
+			for nbuilt, tbuilt := range s.periodTimes() {
+				if fac.Alive(tbuilt, t) {
+					i := f*nperiods + nbuilt
+					A.Set(n, i, fac.Cap)
 				}
 			}
 		}
@@ -355,9 +347,9 @@ func (s *Scenario) AfterConstr() (A, target *mat64.Dense) {
 		if fac.BuildAfter == 0 {
 			continue
 		}
-		for t := s.BuildPeriod; t < s.SimDur; t += s.BuildPeriod {
+		for n, t := range s.periodTimes() {
 			if !fac.Available(t) {
-				c := f*nperiods + t/s.BuildPeriod - 1
+				c := f*nperiods + n
 				A.Set(r, c, 1)
 			}
 			r++
@@ -408,8 +400,24 @@ func (s *Scenario) Nvars() int {
 	return s.nPeriods() * len(s.Facs)
 }
 
+func (s *Scenario) timeOf(period int) int {
+	return period*s.BuildPeriod + 1 + s.BuildOffset
+}
+
+func (s *Scenario) periodOf(time int) int {
+	return (time - s.BuildOffset - 1) / s.BuildPeriod
+}
+
+func (s *Scenario) periodTimes() []int {
+	periods := make([]int, s.nPeriods())
+	for i := range periods {
+		periods[i] = s.timeOf(i)
+	}
+	return periods
+}
+
 func (s *Scenario) nPeriods() int {
-	return (s.SimDur - 1) / s.BuildPeriod
+	return (s.SimDur-s.BuildOffset-2)/s.BuildPeriod + 1
 }
 
 func findLine(data []byte, pos int64) (line, col int) {
