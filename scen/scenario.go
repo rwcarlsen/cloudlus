@@ -62,10 +62,7 @@ type Param struct {
 // Alive returns whether or not a facility with the given lifetime and built
 // at the specified time is still operating/active at t.
 func Alive(built, t, life int) bool {
-	if built > t {
-		return false
-	}
-	return built+life >= t || life <= 0
+	return built <= t && (built+life >= t || life <= 0)
 }
 
 type Scenario struct {
@@ -95,8 +92,8 @@ type Scenario struct {
 	// MaxPower is a series of max deployed power capacity requirements that
 	// must be maintained for each build period.
 	MaxPower []float64
-	// Params holds a set of potential build schedule values for the scenario.
-	// This usually does not need to be set by the user.
+	// Params holds the set of build schedule values for all agents in the
+	// scenario.  This can be used to specify initial condition deployments.
 	Params []Param
 	// Addr is the location of the cyclus simulation execution server.  An
 	// empty string "" indicates that simulations will run locally.
@@ -107,6 +104,31 @@ type Scenario struct {
 	// Handle is used internally and does not need to be specified by the
 	// user.
 	Handle string
+}
+
+// Validate returns an error if the scenario is ill-configured.
+func (s *Scenario) Validate() error {
+	if min, max := len(s.MinPower), len(s.MaxPower); min != max {
+		return fmt.Errorf("MaxPower length %v != MinPower length %v", max, min)
+	}
+
+	np := s.nPeriods()
+	lmin := len(s.MinPower)
+	if np != lmin {
+		return fmt.Errorf("number power constraints %v != number build periods %v", lmin, np)
+	}
+
+	protos := map[string]bool{}
+	for _, fac := range s.Facs {
+		protos[fac.Proto] = true
+	}
+
+	for _, p := range s.Params {
+		if !protos[p.Proto] {
+			return fmt.Errorf("param prototype '%v' is not defined in Facs", p.Proto)
+		}
+	}
+	return nil
 }
 
 func (s *Scenario) Load(fname string) error {
@@ -129,7 +151,7 @@ func (s *Scenario) Load(fname string) error {
 	if len(s.Params) == 0 {
 		s.Params = make([]Param, s.Nvars())
 	}
-	return nil
+	return s.Validate()
 }
 
 func (s *Scenario) GenCyclusInfile() ([]byte, error) {
@@ -310,9 +332,9 @@ func (s *Scenario) PowerConstr() (low, A, up *mat64.Dense) {
 	up = mat64.NewDense(nperiods, 1, tmpu)
 	A = mat64.NewDense(nperiods, s.Nvars(), nil)
 
-	for n, t := range s.periodTimes() {
-		for f, fac := range s.Facs {
-			for nbuilt, tbuilt := range s.periodTimes() {
+	for f, fac := range s.Facs {
+		for nbuilt, tbuilt := range s.periodTimes() {
+			for n, t := range s.periodTimes() {
 				if fac.Alive(tbuilt, t) {
 					i := f*nperiods + nbuilt
 					A.Set(n, i, fac.Cap)
