@@ -265,8 +265,9 @@ func (s *Scenario) UpperBounds() *mat64.Dense {
 	up := mat64.NewDense(s.Nvars(), 1, nil)
 	for f, fac := range s.Facs {
 		for n, t := range s.periodTimes() {
+			row := f*nperiods + n
 			if !fac.Available(t) {
-				up.Set(f*nperiods+n, 0, 0)
+				up.Set(row, 0, 0)
 			} else if fac.Cap != 0 {
 				v := s.MaxPower[n]/fac.Cap*.2 + 1
 				if v < 10 {
@@ -280,9 +281,9 @@ func (s *Scenario) UpperBounds() *mat64.Dense {
 				if v < 0 {
 					v = 0
 				}
-				up.Set(f*nperiods+n, 0, v)
+				up.Set(row, 0, v)
 			} else {
-				up.Set(f*nperiods+n, 0, 10)
+				up.Set(row, 0, 10)
 			}
 		}
 	}
@@ -380,7 +381,7 @@ func (s *Scenario) AfterConstr() (A, target *mat64.Dense) {
 	// count facilities that have build time constraints
 	n := 0
 	for _, fac := range s.Facs {
-		if fac.BuildAfter != 0 {
+		if fac.BuildAfter > 0 {
 			n++
 		}
 	}
@@ -390,7 +391,7 @@ func (s *Scenario) AfterConstr() (A, target *mat64.Dense) {
 
 	r := 0
 	for f, fac := range s.Facs {
-		if fac.BuildAfter == 0 {
+		if fac.BuildAfter <= 0 {
 			continue
 		}
 		for n, t := range s.periodTimes() {
