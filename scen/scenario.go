@@ -332,6 +332,9 @@ func (s *Scenario) Validate() error {
 		if fac.Cap > 0 {
 			havereactor = true
 		}
+		if fac.Cap == 0 && len(fac.FracOfProtos) == 0 && fac.BuildAfter >= 0 {
+			return fmt.Errorf("prototype %v needs at least one prototype defined in FracOfProtos", fac.Proto)
+		}
 		protos[fac.Proto] = fac
 	}
 	if !havereactor {
