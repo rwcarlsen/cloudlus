@@ -145,6 +145,7 @@ func (s *Scenario) nvarsPerPeriod() int {
 
 func (s *Scenario) periodFacOrder() (varfacs []Facility, implicitreactor Facility) {
 	facs := []Facility{}
+	facs = append(facs, Facility{}) // add blank to account for power var offset
 	for _, fac := range s.reactors()[1:] {
 		facs = append(facs, fac)
 	}
@@ -193,7 +194,6 @@ func (s *Scenario) TransformVars(vars []float64) (map[string][]Build, error) {
 			toterr += caperr
 		}
 		shouldhavepower := currpower + toterr
-		fmt.Println(shouldhavepower)
 
 		captobuild := math.Max(minpow-shouldhavepower, 0)
 		powerrange := maxpow - (shouldhavepower + captobuild)
@@ -203,7 +203,7 @@ func (s *Scenario) TransformVars(vars []float64) (map[string][]Build, error) {
 		reactorfrac := 0.0
 		j := 1 // skip j = 0 which is the power cap variable
 		for j = 1; j < s.nvarsPerPeriod(); j++ {
-			val := vars[s.BuildPeriod*i+j]
+			val := vars[i*s.nvarsPerPeriod()+j]
 			fac := varfacs[j]
 			if fac.Cap > 0 {
 				facfrac := (1 - reactorfrac) * val
@@ -244,7 +244,7 @@ func (s *Scenario) TransformVars(vars []float64) (map[string][]Build, error) {
 
 		// handle other facilities
 		for ; j < s.nvarsPerPeriod(); j++ {
-			facfrac := vars[s.BuildPeriod*i+j]
+			facfrac := vars[i*s.nvarsPerPeriod()+j]
 			fac := varfacs[j]
 
 			caperr := caperror[fac.Proto]

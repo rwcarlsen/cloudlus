@@ -49,6 +49,7 @@ func TestTransformVars(t *testing.T) {
 		Scen     *Scenario
 		Vars     []float64
 		PowerExp []float64
+		BuildExp map[string][]int
 	}{
 		{
 			Scen: &Scenario{
@@ -62,6 +63,9 @@ func TestTransformVars(t *testing.T) {
 			},
 			Vars:     []float64{.5, .5, .5, .5, .5},
 			PowerExp: []float64{10, 15, 28, 44, 70},
+			BuildExp: map[string][]int{
+				"Proto1": {10, 5, 13, 16, 26},
+			},
 		}, {
 			Scen: &Scenario{
 				SimDur:      10,
@@ -98,6 +102,26 @@ func TestTransformVars(t *testing.T) {
 			},
 			Vars:     []float64{.5, .5, .5, .5, .5},
 			PowerExp: []float64{12, 16, 28, 44, 72},
+			BuildExp: map[string][]int{
+				"Proto1": {3, 1, 3, 4, 7},
+			},
+		}, {
+			Scen: &Scenario{
+				SimDur:      10,
+				BuildPeriod: 2,
+				Facs: []Facility{
+					{Proto: "Proto1", Cap: 1, Life: 0},
+					{Proto: "Proto2", Cap: 0, Life: 0, FracOfProtos: []string{"Proto1"}},
+				},
+				MaxPower: []float64{10, 20, 40, 60, 70},
+				MinPower: []float64{10, 10, 10, 10, 70},
+			},
+			Vars:     []float64{.5, .5, .5, .5, .5, .5, .5, .5, .5, .5},
+			PowerExp: []float64{10, 15, 28, 44, 70},
+			BuildExp: map[string][]int{
+				"Proto1": {10, 5, 13, 16, 26},
+				"Proto2": {5, 8, 14, 22, 35},
+			},
 		},
 	}
 
@@ -122,14 +146,16 @@ func TestTransformVars(t *testing.T) {
 			}
 		}
 
-		t.Logf("  deployed capacity: %v", timepowers)
-		t.Logf("  want capacity: %v", test.PowerExp)
+		t.Logf("  power cap want: %v", test.PowerExp)
+		t.Logf("  power cap got: %v", timepowers)
 
 		for proto, buildsp := range builds {
-			t.Logf("  prototype %v:", proto)
+			nbuilt := make([]int, s.nperiods())
 			for _, b := range buildsp {
-				t.Logf("    build: time=%v, proto=%v, n=%v", b.Time, b.Proto, b.N)
+				nbuilt[s.periodOf(b.Time)] += b.N
 			}
+			t.Logf("  proto %v nbuilt want: %v", proto, test.BuildExp[proto])
+			t.Logf("  proto %v nbuilt got: %v", proto, nbuilt)
 		}
 	}
 }
