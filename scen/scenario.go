@@ -60,8 +60,11 @@ func (b Build) Alive(t int) bool { return Alive(b.Time, t, b.Lifetime()) }
 func (b Build) Lifetime() int {
 	if b.Life > 0 {
 		return b.Life
+	} else if b.fac.Life > 0 {
+		return b.fac.Life
+	} else {
+		return -1
 	}
-	return b.fac.Life
 }
 
 // Alive returns whether or not a facility with the given lifetime and built
@@ -221,12 +224,14 @@ func (s *Scenario) TransformVars(vars []float64) (map[string][]Build, error) {
 				nbuild := int(math.Max(0, math.Floor(wantcap/fac.Cap+0.5)))
 				caperror[fac.Proto] = wantcap - float64(nbuild)*fac.Cap
 
-				builds[fac.Proto] = append(builds[fac.Proto], Build{
-					Time:  t,
-					Proto: fac.Proto,
-					N:     nbuild,
-					fac:   fac,
-				})
+				if nbuild > 0 {
+					builds[fac.Proto] = append(builds[fac.Proto], Build{
+						Time:  t,
+						Proto: fac.Proto,
+						N:     nbuild,
+						fac:   fac,
+					})
+				}
 			} else {
 				// done processing reactors (except last one)
 				break
@@ -242,29 +247,35 @@ func (s *Scenario) TransformVars(vars []float64) (map[string][]Build, error) {
 		nbuild := int(math.Max(0, math.Floor(wantcap/fac.Cap+0.5)))
 		caperror[fac.Proto] = wantcap - float64(nbuild)*fac.Cap
 
-		builds[fac.Proto] = append(builds[fac.Proto], Build{
-			Time:  t,
-			Proto: fac.Proto,
-			N:     nbuild,
-			fac:   fac,
-		})
-
-		// handle other facilities
-		for ; j < s.nvarsPerPeriod(); j++ {
-			facfrac := vars[i*s.nvarsPerPeriod()+j]
-			fac := varfacs[j]
-
-			haven := float64(s.naliveproto(builds, t, fac.Proto))
-			needn := facfrac * float64(s.naliveproto(builds, t, fac.FracOfProtos...))
-			wantn := math.Max(0, needn-haven)
-			nbuild := int(math.Floor(wantn + 0.5))
-
+		if nbuild > 0 {
 			builds[fac.Proto] = append(builds[fac.Proto], Build{
 				Time:  t,
 				Proto: fac.Proto,
 				N:     nbuild,
 				fac:   fac,
 			})
+		}
+
+		// handle other facilities
+		for ; j < s.nvarsPerPeriod(); j++ {
+			facfrac := vars[i*s.nvarsPerPeriod()+j]
+			fac := varfacs[j]
+			if fac.BuildAfter < 0 { // skip
+				continue
+			}
+
+			haven := float64(s.naliveproto(builds, t, fac.Proto))
+			needn := facfrac * float64(s.naliveproto(builds, t, fac.FracOfProtos...))
+			wantn := math.Max(0, needn-haven)
+			nbuild := int(math.Floor(wantn + 0.5))
+			if nbuild > 0 {
+				builds[fac.Proto] = append(builds[fac.Proto], Build{
+					Time:  t,
+					Proto: fac.Proto,
+					N:     nbuild,
+					fac:   fac,
+				})
+			}
 		}
 	}
 
@@ -327,12 +338,12 @@ func (s *Scenario) Validate() error {
 		return fmt.Errorf("scenario has no nonzero capacity (i.e. reactor) prototypes")
 	}
 
-	for _, p := range s.StartBuilds {
+	for i, p := range s.StartBuilds {
 		fac, ok := protos[p.Proto]
 		if !ok {
 			return fmt.Errorf("StartBuild prototype '%v' is not defined in Facs", p.Proto)
 		}
-		p.fac = fac
+		s.StartBuilds[i].fac = fac
 	}
 
 	return nil
@@ -371,6 +382,7 @@ func (s *Scenario) GenCyclusInfile() ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	ioutil.WriteFile("foo.xml", buf.Bytes(), 0755)
 
 	return buf.Bytes(), nil
 }

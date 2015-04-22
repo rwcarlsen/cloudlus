@@ -51,7 +51,10 @@ func main() {
 	check(err)
 
 	if len(params) > 0 {
-		scen.TransformVars(params)
+		_, err = scen.TransformVars(params)
+		if err != nil {
+			log.Fatal(err)
+		}
 	}
 
 	// perform action
