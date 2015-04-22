@@ -15,7 +15,6 @@ import (
 	"code.google.com/p/go-uuid/uuid"
 
 	_ "github.com/gonum/blas/native"
-	"github.com/gonum/matrix/mat64"
 	_ "github.com/mxk/go-sqlite/sqlite3"
 	"github.com/rwcarlsen/cyan/post"
 )
@@ -101,8 +100,11 @@ type Scenario struct {
 	// MaxPower is a series of max deployed power capacity requirements that
 	// must be maintained for each build period.
 	MaxPower []float64
-	// Builds holds the set of build schedule values for all agents in the
-	// scenario.  This can be used to specify initial condition deployments.
+	// StartBuilds holds the set of build schedule values for all agents
+	// initially in the scenario (not added/deployed by optimizer).
+	StartBuilds []Build
+	// Builds holds all scenario deployments (including startbuilds).  This is
+	// only non-nil after TransformVars has been called.
 	Builds []Build
 	// Addr is the location of the cyclus simulation execution server.  An
 	// empty string "" indicates that simulations will run locally.
@@ -177,7 +179,7 @@ func (s *Scenario) TransformVars(vars []float64) (map[string][]Build, error) {
 	}
 
 	builds := map[string][]Build{}
-	for _, b := range s.Builds {
+	for _, b := range s.StartBuilds {
 		builds[b.Proto] = append(builds[b.Proto], b)
 	}
 
@@ -262,6 +264,13 @@ func (s *Scenario) TransformVars(vars []float64) (map[string][]Build, error) {
 		}
 	}
 
+	s.Builds = nil
+	for _, blds := range builds {
+		for _, b := range blds {
+			s.Builds = append(s.Builds, b)
+		}
+	}
+
 	return builds, nil
 }
 
@@ -307,7 +316,7 @@ func (s *Scenario) Validate() error {
 		protos[fac.Proto] = fac
 	}
 
-	for _, p := range s.Builds {
+	for _, p := range s.StartBuilds {
 		fac, ok := protos[p.Proto]
 		if !ok {
 			return fmt.Errorf("param prototype '%v' is not defined in Facs", p.Proto)
@@ -335,8 +344,8 @@ func (s *Scenario) Load(fname string) error {
 	}
 
 	s.File = fname
-	if len(s.Builds) == 0 {
-		s.Builds = make([]Build, s.nvars())
+	if len(s.StartBuilds) == 0 {
+		s.StartBuilds = make([]Build, s.nvars())
 	}
 	return s.Validate()
 }
@@ -414,14 +423,14 @@ func (s *Scenario) VarNames() []string {
 	return names
 }
 
-func (s *Scenario) LowerBounds() *mat64.Dense {
-	return mat64.NewDense(s.nvars(), 1, nil)
+func (s *Scenario) LowerBounds() []float64 {
+	return make([]float64, s.nvars())
 }
 
-func (s *Scenario) UpperBounds() *mat64.Dense {
-	up := mat64.NewDense(s.nvars(), 1, nil)
-	for i := 0; i < s.nvars(); i++ {
-		up.Set(i, 0, 1)
+func (s *Scenario) UpperBounds() []float64 {
+	up := make([]float64, s.nvars())
+	for i := range up {
+		up[i] = 1
 	}
 	return up
 }
