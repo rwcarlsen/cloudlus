@@ -28,10 +28,6 @@ type Facility struct {
 	Proto string
 	// Cap is the total Power output capacity of the facility.
 	Cap float64
-	// OpCost represents the per timstep operating cost for the facility
-	OpCost float64
-	// CapitalCost represents the overnight cost for building the facility
-	CapitalCost float64
 	// The lifetime of the facility (in timesteps). The lifetime must also
 	// be specified manually (consistent with this value) in the prototype
 	// definition in the cyclus input template file.
@@ -39,9 +35,9 @@ type Facility struct {
 	// BuildAfter is the time step after which this facility type can be built.
 	// -1 for never available, and 0 for always available.
 	BuildAfter int
-	// WasteDiscount represents the fraction is discounted from the waste cost
-	// for this facility.
-	WasteDiscount float64
+	// FracOfProto names a prototype that build fractions of this prototype
+	// are a portion of.
+	FracOfProtos []string
 }
 
 // Alive returns whether or not a facility built at the specified time is
@@ -53,11 +49,22 @@ func (f *Facility) Available(t int) bool {
 	return t >= f.BuildAfter && f.BuildAfter >= 0
 }
 
-type Param struct {
+type Build struct {
 	Time  int
 	Proto string
 	N     int
 	Life  int
+	fac   Facility
+}
+
+// Alive returns whether or not the facility is still operabing/active at t.
+func (b Build) Alive(t int) bool { return Alive(b.Time, t, b.Lifetime()) }
+
+func (b Build) Lifetime() int {
+	if b.Life > 0 {
+		return b.Life
+	}
+	return fac.Life
 }
 
 // Alive returns whether or not a facility with the given lifetime and built
@@ -96,9 +103,9 @@ type Scenario struct {
 	// MaxPower is a series of max deployed power capacity requirements that
 	// must be maintained for each build period.
 	MaxPower []float64
-	// Params holds the set of build schedule values for all agents in the
+	// Builds holds the set of build schedule values for all agents in the
 	// scenario.  This can be used to specify initial condition deployments.
-	Params []Param
+	Builds []Build
 	// Addr is the location of the cyclus simulation execution server.  An
 	// empty string "" indicates that simulations will run locally.
 	Addr string
@@ -110,21 +117,171 @@ type Scenario struct {
 	Handle string
 }
 
-func (s *Scenario) ExpandParams() []Param {
-	lifes := map[string]int{}
+func (s *Scenario) reactors() []Facility {
+	rs := []Facility{}
 	for _, fac := range s.Facs {
-		lifes[fac.Proto] = fac.Life
+		if fac.Cap > 0 {
+			rs = append(rs, fac)
+		}
+	}
+	return rs
+}
+
+func (s *Scenario) notreactors() []Facility {
+	fs := []Facility{}
+	for _, fac := range s.Facs {
+		if fac.Cap == 0 {
+			fs = append(fs, fac)
+		}
+	}
+	return fs
+}
+
+func (s *Scenario) nvars() int { return s.nvarsPerPeriod * s.nperiods() }
+
+func (s *Scenario) nvarsPerPeriod() int {
+	numFacVars := len(s.Facs) - 1
+	numPowerVars := 1
+	return numFacVars + numPowerVars
+}
+
+func (s *Scenario) periodFacOrder() (varfacs []Facility, implicitreactor Facility) {
+	facs := []Facility{}
+	for i, fac := range s.reactors()[1:] {
+		facs = append(facs, fac)
+	}
+	for i, fac := range s.notreactors() {
+		facs = append(facs, fac)
+	}
+	return facs
+}
+
+// TransformVars takes a sequence of input variables for the scenario and
+// transforms them into a set of prototype/facility deployments. The sequence
+// of the vars follows this pattern: fac1_t1, fac1_t2, ..., fac1_tn, fac2_t1,
+// ..., facm_t1, facm_t2, ..., facm_tn.
+//
+// The first reactor type variable represents the total fraction of new built
+// power capacity satisfied by that reactor on the given time step.  For each
+// subsequent reactor type (except the last), the variables represent the
+// fraction of the remaining power capacity satisfied by that reactor type
+// (e.g. the third reactor type's variable can be used to calculate its
+// fraction like this (1-(react1frac + (1-react1frac) * react2frac)) *
+// react3frac).  The last reactor type fraction is simply the remainining
+// unsatisfied power capacity.
+func (s *Scenario) TransformVars(vars []float64) (map[string][]Build, error) {
+	err := s.Validate()
+	if err != nil {
+		return nil, err
+	} else if len(vars) != s.nvars() {
+		return nil, fmt.Errorf("wrong number of vars: want %v, got %v", s.nvars(), len(vars))
 	}
 
-	params := []Param{}
-	for _, p := range s.Params {
-		life := lifes[p.Proto]
-		if p.Life > 0 {
-			life = p.Life
-		}
-		params = append(params, Param{p.Time, p.Proto, p.N, life})
+	builds := map[string][]Build{}
+	for _, b := range s.Builds {
+		builds[b.Proto] = b
 	}
-	return params
+
+	varfacs, implicitreactor := s.periodFacOrder()
+	caperror := map[string]float64{}
+	for i, t := range s.periodTimes() {
+		minpow := s.MinPower[t]
+		maxpow := s.MaxPower[t]
+		currpower := s.powercap(builds, t)
+		powervar := vars[s.BuildPeriod*i]
+		captobuild := math.Max(minpow-currpower, 0)
+		powerrange := maxpow - (currpower + captobuild)
+		captobuild += powervar * powerrange
+		finalpower := currpower + captobuild
+
+		// handle reactor builds
+		reactorfrac := 0.0
+		j := 1
+		for j = 1; j < s.nvarsPerPeriod(); j++ {
+			val := vars[s.BuildPeriod*i+j]
+			fac := varfacs[j]
+			if fac.Cap > 0 {
+				facfrac := (1 - reactorfrac) * val
+				reactorfrac += facfrac
+
+				caperr := caperror[fac.Proto]
+				wantcap := facfrac*captobuild + caperr
+				nbuild := int(math.Max(math.Floor(wantcap/fac.Cap + 0.5)))
+				caperror[fac.Proto] = wantcap - float64(nbuild)*fac.Cap
+
+				builds[fac.Proto] = append(builds[fac.Proto], Build{
+					Time:  t,
+					Proto: fac.Proto,
+					N:     nbuild,
+					fac:   fac,
+				})
+			} else {
+				break
+			}
+		}
+
+		// handle implicit reactor
+		j := 0
+		fac := implicitreactor
+		facfrac := (1 - reactorfrac)
+
+		caperr := caperror[fac.Proto]
+		wantcap := facfrac*captobuild + caperr
+		nbuild := int(math.Max(0, math.Floor(wantcap/fac.Cap+0.5)))
+		caperror[fac.Proto] = wantcap - float64(nbuild)*fac.Cap
+
+		builds[fac.Proto] = append(builds[fac.Proto], Build{
+			Time:  t,
+			Proto: fac.Proto,
+			N:     nbuild,
+			fac:   fac,
+		})
+
+		// handle other facilities
+		for ; j < s.nvarsPerPeriod(); j++ {
+			facfrac := vars[s.BuildPeriod*i+j]
+			fac := varfacs[j]
+
+			caperr := caperror[fac.Proto]
+			wantn := facfrac*float64(s.naliveproto(builds, t, fac.FracOfProtos...)) + caperr
+			nbuild := int(math.Max(0, math.Floor(float64(wantn)+0.5)))
+			caperror[fac.Proto] = wantcap - float64(nbuild)
+
+			builds[fac.Proto] = append(builds[fac.Proto], Build{
+				Time:  t,
+				Proto: fac.Proto,
+				N:     nbuild,
+				fac:   fac,
+			})
+		}
+	}
+
+	return builds, nil
+}
+
+func (s *Scenario) naliveproto(facs map[string][]Build, t int, protos ...string) int {
+	count := 0
+	for _, proto := range protos {
+		builds := facs[proto]
+		for _, b := range builds {
+			if b.Alive(t) {
+				count++
+			}
+		}
+	}
+	return count
+}
+
+func (s *Scenario) powercap(builds map[string][]Build, t int) float64 {
+	pow := 0.0
+	for _, buildsproto := range builds {
+		for _, b := range buildsproto {
+			if b.Alive(t) {
+				pow += fac.Cap * b.N
+			}
+		}
+	}
+	return pow
 }
 
 // Validate returns an error if the scenario is ill-configured.
@@ -133,7 +290,7 @@ func (s *Scenario) Validate() error {
 		return fmt.Errorf("MaxPower length %v != MinPower length %v", max, min)
 	}
 
-	np := s.nPeriods()
+	np := s.nperiods()
 	lmin := len(s.MinPower)
 	if np != lmin {
 		return fmt.Errorf("number power constraints %v != number build periods %v", lmin, np)
@@ -141,14 +298,16 @@ func (s *Scenario) Validate() error {
 
 	protos := map[string]bool{}
 	for _, fac := range s.Facs {
-		protos[fac.Proto] = true
+		protos[fac.Proto] = fac
 	}
 
-	for _, p := range s.Params {
-		if !protos[p.Proto] {
+	for _, p := range s.Builds {
+		if fac, ok := protos[p.Proto]; !ok {
 			return fmt.Errorf("param prototype '%v' is not defined in Facs", p.Proto)
 		}
+		p.fac = fac
 	}
+
 	return nil
 }
 
@@ -169,8 +328,8 @@ func (s *Scenario) Load(fname string) error {
 	}
 
 	s.File = fname
-	if len(s.Params) == 0 {
-		s.Params = make([]Param, s.Nvars())
+	if len(s.Builds) == 0 {
+		s.Builds = make([]Build, s.nvars())
 	}
 	return s.Validate()
 }
@@ -236,17 +395,9 @@ func (s *Scenario) Run(stdout, stderr io.Writer) (dbfile string, simid []byte, e
 	return cycout, simids[0], nil
 }
 
-func (s *Scenario) InitParams(vals []int) {
-	for i, val := range vals {
-		f := i / s.nPeriods()
-		t := s.timeOf(i % s.nPeriods())
-		s.Params = append(s.Params, Param{Proto: s.Facs[f].Proto, Time: t, N: val})
-	}
-}
-
 func (s *Scenario) VarNames() []string {
-	nperiods := s.nPeriods()
-	names := make([]string, s.Nvars())
+	nperiods := s.nperiods()
+	names := make([]string, s.nvars())
 	for f := range s.Facs {
 		for n, t := range s.periodTimes() {
 			i := f*nperiods + n
@@ -257,12 +408,12 @@ func (s *Scenario) VarNames() []string {
 }
 
 func (s *Scenario) LowerBounds() *mat64.Dense {
-	return mat64.NewDense(s.Nvars(), 1, nil)
+	return mat64.NewDense(s.nvars(), 1, nil)
 }
 
 func (s *Scenario) UpperBounds() *mat64.Dense {
-	nperiods := s.nPeriods()
-	up := mat64.NewDense(s.Nvars(), 1, nil)
+	nperiods := s.nperiods()
+	up := mat64.NewDense(s.nvars(), 1, nil)
 	for f, fac := range s.Facs {
 		for n, t := range s.periodTimes() {
 			row := f*nperiods + n
@@ -273,7 +424,7 @@ func (s *Scenario) UpperBounds() *mat64.Dense {
 				if v < 10 {
 					v = 10
 				}
-				for _, ifac := range s.Params {
+				for _, ifac := range s.Builds {
 					if ifac.Proto == fac.Proto && Alive(ifac.Time, t, fac.Life) {
 						v -= float64(ifac.N)
 					}
@@ -290,163 +441,6 @@ func (s *Scenario) UpperBounds() *mat64.Dense {
 	return up
 }
 
-// SupportConstr builds and returns matrices representing linear inequality
-// constraints with a parameter multiplier matrix A and upper and lower
-// bounds. The constraint expresses that the total number of support
-// facilities (i.e. not reactors) at every timestep must never be more
-// than twice the number of deployed reactors.
-func (s *Scenario) SupportConstr() (low, A, up *mat64.Dense) {
-	nperiods := s.nPeriods()
-
-	A = mat64.NewDense(nperiods, s.Nvars(), nil)
-	low = mat64.NewDense(nperiods, 1, nil)
-	tmp := make([]float64, len(s.MaxPower))
-	copy(tmp, s.MaxPower)
-	up = mat64.NewDense(nperiods, 1, tmp)
-	up.Apply(func(r, c int, v float64) float64 { return 1e200 }, up)
-
-	for nt, t := range s.periodTimes() {
-		for f, fac := range s.Facs {
-			for ntbuilt, tbuilt := range s.periodTimes() {
-				if !fac.Alive(tbuilt, t) {
-					continue
-				}
-
-				i := f*nperiods + ntbuilt
-				if fac.Cap == 0 {
-					A.Set(nt, i, -1)
-				} else {
-					A.Set(nt, i, 2)
-				}
-			}
-		}
-	}
-
-	return low, A, up
-}
-
-// PowerConstr builds and returns matrices representing linear inequality
-// constraints with a parameter multiplier matrix A and upper and lower
-// bounds. The constraint expresses that the total power capacity deployed at
-// every timestep must always be between the given MinPower and MaxPower
-// scenario bounds.
-func (s *Scenario) PowerConstr() (low, A, up *mat64.Dense) {
-	nperiods := s.nPeriods()
-
-	tmpl := make([]float64, len(s.MinPower))
-	tmpu := make([]float64, len(s.MaxPower))
-	copy(tmpl, s.MinPower)
-	copy(tmpu, s.MaxPower)
-	// correct for initially built capacity
-	i := 0
-	for _, t := range s.periodTimes() {
-		cap := 0.0
-		for _, fac := range s.Facs {
-			for _, ifac := range s.Params {
-				if ifac.Proto == fac.Proto && Alive(ifac.Time, t, fac.Life) {
-					cap += fac.Cap * float64(ifac.N)
-				}
-			}
-		}
-		tmpl[i] -= cap
-		tmpu[i] -= cap
-		i++
-	}
-
-	low = mat64.NewDense(nperiods, 1, tmpl)
-	up = mat64.NewDense(nperiods, 1, tmpu)
-	A = mat64.NewDense(nperiods, s.Nvars(), nil)
-
-	for f, fac := range s.Facs {
-		for nbuilt, tbuilt := range s.periodTimes() {
-			for n, t := range s.periodTimes() {
-				if fac.Alive(tbuilt, t) {
-					i := f*nperiods + nbuilt
-					A.Set(n, i, fac.Cap)
-				}
-			}
-		}
-	}
-
-	return low, A, up
-}
-
-// AfterConstr builds and returns matrices representing equality
-// constraints with a parameter multiplier matrix A and upper and lower
-// bounds. The constraint expresses that each facility can only be built after
-// a certain date.
-func (s *Scenario) AfterConstr() (A, target *mat64.Dense) {
-	nperiods := s.nPeriods()
-
-	// count facilities that have build time constraints
-	n := 0
-	for _, fac := range s.Facs {
-		if fac.BuildAfter > 0 {
-			n++
-		}
-	}
-
-	A = mat64.NewDense(n*nperiods, s.Nvars(), nil)
-	target = mat64.NewDense(n*nperiods, 1, nil)
-
-	r := 0
-	for f, fac := range s.Facs {
-		if fac.BuildAfter <= 0 {
-			continue
-		}
-		for n, t := range s.periodTimes() {
-			if !fac.Available(t) {
-				c := f*nperiods + n
-				A.Set(r, c, 1)
-			}
-			r++
-		}
-	}
-
-	return A, target
-}
-
-func (s *Scenario) IneqConstr() (low, A, up *mat64.Dense) {
-	low, A, up = &mat64.Dense{}, &mat64.Dense{}, &mat64.Dense{}
-	l1, a1, u1 := s.SupportConstr()
-	l2, a2, u2 := s.PowerConstr()
-
-	low.Stack(l1, l2)
-	A.Stack(a1, a2)
-	up.Stack(u1, u2)
-
-	return low, A, up
-}
-
-func (s *Scenario) ConstrMat() (A *mat64.Dense) {
-	_, A, _ = s.IneqConstr()
-	return A
-}
-
-func (s *Scenario) ConstrLow() (low *mat64.Dense) {
-	low, _, _ = s.IneqConstr()
-	return low
-}
-
-func (s *Scenario) ConstrUp() (up *mat64.Dense) {
-	_, _, up = s.IneqConstr()
-	return up
-}
-
-func (s *Scenario) EqConstrMat() (A *mat64.Dense) {
-	A, _ = s.AfterConstr()
-	return A
-}
-
-func (s *Scenario) EqConstrTarget() (target *mat64.Dense) {
-	_, target = s.AfterConstr()
-	return target
-}
-
-func (s *Scenario) Nvars() int {
-	return s.nPeriods() * len(s.Facs)
-}
-
 func (s *Scenario) timeOf(period int) int {
 	return period*s.BuildPeriod + 1 + s.BuildOffset
 }
@@ -456,14 +450,14 @@ func (s *Scenario) periodOf(time int) int {
 }
 
 func (s *Scenario) periodTimes() []int {
-	periods := make([]int, s.nPeriods())
+	periods := make([]int, s.nperiods())
 	for i := range periods {
 		periods[i] = s.timeOf(i)
 	}
 	return periods
 }
 
-func (s *Scenario) nPeriods() int {
+func (s *Scenario) nperiods() int {
 	return (s.SimDur-s.BuildOffset-s.TrailingDur-2)/s.BuildPeriod + 1
 }
 
