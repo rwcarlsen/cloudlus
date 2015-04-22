@@ -187,14 +187,15 @@ func (s *Scenario) TransformVars(vars []float64) (map[string][]Build, error) {
 		maxpow := s.MaxPower[i]
 		currpower := s.powercap(builds, t)
 		powervar := vars[i*s.nvarsPerPeriod()]
-		captobuild := math.Max(minpow-currpower, 0)
 
 		toterr := 0.0
 		for _, caperr := range caperror {
 			toterr += caperr
 		}
 		shouldhavepower := currpower + toterr
+		fmt.Println(shouldhavepower)
 
+		captobuild := math.Max(minpow-shouldhavepower, 0)
 		powerrange := maxpow - (shouldhavepower + captobuild)
 		captobuild += powervar * powerrange
 

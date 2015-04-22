@@ -85,7 +85,19 @@ func TestTransformVars(t *testing.T) {
 				MinPower: []float64{10, 10, 10, 10, 70},
 			},
 			Vars:     []float64{.5, .5, .5, .5, .5},
-			PowerExp: []float64{10, 10, 10, 10, 70},
+			PowerExp: []float64{9, 15, 27, 45, 69},
+		}, {
+			Scen: &Scenario{
+				SimDur:      10,
+				BuildPeriod: 2,
+				Facs: []Facility{
+					{Proto: "Proto1", Cap: 4, Life: 0},
+				},
+				MaxPower: []float64{10, 20, 40, 60, 70},
+				MinPower: []float64{10, 10, 10, 10, 70},
+			},
+			Vars:     []float64{.5, .5, .5, .5, .5},
+			PowerExp: []float64{12, 16, 28, 44, 72},
 		},
 	}
 
