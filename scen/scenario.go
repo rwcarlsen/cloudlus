@@ -146,6 +146,11 @@ func (s *Scenario) nvarsPerPeriod() int {
 }
 
 func (s *Scenario) periodFacOrder() (varfacs []Facility, implicitreactor Facility) {
+	err := s.Validate()
+	if err != nil {
+		panic(err.Error())
+	}
+
 	facs := []Facility{}
 	facs = append(facs, Facility{}) // add blank to account for power var offset
 	for _, fac := range s.reactors()[1:] {
@@ -252,7 +257,6 @@ func (s *Scenario) TransformVars(vars []float64) (map[string][]Build, error) {
 			haven := float64(s.naliveproto(builds, t, fac.Proto))
 			needn := facfrac * float64(s.naliveproto(builds, t, fac.FracOfProtos...))
 			wantn := math.Max(0, needn-haven)
-			fmt.Println(wantn)
 			nbuild := int(math.Floor(wantn + 0.5))
 
 			builds[fac.Proto] = append(builds[fac.Proto], Build{
@@ -312,14 +316,21 @@ func (s *Scenario) Validate() error {
 	}
 
 	protos := map[string]Facility{}
+	havereactor := false
 	for _, fac := range s.Facs {
+		if fac.Cap > 0 {
+			havereactor = true
+		}
 		protos[fac.Proto] = fac
+	}
+	if !havereactor {
+		return fmt.Errorf("scenario has no nonzero capacity (i.e. reactor) prototypes")
 	}
 
 	for _, p := range s.StartBuilds {
 		fac, ok := protos[p.Proto]
 		if !ok {
-			return fmt.Errorf("param prototype '%v' is not defined in Facs", p.Proto)
+			return fmt.Errorf("StartBuild prototype '%v' is not defined in Facs", p.Proto)
 		}
 		p.fac = fac
 	}
@@ -428,9 +439,20 @@ func (s *Scenario) LowerBounds() []float64 {
 }
 
 func (s *Scenario) UpperBounds() []float64 {
-	up := make([]float64, s.nvars())
-	for i := range up {
-		up[i] = 1
+	facs, _ := s.periodFacOrder()
+	up := make([]float64, 0, s.nvars())
+	for _, t := range s.periodTimes() {
+		for j, fac := range facs {
+			if j == 0 { // power var
+				up = append(up, 1)
+			} else if fac.BuildAfter == -1 { // never can build
+				up = append(up, 0)
+			} else if fac.BuildAfter > 0 && fac.BuildAfter > t {
+				up = append(up, 0)
+			} else {
+				up = append(up, 1)
+			}
+		}
 	}
 	return up
 }

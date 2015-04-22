@@ -1,11 +1,6 @@
 package scen
 
-import (
-	"fmt"
-	"testing"
-
-	"github.com/gonum/matrix/mat64"
-)
+import "testing"
 
 func TestPeriodTimes(t *testing.T) {
 	var tests = []struct {
@@ -179,7 +174,7 @@ func TestTransformVars(t *testing.T) {
 
 func TestVarNames(t *testing.T) {
 	facs := []Facility{
-		Facility{Proto: "Proto1"},
+		Facility{Proto: "Proto1", Cap: 1},
 		Facility{Proto: "Proto2"},
 		Facility{Proto: "Proto3"},
 		Facility{Proto: "Proto4"},
@@ -203,14 +198,6 @@ func TestVarNames(t *testing.T) {
 	for i, name := range s.VarNames() {
 		t.Logf("   %v| %v", i, name)
 	}
-	t.Logf("LowerBounds:\n%v", Mat{s.LowerBounds()})
-	t.Logf("UpperBounds:\n%v", Mat{s.UpperBounds()})
-}
-
-type Mat struct {
-	*mat64.Dense
-}
-
-func (m Mat) Format(f fmt.State, c rune) {
-	mat64.Format(m, 0, 0, f, c)
+	t.Logf("LowerBounds:\n%v", s.LowerBounds())
+	t.Logf("UpperBounds:\n%v", s.UpperBounds())
 }
