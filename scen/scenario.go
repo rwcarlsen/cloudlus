@@ -183,6 +183,7 @@ func (s *Scenario) TransformVars(vars []float64) (map[string][]Build, error) {
 
 	varfacs, implicitreactor := s.periodFacOrder()
 	caperror := map[string]float64{}
+	supporterror := map[string]float64{}
 	for i, t := range s.periodTimes() {
 		minpow := s.MinPower[i]
 		maxpow := s.MaxPower[i]
@@ -247,12 +248,12 @@ func (s *Scenario) TransformVars(vars []float64) (map[string][]Build, error) {
 			facfrac := vars[i*s.nvarsPerPeriod()+j]
 			fac := varfacs[j]
 
-			caperr := caperror[fac.Proto]
+			superr := supporterror[fac.Proto]
 			haven := float64(s.naliveproto(builds, t, fac.Proto))
-			needn := facfrac*float64(s.naliveproto(builds, t, fac.FracOfProtos...)) + caperr
+			needn := facfrac*float64(s.naliveproto(builds, t, fac.FracOfProtos...)) + superr
 			wantn := math.Max(0, needn-haven)
 			nbuild := int(math.Max(0, math.Floor(wantn+0.5)))
-			caperror[fac.Proto] = wantn - float64(nbuild)
+			supporterror[fac.Proto] = wantn - float64(nbuild)
 
 			builds[fac.Proto] = append(builds[fac.Proto], Build{
 				Time:  t,
