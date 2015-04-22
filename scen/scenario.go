@@ -273,7 +273,7 @@ func (s *Scenario) naliveproto(facs map[string][]Build, t int, protos ...string)
 		builds := facs[proto]
 		for _, b := range builds {
 			if b.Alive(t) {
-				count++
+				count += b.N
 			}
 		}
 	}

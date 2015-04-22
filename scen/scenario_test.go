@@ -120,7 +120,24 @@ func TestTransformVars(t *testing.T) {
 			PowerExp: []float64{10, 15, 28, 44, 70},
 			BuildExp: map[string][]int{
 				"Proto1": {10, 5, 13, 16, 26},
-				"Proto2": {5, 8, 14, 22, 35},
+				"Proto2": {5, 3, 6, 8, 13},
+			},
+		}, {
+			Scen: &Scenario{
+				SimDur:      10,
+				BuildPeriod: 2,
+				Facs: []Facility{
+					{Proto: "Proto1", Cap: 1, Life: 1},
+					{Proto: "Proto2", Cap: 0, Life: 0, FracOfProtos: []string{"Proto1"}},
+				},
+				MaxPower: []float64{10, 20, 40, 60, 70},
+				MinPower: []float64{10, 10, 10, 10, 70},
+			},
+			Vars:     []float64{.5, .5, .5, .5, .5, .5, .5, .5, .5, .5},
+			PowerExp: []float64{10, 15, 25, 35, 70},
+			BuildExp: map[string][]int{
+				"Proto1": {10, 15, 25, 35, 70},
+				"Proto2": {5, 3, 4, 6, 17},
 			},
 		},
 	}
