@@ -137,7 +137,7 @@ func TestTransformVars(t *testing.T) {
 			PowerExp: []float64{10, 15, 25, 35, 70},
 			BuildExp: map[string][]int{
 				"Proto1": {10, 15, 25, 35, 70},
-				"Proto2": {5, 3, 4, 6, 17},
+				"Proto2": {5, 3, 5, 5, 17},
 			},
 		},
 	}
