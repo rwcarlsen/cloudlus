@@ -44,6 +44,60 @@ func TestPeriodTimes(t *testing.T) {
 	}
 }
 
+func TestTransformVars(t *testing.T) {
+	tests := []struct {
+		Scen     *Scenario
+		Vars     []float64
+		PowerExp []float64
+	}{
+		{
+			Scen: &Scenario{
+				SimDur:      10,
+				BuildPeriod: 2,
+				Facs: []Facility{
+					{Proto: "Proto1", Cap: 1, Life: 0},
+				},
+				MaxPower: []float64{10, 20, 40, 60, 70},
+				MinPower: []float64{10, 10, 10, 10, 70},
+			},
+			Vars:     []float64{.5, .5, .5, .5, .5},
+			PowerExp: []float64{10, 15, 28, 44, 70},
+		},
+	}
+
+	for i, test := range tests {
+		t.Logf("test %v", i)
+		s := test.Scen
+		vars := test.Vars
+
+		builds, err := s.TransformVars(vars)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		timepowers := make([]float64, s.nperiods())
+		for n, t := range s.periodTimes() {
+			for _, buildsp := range builds {
+				for _, b := range buildsp {
+					if b.Alive(t) {
+						timepowers[n] += b.fac.Cap * float64(b.N)
+					}
+				}
+			}
+		}
+
+		t.Logf("  deployed capacity: %v", timepowers)
+		t.Logf("  want capacity: %v", test.PowerExp)
+
+		for proto, buildsp := range builds {
+			t.Logf("  prototype %v:", proto)
+			for _, b := range buildsp {
+				t.Logf("    build: time=%v, proto=%v, n=%v", b.Time, b.Proto, b.N)
+			}
+		}
+	}
+}
+
 func TestVarNames(t *testing.T) {
 	facs := []Facility{
 		Facility{Proto: "Proto1"},
