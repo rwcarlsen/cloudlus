@@ -17,9 +17,7 @@ import (
 	_ "github.com/gonum/blas/native"
 	"github.com/gonum/matrix/mat64"
 	_ "github.com/mxk/go-sqlite/sqlite3"
-	"github.com/rwcarlsen/cyan/nuc"
 	"github.com/rwcarlsen/cyan/post"
-	"github.com/rwcarlsen/cyan/query"
 )
 
 // Facility represents a cyclus agent prototype that could be built by the
@@ -64,7 +62,7 @@ func (b Build) Lifetime() int {
 	if b.Life > 0 {
 		return b.Life
 	}
-	return fac.Life
+	return b.fac.Life
 }
 
 // Alive returns whether or not a facility with the given lifetime and built
@@ -137,7 +135,7 @@ func (s *Scenario) notreactors() []Facility {
 	return fs
 }
 
-func (s *Scenario) nvars() int { return s.nvarsPerPeriod * s.nperiods() }
+func (s *Scenario) nvars() int { return s.nvarsPerPeriod() * s.nperiods() }
 
 func (s *Scenario) nvarsPerPeriod() int {
 	numFacVars := len(s.Facs) - 1
@@ -147,13 +145,13 @@ func (s *Scenario) nvarsPerPeriod() int {
 
 func (s *Scenario) periodFacOrder() (varfacs []Facility, implicitreactor Facility) {
 	facs := []Facility{}
-	for i, fac := range s.reactors()[1:] {
+	for _, fac := range s.reactors()[1:] {
 		facs = append(facs, fac)
 	}
-	for i, fac := range s.notreactors() {
+	for _, fac := range s.notreactors() {
 		facs = append(facs, fac)
 	}
-	return facs
+	return facs, s.reactors()[0]
 }
 
 // TransformVars takes a sequence of input variables for the scenario and
@@ -179,7 +177,7 @@ func (s *Scenario) TransformVars(vars []float64) (map[string][]Build, error) {
 
 	builds := map[string][]Build{}
 	for _, b := range s.Builds {
-		builds[b.Proto] = b
+		builds[b.Proto] = append(builds[b.Proto], b)
 	}
 
 	varfacs, implicitreactor := s.periodFacOrder()
@@ -192,11 +190,10 @@ func (s *Scenario) TransformVars(vars []float64) (map[string][]Build, error) {
 		captobuild := math.Max(minpow-currpower, 0)
 		powerrange := maxpow - (currpower + captobuild)
 		captobuild += powervar * powerrange
-		finalpower := currpower + captobuild
 
 		// handle reactor builds
 		reactorfrac := 0.0
-		j := 1
+		j := 1 // skip j = 0 which is the power cap variable
 		for j = 1; j < s.nvarsPerPeriod(); j++ {
 			val := vars[s.BuildPeriod*i+j]
 			fac := varfacs[j]
@@ -206,7 +203,7 @@ func (s *Scenario) TransformVars(vars []float64) (map[string][]Build, error) {
 
 				caperr := caperror[fac.Proto]
 				wantcap := facfrac*captobuild + caperr
-				nbuild := int(math.Max(math.Floor(wantcap/fac.Cap + 0.5)))
+				nbuild := int(math.Max(0, math.Floor(wantcap/fac.Cap+0.5)))
 				caperror[fac.Proto] = wantcap - float64(nbuild)*fac.Cap
 
 				builds[fac.Proto] = append(builds[fac.Proto], Build{
@@ -221,7 +218,6 @@ func (s *Scenario) TransformVars(vars []float64) (map[string][]Build, error) {
 		}
 
 		// handle implicit reactor
-		j := 0
 		fac := implicitreactor
 		facfrac := (1 - reactorfrac)
 
@@ -277,7 +273,7 @@ func (s *Scenario) powercap(builds map[string][]Build, t int) float64 {
 	for _, buildsproto := range builds {
 		for _, b := range buildsproto {
 			if b.Alive(t) {
-				pow += fac.Cap * b.N
+				pow += b.fac.Cap * float64(b.N)
 			}
 		}
 	}
@@ -296,13 +292,14 @@ func (s *Scenario) Validate() error {
 		return fmt.Errorf("number power constraints %v != number build periods %v", lmin, np)
 	}
 
-	protos := map[string]bool{}
+	protos := map[string]Facility{}
 	for _, fac := range s.Facs {
 		protos[fac.Proto] = fac
 	}
 
 	for _, p := range s.Builds {
-		if fac, ok := protos[p.Proto]; !ok {
+		fac, ok := protos[p.Proto]
+		if !ok {
 			return fmt.Errorf("param prototype '%v' is not defined in Facs", p.Proto)
 		}
 		p.fac = fac
@@ -412,31 +409,9 @@ func (s *Scenario) LowerBounds() *mat64.Dense {
 }
 
 func (s *Scenario) UpperBounds() *mat64.Dense {
-	nperiods := s.nperiods()
 	up := mat64.NewDense(s.nvars(), 1, nil)
-	for f, fac := range s.Facs {
-		for n, t := range s.periodTimes() {
-			row := f*nperiods + n
-			if !fac.Available(t) {
-				up.Set(row, 0, 0)
-			} else if fac.Cap != 0 {
-				v := s.MaxPower[n]/fac.Cap*.2 + 1
-				if v < 10 {
-					v = 10
-				}
-				for _, ifac := range s.Builds {
-					if ifac.Proto == fac.Proto && Alive(ifac.Time, t, fac.Life) {
-						v -= float64(ifac.N)
-					}
-				}
-				if v < 0 {
-					v = 0
-				}
-				up.Set(row, 0, v)
-			} else {
-				up.Set(row, 0, 10)
-			}
-		}
+	for i := 0; i < s.nvars(); i++ {
+		up.Set(i, 0, 1)
 	}
 	return up
 }
@@ -477,98 +452,4 @@ func findLine(data []byte, pos int64) (line, col int) {
 		}
 	}
 	return
-}
-
-func (scen *Scenario) CalcObjective(dbfile string, simid []byte) (float64, error) {
-	db, err := sql.Open("sqlite3", dbfile)
-	if err != nil {
-		return 0, err
-	}
-	defer db.Close()
-
-	// add up overnight and operating costs converted to PV(t=0)
-	q1 := `
-		SELECT tl.Time FROM TimeList AS tl
-			INNER JOIN Agents As a ON a.EnterTime <= tl.Time AND (a.ExitTime >= tl.Time OR a.ExitTime IS NULL)
-		WHERE
-			a.SimId = tl.SimId AND a.SimId = ?
-			AND a.Prototype = ?;
-		`
-	q2 := `SELECT EnterTime FROM Agents WHERE SimId = ? AND Prototype = ?`
-
-	totcost := 0.0
-	for _, fac := range scen.Facs {
-		// calc total operating cost
-		rows, err := db.Query(q1, simid, fac.Proto)
-		if err != nil {
-			return 0, err
-		}
-		for rows.Next() {
-			var t int
-			if err := rows.Scan(&t); err != nil {
-				return 0, err
-			}
-			totcost += PV(fac.OpCost, t, scen.Discount)
-		}
-		if err := rows.Err(); err != nil {
-			return 0, err
-		}
-
-		// calc overnight capital cost
-		rows, err = db.Query(q2, simid, fac.Proto)
-		if err != nil {
-			return 0, err
-		}
-		for rows.Next() {
-			var t int
-			if err := rows.Scan(&t); err != nil {
-				return 0, err
-			}
-			totcost += PV(fac.CapitalCost, t, scen.Discount)
-		}
-		if err := rows.Err(); err != nil {
-			return 0, err
-		}
-
-		// add in waste penalty
-		ags, err := query.AllAgents(db, simid, fac.Proto)
-		if err != nil {
-			return 0, err
-		}
-
-		// InvAt uses all agents if no ids are passed - so we need to skip from here
-		if len(ags) == 0 {
-			continue
-		}
-
-		ids := make([]int, len(ags))
-		for i, a := range ags {
-			ids[i] = a.Id
-		}
-
-		for t := 0; t < scen.SimDur; t++ {
-			mat, err := query.InvAt(db, simid, t, ids...)
-			if err != nil {
-				return 0, err
-			}
-			for nuc, qty := range mat {
-				nucstr := fmt.Sprint(nuc)
-				totcost += PV(scen.NuclideCost[nucstr]*float64(qty)*(1-fac.WasteDiscount), t, scen.Discount)
-			}
-		}
-	}
-
-	// normalize to energy produced
-	joules, err := query.EnergyProduced(db, simid, 0, scen.SimDur)
-	if err != nil {
-		return 0, err
-	}
-	mwh := joules / nuc.MWh
-	mult := 1e6 // to get the objective around 0.1 same magnitude as constraint penalties
-	return totcost / (mwh + 1e-30) * mult, nil
-}
-
-func PV(amt float64, nt int, rate float64) float64 {
-	monrate := rate / 12
-	return amt / math.Pow(1+monrate, float64(nt))
 }
