@@ -20,6 +20,7 @@ import (
 
 	_ "github.com/mxk/go-sqlite/sqlite3"
 	"github.com/rwcarlsen/cloudlus/cloudlus"
+	"github.com/rwcarlsen/cloudlus/objective"
 	"github.com/rwcarlsen/cloudlus/scen"
 	"github.com/rwcarlsen/optim"
 	"github.com/rwcarlsen/optim/pattern"
@@ -92,7 +93,7 @@ func main() {
 	ub := scen.UpperBounds()
 	it, ev := buildIter(lb, ub)
 
-	obj := &optim.ObjectiveLogger{Obj: &objective{scen, f4}, W: f1}
+	obj := &optim.ObjectiveLogger{Obj: &obj{scen, f4}, W: f1}
 
 	m := &optim.BoxMesh{Mesh: &optim.InfMesh{StepSize: 0.2}, Lower: lb, Upper: ub}
 
@@ -173,13 +174,12 @@ func buildIter(lb, ub []float64) (optim.Method, *optim.CacheEvaler) {
 	), ev
 }
 
-type objective struct {
+type obj struct {
 	s      *scen.Scenario
 	runlog io.Writer
 }
 
-func (o *objective) Objective(v []float64) (float64, error) {
-
+func (o *obj) Objective(v []float64) (float64, error) {
 	scencopyval := *o.s
 	scencopy := &scencopyval
 	scencopy.TransformVars(v)
@@ -188,7 +188,8 @@ func (o *objective) Objective(v []float64) (float64, error) {
 		if err != nil {
 			return math.Inf(1), err
 		}
-		return scencopy.CalcObjective(dbfile, simid)
+
+		return objective.Calc(scencopy, dbfile, simid)
 	} else {
 		j := buildjob(scencopy)
 		return submitjob(scencopy, j)

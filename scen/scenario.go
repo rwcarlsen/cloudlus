@@ -355,9 +355,6 @@ func (s *Scenario) Load(fname string) error {
 	}
 
 	s.File = fname
-	if len(s.StartBuilds) == 0 {
-		s.StartBuilds = make([]Build, s.nvars())
-	}
 	return s.Validate()
 }
 

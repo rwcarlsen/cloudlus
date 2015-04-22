@@ -11,6 +11,7 @@ import (
 
 	_ "github.com/mxk/go-sqlite/sqlite3"
 	"github.com/rwcarlsen/cloudlus/cloudlus"
+	"github.com/rwcarlsen/cloudlus/objective"
 	"github.com/rwcarlsen/cloudlus/scen"
 )
 
@@ -108,9 +109,7 @@ func submitjob(scen *scen.Scenario, j *cloudlus.Job) {
 
 func runjob(scen *scen.Scenario) {
 	dbfile, simid, err := scen.Run(nil, nil)
-	val, err := scen.CalcObjective(dbfile, simid)
-	check(err)
-
+	val, err := objective.Calc(scen, dbfile, simid)
 	err = ioutil.WriteFile(*out, []byte(fmt.Sprint(val)), 0644)
 	check(err)
 }
