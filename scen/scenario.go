@@ -391,7 +391,7 @@ func (s *Scenario) GenCyclusInfile() ([]byte, error) {
 	}
 
 	var buf bytes.Buffer
-	err := t.Execute(&buf, s)
+	err := s.tmpl.Execute(&buf, s)
 	if err != nil {
 		return nil, err
 	}
