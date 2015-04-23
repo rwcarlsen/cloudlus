@@ -10,7 +10,6 @@ import (
 	"math"
 	"os"
 	"os/exec"
-	"sync"
 	"text/template"
 
 	"code.google.com/p/go-uuid/uuid"
@@ -122,7 +121,6 @@ type Scenario struct {
 
 	// tmpl is a cach for the templated cyclus input file
 	tmpl *template.Template
-	sync.Mutex
 }
 
 func (s *Scenario) reactors() []Facility {
@@ -327,6 +325,10 @@ func (s *Scenario) Validate() error {
 		return fmt.Errorf("MaxPower length %v != MinPower length %v", max, min)
 	}
 
+	if s.tmpl == nil {
+		s.tmpl = template.Must(template.ParseFiles(s.CyclusTmpl))
+	}
+
 	np := s.nperiods()
 	lmin := len(s.MinPower)
 	if np != lmin {
@@ -384,8 +386,6 @@ func (s *Scenario) GenCyclusInfile() ([]byte, error) {
 		s.Handle = "none"
 	}
 
-	s.Lock()
-	defer s.Unlock()
 	if s.tmpl == nil {
 		s.tmpl = template.Must(template.ParseFiles(s.CyclusTmpl))
 	}
