@@ -18,9 +18,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/gonum/matrix/mat64"
 	_ "github.com/mxk/go-sqlite/sqlite3"
 	"github.com/rwcarlsen/cloudlus/cloudlus"
+	"github.com/rwcarlsen/cloudlus/objective"
 	"github.com/rwcarlsen/cloudlus/scen"
 	"github.com/rwcarlsen/optim"
 	"github.com/rwcarlsen/optim/pattern"
@@ -37,7 +37,6 @@ var (
 	maxeval      = flag.Int("maxeval", 50000, "max number of objective evaluations")
 	maxiter      = flag.Int("maxiter", 500, "max number of optimizer iterations")
 	maxnoimprove = flag.Int("maxnoimprove", 100, "max iterations with no objective improvement(zero -> infinite)")
-	penalty      = flag.Float64("penalty", 0.5, "fractional penalty for constraint violations")
 	dbname       = flag.String("db", "pswarm.sqlite", "name for database containing optimizer work")
 )
 
@@ -90,27 +89,18 @@ func main() {
 	defer f4.Close()
 
 	// create and initialize solver
-	lb := scen.LowerBounds().Col(nil, 0)
-	ub := scen.UpperBounds().Col(nil, 0)
-	low, A, up := scen.IneqConstr()
-	it, ev := buildIter(low, A, up, lb, ub)
+	lb := scen.LowerBounds()
+	ub := scen.UpperBounds()
+	it, ev := buildIter(lb, ub)
 
-	loggedobj := &optim.ObjectiveLogger{Obj: &objective{scen, f4}, W: f1}
-	pobj := &optim.ObjectivePenalty{
-		Obj:    loggedobj,
-		A:      A,
-		Low:    low,
-		Up:     up,
-		Weight: 1,
-	}
+	obj := &optim.ObjectiveLogger{Obj: &obj{scen, f4}, W: f1}
 
-	stackA, b, _ := optim.StackConstrBoxed(lb, ub, low, A, up)
-	m := &optim.IntMesh{&optim.ConstrMesh{Mesh: &optim.InfMesh{StepSize: 2}, A: stackA, B: b}}
+	m := &optim.BoxMesh{Mesh: &optim.InfMesh{StepSize: 0.2}, Lower: lb, Upper: ub}
 
 	// this is here so that signals goroutine can close over it
 	solv := &optim.Solver{
 		Method:       it,
-		Obj:          pobj,
+		Obj:          obj,
 		Mesh:         m,
 		MaxIter:      *maxiter,
 		MaxEval:      *maxeval,
@@ -154,7 +144,7 @@ func final(s *optim.Solver, cache int, start time.Time) {
 	fmt.Printf("%v cached objective uses\n", cache)
 }
 
-func buildIter(low, A, up *mat64.Dense, lb, ub []float64) (optim.Method, *optim.CacheEvaler) {
+func buildIter(lb, ub []float64) (optim.Method, *optim.CacheEvaler) {
 	vmax := make([]float64, len(lb))
 	for i := range lb {
 		vmax[i] = (ub[i] - lb[i])
@@ -167,7 +157,7 @@ func buildIter(low, A, up *mat64.Dense, lb, ub []float64) (optim.Method, *optim.
 		n = 30
 	}
 
-	points := optim.RandPopConstr(n, lb, ub, low, A, up)
+	points := optim.RandPop(n, lb, ub)
 	fmt.Printf("swarming with %v particles\n", n)
 
 	ev := optim.NewCacheEvaler(optim.ParallelEvaler{})
@@ -184,31 +174,22 @@ func buildIter(low, A, up *mat64.Dense, lb, ub []float64) (optim.Method, *optim.
 	), ev
 }
 
-type objective struct {
+type obj struct {
 	s      *scen.Scenario
 	runlog io.Writer
 }
 
-func (o *objective) Objective(v []float64) (float64, error) {
-	if n := len(v); n != o.s.Nvars() {
-		panic(fmt.Sprintf("expected %v vars, got %v as args", o.s.Nvars(), n))
-	}
-
-	params := make([]int, len(v))
-	for i := range v {
-		params[i] = int(v[i])
-	}
-
+func (o *obj) Objective(v []float64) (float64, error) {
 	scencopyval := *o.s
 	scencopy := &scencopyval
-	scencopy.Params = nil
-	scencopy.InitParams(params)
+	scencopy.TransformVars(v)
 	if *addr == "" {
 		dbfile, simid, err := scencopy.Run(o.runlog, o.runlog)
 		if err != nil {
 			return math.Inf(1), err
 		}
-		return scencopy.CalcObjective(dbfile, simid)
+
+		return objective.Calc(scencopy, dbfile, simid)
 	} else {
 		j := buildjob(scencopy)
 		return submitjob(scencopy, j)

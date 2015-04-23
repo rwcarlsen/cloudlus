@@ -15,11 +15,8 @@ import (
 	"code.google.com/p/go-uuid/uuid"
 
 	_ "github.com/gonum/blas/native"
-	"github.com/gonum/matrix/mat64"
 	_ "github.com/mxk/go-sqlite/sqlite3"
-	"github.com/rwcarlsen/cyan/nuc"
 	"github.com/rwcarlsen/cyan/post"
-	"github.com/rwcarlsen/cyan/query"
 )
 
 // Facility represents a cyclus agent prototype that could be built by the
@@ -28,10 +25,6 @@ type Facility struct {
 	Proto string
 	// Cap is the total Power output capacity of the facility.
 	Cap float64
-	// OpCost represents the per timstep operating cost for the facility
-	OpCost float64
-	// CapitalCost represents the overnight cost for building the facility
-	CapitalCost float64
 	// The lifetime of the facility (in timesteps). The lifetime must also
 	// be specified manually (consistent with this value) in the prototype
 	// definition in the cyclus input template file.
@@ -39,37 +32,57 @@ type Facility struct {
 	// BuildAfter is the time step after which this facility type can be built.
 	// -1 for never available, and 0 for always available.
 	BuildAfter int
-	// WasteDiscount represents the fraction is discounted from the waste cost
-	// for this facility.
-	WasteDiscount float64
-	// Ninitial is the number of this facility type deployed at simulation
-	// start.
-	Ninitial int
+	// FracOfProto names a prototype that build fractions of this prototype
+	// are a portion of.
+	FracOfProtos []string
 }
 
 // Alive returns whether or not a facility built at the specified time is
 // still operating/active at t.
-func (f *Facility) Alive(built, t int) bool {
-	if built > t {
-		return false
-	}
-	return built+f.Life >= t || f.Life <= 0
-}
+func (f *Facility) Alive(built, t int) bool { return Alive(built, t, f.Life) }
 
 // Available returns true if the facility type can be built at time t.
 func (f *Facility) Available(t int) bool {
 	return t >= f.BuildAfter && f.BuildAfter >= 0
 }
 
-type Param struct {
+type Build struct {
 	Time  int
 	Proto string
 	N     int
+	Life  int
+	fac   Facility
+}
+
+// Alive returns whether or not the facility is still operabing/active at t.
+func (b Build) Alive(t int) bool { return Alive(b.Time, t, b.Lifetime()) }
+
+func (b Build) Lifetime() int {
+	if b.Life > 0 {
+		return b.Life
+	} else if b.fac.Life > 0 {
+		return b.fac.Life
+	} else {
+		return -1
+	}
+}
+
+// Alive returns whether or not a facility with the given lifetime and built
+// at the specified time is still operating/active at t.
+func Alive(built, t, life int) bool {
+	return built <= t && (built+life >= t || life <= 0)
 }
 
 type Scenario struct {
 	// SimDur is the simulation duration in timesteps (months)
 	SimDur int
+	// BuildOffset is the number of timesteps after simulation start at which
+	// deployments actually begin.  This allows facilities and other initial
+	// conditions to be set up and run before the deploying begins.
+	BuildOffset int
+	// TrailingDur is the number of timesteps of the simulation duration that
+	// are reserved for wind-down - no new deployments will be made.
+	TrailingDur int
 	// CyclusTmpl is the path to the text templated cyclus input file.
 	CyclusTmpl string
 	// BuildPeriod is the number of timesteps between timesteps in which
@@ -90,19 +103,262 @@ type Scenario struct {
 	// MaxPower is a series of max deployed power capacity requirements that
 	// must be maintained for each build period.
 	MaxPower []float64
-	// Params holds a set of potential build schedule values for the scenario.
-	// This usually does not need to be set by the user.
-	Params []Param
+	// StartBuilds holds the set of build schedule values for all agents
+	// initially in the scenario (not added/deployed by optimizer).
+	StartBuilds []Build
+	// Builds holds all scenario deployments (including startbuilds).  This is
+	// only non-nil after TransformVars has been called.
+	Builds []Build
 	// Addr is the location of the cyclus simulation execution server.  An
 	// empty string "" indicates that simulations will run locally.
 	Addr string
-
 	// File is the name of the scenario file. This is for internal use and
 	// does not need to be filled out by the user.
 	File string
 	// Handle is used internally and does not need to be specified by the
 	// user.
 	Handle string
+
+	// tmpl is a cach for the templated cyclus input file
+	tmpl *template.Template
+}
+
+func (s *Scenario) reactors() []Facility {
+	rs := []Facility{}
+	for _, fac := range s.Facs {
+		if fac.Cap > 0 {
+			rs = append(rs, fac)
+		}
+	}
+	return rs
+}
+
+func (s *Scenario) notreactors() []Facility {
+	fs := []Facility{}
+	for _, fac := range s.Facs {
+		if fac.Cap == 0 {
+			fs = append(fs, fac)
+		}
+	}
+	return fs
+}
+
+func (s *Scenario) nvars() int { return s.nvarsPerPeriod() * s.nperiods() }
+
+func (s *Scenario) nvarsPerPeriod() int {
+	numFacVars := len(s.Facs) - 1
+	numPowerVars := 1
+	return numFacVars + numPowerVars
+}
+
+func (s *Scenario) periodFacOrder() (varfacs []Facility, implicitreactor Facility) {
+	err := s.Validate()
+	if err != nil {
+		panic(err.Error())
+	}
+
+	facs := []Facility{}
+	facs = append(facs, Facility{}) // add blank to account for power var offset
+	for _, fac := range s.reactors()[1:] {
+		facs = append(facs, fac)
+	}
+	for _, fac := range s.notreactors() {
+		facs = append(facs, fac)
+	}
+	return facs, s.reactors()[0]
+}
+
+// TransformVars takes a sequence of input variables for the scenario and
+// transforms them into a set of prototype/facility deployments. The sequence
+// of the vars follows this pattern: fac1_t1, fac1_t2, ..., fac1_tn, fac2_t1,
+// ..., facm_t1, facm_t2, ..., facm_tn.
+//
+// The first reactor type variable represents the total fraction of new built
+// power capacity satisfied by that reactor on the given time step.  For each
+// subsequent reactor type (except the last), the variables represent the
+// fraction of the remaining power capacity satisfied by that reactor type
+// (e.g. the third reactor type's variable can be used to calculate its
+// fraction like this (1-(react1frac + (1-react1frac) * react2frac)) *
+// react3frac).  The last reactor type fraction is simply the remainining
+// unsatisfied power capacity.
+func (s *Scenario) TransformVars(vars []float64) (map[string][]Build, error) {
+	err := s.Validate()
+	if err != nil {
+		return nil, err
+	} else if len(vars) != s.nvars() {
+		return nil, fmt.Errorf("wrong number of vars: want %v, got %v", s.nvars(), len(vars))
+	}
+
+	builds := map[string][]Build{}
+	for _, b := range s.StartBuilds {
+		builds[b.Proto] = append(builds[b.Proto], b)
+	}
+
+	varfacs, implicitreactor := s.periodFacOrder()
+	caperror := map[string]float64{}
+	for i, t := range s.periodTimes() {
+		minpow := s.MinPower[i]
+		maxpow := s.MaxPower[i]
+		currpower := s.powercap(builds, t)
+		powervar := vars[i*s.nvarsPerPeriod()]
+
+		toterr := 0.0
+		for _, caperr := range caperror {
+			toterr += caperr
+		}
+		shouldhavepower := currpower + toterr
+
+		captobuild := math.Max(minpow-shouldhavepower, 0)
+		powerrange := maxpow - (shouldhavepower + captobuild)
+		captobuild += powervar * powerrange
+
+		// handle reactor builds
+		reactorfrac := 0.0
+		j := 1 // skip j = 0 which is the power cap variable
+		for j = 1; j < s.nvarsPerPeriod(); j++ {
+			val := vars[i*s.nvarsPerPeriod()+j]
+			fac := varfacs[j]
+			if fac.Cap > 0 {
+				facfrac := (1 - reactorfrac) * val
+				reactorfrac += facfrac
+
+				caperr := caperror[fac.Proto]
+				wantcap := facfrac*captobuild + caperr
+				wantcap = math.Min(wantcap, maxpow-currpower)
+				nbuild := int(math.Max(0, math.Floor(wantcap/fac.Cap+0.5)))
+				caperror[fac.Proto] = wantcap - float64(nbuild)*fac.Cap
+
+				if nbuild > 0 {
+					builds[fac.Proto] = append(builds[fac.Proto], Build{
+						Time:  t,
+						Proto: fac.Proto,
+						N:     nbuild,
+						fac:   fac,
+					})
+				}
+			} else {
+				// done processing reactors (except last one)
+				break
+			}
+		}
+
+		// handle last (implicit) reactor
+		fac := implicitreactor
+		facfrac := (1 - reactorfrac)
+
+		caperr := caperror[fac.Proto]
+		wantcap := facfrac*captobuild + caperr
+		wantcap = math.Min(wantcap, maxpow-currpower)
+		nbuild := int(math.Max(0, math.Floor(wantcap/fac.Cap+0.5)))
+		caperror[fac.Proto] = wantcap - float64(nbuild)*fac.Cap
+
+		if nbuild > 0 {
+			builds[fac.Proto] = append(builds[fac.Proto], Build{
+				Time:  t,
+				Proto: fac.Proto,
+				N:     nbuild,
+				fac:   fac,
+			})
+		}
+
+		// handle other facilities
+		for ; j < s.nvarsPerPeriod(); j++ {
+			facfrac := vars[i*s.nvarsPerPeriod()+j]
+			fac := varfacs[j]
+			if fac.BuildAfter < 0 { // skip
+				continue
+			}
+
+			haven := float64(s.naliveproto(builds, t, fac.Proto))
+			needn := facfrac * float64(s.naliveproto(builds, t, fac.FracOfProtos...))
+			wantn := math.Max(0, needn-haven)
+			nbuild := int(math.Floor(wantn + 0.5))
+			if nbuild > 0 {
+				builds[fac.Proto] = append(builds[fac.Proto], Build{
+					Time:  t,
+					Proto: fac.Proto,
+					N:     nbuild,
+					fac:   fac,
+				})
+			}
+		}
+	}
+
+	s.Builds = nil
+	for _, blds := range builds {
+		for _, b := range blds {
+			s.Builds = append(s.Builds, b)
+		}
+	}
+
+	return builds, nil
+}
+
+func (s *Scenario) naliveproto(facs map[string][]Build, t int, protos ...string) int {
+	count := 0
+	for _, proto := range protos {
+		builds := facs[proto]
+		for _, b := range builds {
+			if b.Alive(t) {
+				count += b.N
+			}
+		}
+	}
+	return count
+}
+
+func (s *Scenario) powercap(builds map[string][]Build, t int) float64 {
+	pow := 0.0
+	for _, buildsproto := range builds {
+		for _, b := range buildsproto {
+			if b.Alive(t) {
+				pow += b.fac.Cap * float64(b.N)
+			}
+		}
+	}
+	return pow
+}
+
+// Validate returns an error if the scenario is ill-configured.
+func (s *Scenario) Validate() error {
+	if min, max := len(s.MinPower), len(s.MaxPower); min != max {
+		return fmt.Errorf("MaxPower length %v != MinPower length %v", max, min)
+	}
+
+	if s.tmpl == nil {
+		s.tmpl = template.Must(template.ParseFiles(s.CyclusTmpl))
+	}
+
+	np := s.nperiods()
+	lmin := len(s.MinPower)
+	if np != lmin {
+		return fmt.Errorf("number power constraints %v != number build periods %v", lmin, np)
+	}
+
+	protos := map[string]Facility{}
+	havereactor := false
+	for _, fac := range s.Facs {
+		if fac.Cap > 0 {
+			havereactor = true
+		}
+		if fac.Cap == 0 && len(fac.FracOfProtos) == 0 && fac.BuildAfter >= 0 {
+			return fmt.Errorf("prototype %v needs at least one prototype defined in FracOfProtos", fac.Proto)
+		}
+		protos[fac.Proto] = fac
+	}
+	if !havereactor {
+		return fmt.Errorf("scenario has no nonzero capacity (i.e. reactor) prototypes")
+	}
+
+	for i, p := range s.StartBuilds {
+		fac, ok := protos[p.Proto]
+		if !ok {
+			return fmt.Errorf("StartBuild prototype '%v' is not defined in Facs", p.Proto)
+		}
+		s.StartBuilds[i].fac = fac
+	}
+
+	return nil
 }
 
 func (s *Scenario) Load(fname string) error {
@@ -122,10 +378,7 @@ func (s *Scenario) Load(fname string) error {
 	}
 
 	s.File = fname
-	if len(s.Params) == 0 {
-		s.Params = make([]Param, s.Nvars())
-	}
-	return nil
+	return s.Validate()
 }
 
 func (s *Scenario) GenCyclusInfile() ([]byte, error) {
@@ -133,14 +386,16 @@ func (s *Scenario) GenCyclusInfile() ([]byte, error) {
 		s.Handle = "none"
 	}
 
-	var buf bytes.Buffer
-	tmpl := s.CyclusTmpl
-	t := template.Must(template.ParseFiles(tmpl))
+	if s.tmpl == nil {
+		s.tmpl = template.Must(template.ParseFiles(s.CyclusTmpl))
+	}
 
-	err := t.Execute(&buf, s)
+	var buf bytes.Buffer
+	err := s.tmpl.Execute(&buf, s)
 	if err != nil {
 		return nil, err
 	}
+	ioutil.WriteFile("foo.xml", buf.Bytes(), 0755)
 
 	return buf.Bytes(), nil
 }
@@ -189,222 +444,59 @@ func (s *Scenario) Run(stdout, stderr io.Writer) (dbfile string, simid []byte, e
 	return cycout, simids[0], nil
 }
 
-func (s *Scenario) InitParams(vals []int) {
-	s.Params = make([]Param, len(vals))
-	for i, val := range vals {
-		f := i / s.nPeriods()
-		t := (i%s.nPeriods() + 1) * s.BuildPeriod
-		s.Params[i].Time = t
-		s.Params[i].Proto = s.Facs[f].Proto
-		s.Params[i].N = val
-	}
-
-	for _, fac := range s.Facs {
-		if fac.Ninitial == 0 {
-			continue
-		}
-		s.Params = append(s.Params, Param{Time: 1, Proto: fac.Proto, N: fac.Ninitial})
-	}
-}
-
 func (s *Scenario) VarNames() []string {
-	nperiods := s.nPeriods()
-	names := make([]string, s.Nvars())
+	nperiods := s.nperiods()
+	names := make([]string, s.nvars())
 	for f := range s.Facs {
-		for n := 0; n < nperiods; n++ {
+		for n, t := range s.periodTimes() {
 			i := f*nperiods + n
-			names[i] = fmt.Sprintf("b_f%v_t%v", f, n)
+			names[i] = fmt.Sprintf("f%v_t%v", f, t)
 		}
 	}
 	return names
 }
 
-func (s *Scenario) LowerBounds() *mat64.Dense {
-	return mat64.NewDense(s.Nvars(), 1, nil)
+func (s *Scenario) LowerBounds() []float64 {
+	return make([]float64, s.nvars())
 }
 
-func (s *Scenario) UpperBounds() *mat64.Dense {
-	nperiods := s.nPeriods()
-	up := mat64.NewDense(s.Nvars(), 1, nil)
-	for f, fac := range s.Facs {
-		for n := 0; n < nperiods; n++ {
-			v := (s.MaxPower[n]/fac.Cap + 1)
-			t := s.BuildPeriod + n*s.BuildPeriod
-			if !fac.Available(t) {
-				up.Set(f*nperiods+n, 0, 0)
-			} else if fac.Cap != 0 {
-				if fac.Alive(1, t) {
-					v -= float64(fac.Ninitial)
-				}
-				if v < 0 {
-					v = 0
-				}
-				up.Set(f*nperiods+n, 0, v)
+func (s *Scenario) UpperBounds() []float64 {
+	facs, _ := s.periodFacOrder()
+	up := make([]float64, 0, s.nvars())
+	for _, t := range s.periodTimes() {
+		for j, fac := range facs {
+			if j == 0 { // power var
+				up = append(up, 1)
+			} else if fac.BuildAfter == -1 { // never can build
+				up = append(up, 0)
+			} else if fac.BuildAfter > 0 && fac.BuildAfter > t {
+				up = append(up, 0)
 			} else {
-				up.Set(f*nperiods+n, 0, 10)
+				up = append(up, 1)
 			}
 		}
 	}
 	return up
 }
 
-// SupportConstr builds and returns matrices representing linear inequality
-// constraints with a parameter multiplier matrix A and upper and lower
-// bounds. The constraint expresses that the total number of support
-// facilities (i.e. not reactors) at every timestep must never be more
-// than twice the number of deployed reactors.
-func (s *Scenario) SupportConstr() (low, A, up *mat64.Dense) {
-	nperiods := s.nPeriods()
+func (s *Scenario) timeOf(period int) int {
+	return period*s.BuildPeriod + 1 + s.BuildOffset
+}
 
-	A = mat64.NewDense(nperiods, s.Nvars(), nil)
-	low = mat64.NewDense(nperiods, 1, nil)
-	tmp := make([]float64, len(s.MaxPower))
-	copy(tmp, s.MaxPower)
-	up = mat64.NewDense(nperiods, 1, tmp)
-	up.Apply(func(r, c int, v float64) float64 { return 1e200 }, up)
+func (s *Scenario) periodOf(time int) int {
+	return (time - s.BuildOffset - 1) / s.BuildPeriod
+}
 
-	for t := s.BuildPeriod; t < s.SimDur; t += s.BuildPeriod {
-		for f, fac := range s.Facs {
-			for n := 0; n < nperiods; n++ {
-				if !fac.Alive(n*s.BuildPeriod+1, t) {
-					continue
-				}
-
-				i := f*nperiods + n
-				if fac.Cap == 0 {
-					A.Set(t/s.BuildPeriod-1, i, -1)
-				} else {
-					A.Set(t/s.BuildPeriod-1, i, 2)
-				}
-			}
-		}
+func (s *Scenario) periodTimes() []int {
+	periods := make([]int, s.nperiods())
+	for i := range periods {
+		periods[i] = s.timeOf(i)
 	}
-
-	return low, A, up
+	return periods
 }
 
-// PowerConstr builds and returns matrices representing linear inequality
-// constraints with a parameter multiplier matrix A and upper and lower
-// bounds. The constraint expresses that the total power capacity deployed at
-// every timestep must always be between the given MinPower and MaxPower
-// scenario bounds.
-func (s *Scenario) PowerConstr() (low, A, up *mat64.Dense) {
-	nperiods := s.nPeriods()
-
-	tmpl := make([]float64, len(s.MinPower))
-	tmpu := make([]float64, len(s.MaxPower))
-	copy(tmpl, s.MinPower)
-	copy(tmpu, s.MaxPower)
-	// correct for initially built capacity
-	i := 0
-	for t := s.BuildPeriod; t < s.SimDur; t += s.BuildPeriod {
-		cap := 0.0
-		for _, fac := range s.Facs {
-			if fac.Alive(1, t) {
-				cap += fac.Cap * float64(fac.Ninitial)
-			}
-		}
-		tmpl[i] -= cap
-		tmpu[i] -= cap
-		i++
-	}
-
-	low = mat64.NewDense(nperiods, 1, tmpl)
-	up = mat64.NewDense(nperiods, 1, tmpu)
-	A = mat64.NewDense(nperiods, s.Nvars(), nil)
-
-	for t := s.BuildPeriod; t < s.SimDur; t += s.BuildPeriod {
-		for f, fac := range s.Facs {
-			for n := 1; n <= nperiods; n++ {
-				if fac.Alive(n*s.BuildPeriod, t) {
-					i := f*nperiods + (n - 1)
-					A.Set(t/s.BuildPeriod-1, i, fac.Cap)
-				}
-			}
-		}
-	}
-
-	return low, A, up
-}
-
-// AfterConstr builds and returns matrices representing equality
-// constraints with a parameter multiplier matrix A and upper and lower
-// bounds. The constraint expresses that each facility can only be built after
-// a certain date.
-func (s *Scenario) AfterConstr() (A, target *mat64.Dense) {
-	nperiods := s.nPeriods()
-
-	// count facilities that have build time constraints
-	n := 0
-	for _, fac := range s.Facs {
-		if fac.BuildAfter != 0 {
-			n++
-		}
-	}
-
-	A = mat64.NewDense(n*nperiods, s.Nvars(), nil)
-	target = mat64.NewDense(n*nperiods, 1, nil)
-
-	r := 0
-	for f, fac := range s.Facs {
-		if fac.BuildAfter == 0 {
-			continue
-		}
-		for t := s.BuildPeriod; t < s.SimDur; t += s.BuildPeriod {
-			if !fac.Available(t) {
-				c := f*nperiods + t/s.BuildPeriod - 1
-				A.Set(r, c, 1)
-			}
-			r++
-		}
-	}
-
-	return A, target
-}
-
-func (s *Scenario) IneqConstr() (low, A, up *mat64.Dense) {
-	low, A, up = &mat64.Dense{}, &mat64.Dense{}, &mat64.Dense{}
-	l1, a1, u1 := s.SupportConstr()
-	l2, a2, u2 := s.PowerConstr()
-
-	low.Stack(l1, l2)
-	A.Stack(a1, a2)
-	up.Stack(u1, u2)
-
-	return low, A, up
-}
-
-func (s *Scenario) ConstrMat() (A *mat64.Dense) {
-	_, A, _ = s.IneqConstr()
-	return A
-}
-
-func (s *Scenario) ConstrLow() (low *mat64.Dense) {
-	low, _, _ = s.IneqConstr()
-	return low
-}
-
-func (s *Scenario) ConstrUp() (up *mat64.Dense) {
-	_, _, up = s.IneqConstr()
-	return up
-}
-
-func (s *Scenario) EqConstrMat() (A *mat64.Dense) {
-	A, _ = s.AfterConstr()
-	return A
-}
-
-func (s *Scenario) EqConstrTarget() (target *mat64.Dense) {
-	_, target = s.AfterConstr()
-	return target
-}
-
-func (s *Scenario) Nvars() int {
-	return s.nPeriods() * len(s.Facs)
-}
-
-func (s *Scenario) nPeriods() int {
-	return (s.SimDur - 1) / s.BuildPeriod
+func (s *Scenario) nperiods() int {
+	return (s.SimDur-s.BuildOffset-s.TrailingDur-2)/s.BuildPeriod + 1
 }
 
 func findLine(data []byte, pos int64) (line, col int) {
@@ -423,98 +515,4 @@ func findLine(data []byte, pos int64) (line, col int) {
 		}
 	}
 	return
-}
-
-func (scen *Scenario) CalcObjective(dbfile string, simid []byte) (float64, error) {
-	db, err := sql.Open("sqlite3", dbfile)
-	if err != nil {
-		return 0, err
-	}
-	defer db.Close()
-
-	// add up overnight and operating costs converted to PV(t=0)
-	q1 := `
-		SELECT tl.Time FROM TimeList AS tl
-			INNER JOIN Agents As a ON a.EnterTime <= tl.Time AND (a.ExitTime >= tl.Time OR a.ExitTime IS NULL)
-		WHERE
-			a.SimId = tl.SimId AND a.SimId = ?
-			AND a.Prototype = ?;
-		`
-	q2 := `SELECT EnterTime FROM Agents WHERE SimId = ? AND Prototype = ?`
-
-	totcost := 0.0
-	for _, fac := range scen.Facs {
-		// calc total operating cost
-		rows, err := db.Query(q1, simid, fac.Proto)
-		if err != nil {
-			return 0, err
-		}
-		for rows.Next() {
-			var t int
-			if err := rows.Scan(&t); err != nil {
-				return 0, err
-			}
-			totcost += PV(fac.OpCost, t, scen.Discount)
-		}
-		if err := rows.Err(); err != nil {
-			return 0, err
-		}
-
-		// calc overnight capital cost
-		rows, err = db.Query(q2, simid, fac.Proto)
-		if err != nil {
-			return 0, err
-		}
-		for rows.Next() {
-			var t int
-			if err := rows.Scan(&t); err != nil {
-				return 0, err
-			}
-			totcost += PV(fac.CapitalCost, t, scen.Discount)
-		}
-		if err := rows.Err(); err != nil {
-			return 0, err
-		}
-
-		// add in waste penalty
-		ags, err := query.AllAgents(db, simid, fac.Proto)
-		if err != nil {
-			return 0, err
-		}
-
-		// InvAt uses all agents if no ids are passed - so we need to skip from here
-		if len(ags) == 0 {
-			continue
-		}
-
-		ids := make([]int, len(ags))
-		for i, a := range ags {
-			ids[i] = a.Id
-		}
-
-		for t := 0; t < scen.SimDur; t++ {
-			mat, err := query.InvAt(db, simid, t, ids...)
-			if err != nil {
-				return 0, err
-			}
-			for nuc, qty := range mat {
-				nucstr := fmt.Sprint(nuc)
-				totcost += PV(scen.NuclideCost[nucstr]*float64(qty)*(1-fac.WasteDiscount), t, scen.Discount)
-			}
-		}
-	}
-
-	// normalize to energy produced
-	joules, err := query.EnergyProduced(db, simid, 0, scen.SimDur)
-	if err != nil {
-		return 0, err
-	}
-	mwh := joules / nuc.MWh
-	mult := 1e6 // to get the objective around 0.1 same magnitude as constraint penalties
-	return totcost / (mwh + 1e-30) * mult, nil
-}
-
-func PV(amt float64, nt int, rate float64) float64 {
-	monrate := rate / 12
-	return amt / math.Pow(1+monrate, float64(nt))
 }

@@ -11,6 +11,7 @@ import (
 
 	_ "github.com/mxk/go-sqlite/sqlite3"
 	"github.com/rwcarlsen/cloudlus/cloudlus"
+	"github.com/rwcarlsen/cloudlus/objective"
 	"github.com/rwcarlsen/cloudlus/scen"
 )
 
@@ -38,9 +39,9 @@ func main() {
 	var err error
 	flag.Parse()
 
-	params := make([]int, flag.NArg())
+	params := make([]float64, flag.NArg())
 	for i, s := range flag.Args() {
-		params[i], err = strconv.Atoi(s)
+		params[i], err = strconv.ParseFloat(s, 64)
 		check(err)
 	}
 
@@ -49,10 +50,11 @@ func main() {
 	err = scen.Load(*scenfile)
 	check(err)
 
-	if len(params) == scen.Nvars() {
-		scen.InitParams(params)
-	} else if len(params) != 0 {
-		log.Fatalf("expected %v vars, got %v as args", scen.Nvars(), len(params))
+	if len(params) > 0 {
+		_, err = scen.TransformVars(params)
+		if err != nil {
+			log.Fatal(err)
+		}
 	}
 
 	// perform action
@@ -110,9 +112,7 @@ func submitjob(scen *scen.Scenario, j *cloudlus.Job) {
 
 func runjob(scen *scen.Scenario) {
 	dbfile, simid, err := scen.Run(nil, nil)
-	val, err := scen.CalcObjective(dbfile, simid)
-	check(err)
-
+	val, err := objective.Calc(scen, dbfile, simid)
 	err = ioutil.WriteFile(*out, []byte(fmt.Sprint(val)), 0644)
 	check(err)
 }
