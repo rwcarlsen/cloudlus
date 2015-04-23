@@ -21,6 +21,7 @@ var (
 
 // with no flags specified, compute and run simulation
 func main() {
+	flag.Parse()
 	var err error
 	params := make([]float64, flag.NArg())
 	for i, s := range flag.Args() {
