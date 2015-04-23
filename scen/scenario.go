@@ -10,6 +10,7 @@ import (
 	"math"
 	"os"
 	"os/exec"
+	"sync"
 	"text/template"
 
 	"code.google.com/p/go-uuid/uuid"
@@ -118,6 +119,10 @@ type Scenario struct {
 	// Handle is used internally and does not need to be specified by the
 	// user.
 	Handle string
+
+	// tmpl is a cach for the templated cyclus input file
+	tmpl *template.Template
+	sync.Mutex
 }
 
 func (s *Scenario) reactors() []Facility {
@@ -379,10 +384,13 @@ func (s *Scenario) GenCyclusInfile() ([]byte, error) {
 		s.Handle = "none"
 	}
 
-	var buf bytes.Buffer
-	tmpl := s.CyclusTmpl
-	t := template.Must(template.ParseFiles(tmpl))
+	s.Lock()
+	defer s.Unlock()
+	if s.tmpl == nil {
+		s.tmpl = template.Must(template.ParseFiles(s.CyclusTmpl))
+	}
 
+	var buf bytes.Buffer
 	err := t.Execute(&buf, s)
 	if err != nil {
 		return nil, err
