@@ -206,6 +206,7 @@ func (s *Scenario) TransformVars(vars []float64) (map[string][]Build, error) {
 		shouldhavepower := currpower + toterr
 
 		captobuild := math.Max(minpow-shouldhavepower, 0)
+		captobuild = math.Min(captobuild, maxpow-shouldhavepower)
 		powerrange := maxpow - (shouldhavepower + captobuild)
 		captobuild += powervar * powerrange
 

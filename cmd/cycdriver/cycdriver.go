@@ -16,12 +16,11 @@ import (
 )
 
 var (
-	scenfile  = flag.String("scen", "scenario.json", "file containing problem scenification")
-	addr      = flag.String("addr", "", "address to submit jobs to (otherwise, run locally)")
-	out       = flag.String("out", "out.txt", "name of output file for the remote job")
-	obj       = flag.Bool("obj", false, "true to run job and calculate objective (i.e. workers use this flag)")
-	gen       = flag.Bool("gen", false, "true to just print out job file without submitting")
-	transform = flag.Bool("transform", false, "print the deployment schedule form of the passed variables")
+	scenfile = flag.String("scen", "scenario.json", "file containing problem scenification")
+	addr     = flag.String("addr", "", "address to submit jobs to (otherwise, run locally)")
+	out      = flag.String("out", "out.txt", "name of output file for the remote job")
+	obj      = flag.Bool("obj", false, "true to run job and calculate objective (i.e. workers use this flag)")
+	gen      = flag.Bool("gen", false, "true to just print out job file without submitting")
 )
 
 const tmpDir = "cyctmp"
@@ -56,13 +55,6 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
-	}
-
-	if *transform {
-		for _, b := range scen.Builds {
-			fmt.Printf("%v t%v %v\n", b.Proto, b.Time, b.N)
-		}
-		return
 	}
 
 	// perform action
