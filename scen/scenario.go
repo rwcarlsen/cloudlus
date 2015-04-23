@@ -206,7 +206,6 @@ func (s *Scenario) TransformVars(vars []float64) (map[string][]Build, error) {
 		shouldhavepower := currpower + toterr
 
 		captobuild := math.Max(minpow-shouldhavepower, 0)
-		captobuild = math.Min(captobuild, maxpow-shouldhavepower)
 		powerrange := maxpow - (shouldhavepower + captobuild)
 		captobuild += powervar * powerrange
 
@@ -222,6 +221,7 @@ func (s *Scenario) TransformVars(vars []float64) (map[string][]Build, error) {
 
 				caperr := caperror[fac.Proto]
 				wantcap := facfrac*captobuild + caperr
+				wantcap = math.Min(wantcap, maxpow-currpower)
 				nbuild := int(math.Max(0, math.Floor(wantcap/fac.Cap+0.5)))
 				caperror[fac.Proto] = wantcap - float64(nbuild)*fac.Cap
 
@@ -245,6 +245,7 @@ func (s *Scenario) TransformVars(vars []float64) (map[string][]Build, error) {
 
 		caperr := caperror[fac.Proto]
 		wantcap := facfrac*captobuild + caperr
+		wantcap = math.Min(wantcap, maxpow-currpower)
 		nbuild := int(math.Max(0, math.Floor(wantcap/fac.Cap+0.5)))
 		caperror[fac.Proto] = wantcap - float64(nbuild)*fac.Cap
 
