@@ -8,6 +8,7 @@ import (
 	"log"
 	"strconv"
 	"strings"
+	"time"
 
 	_ "github.com/mxk/go-sqlite/sqlite3"
 	"github.com/rwcarlsen/cloudlus/cloudlus"
@@ -79,6 +80,7 @@ func buildjob(scen *scen.Scenario) *cloudlus.Job {
 	check(err)
 
 	j := cloudlus.NewJobCmd("cycdriver", "-obj", "-out", *out, "-scen", *scenfile)
+	j.Timeout = 2 * time.Hour
 	j.AddInfile(scen.CyclusTmpl, tmpldata)
 	j.AddInfile(*scenfile, scendata)
 	j.AddOutfile(*out)

@@ -145,7 +145,7 @@ func (j *Job) Execute() {
 		}
 		if !approved {
 			j.Status = StatusFailed
-			fmt.Fprintf(multierr, "'%v' is not a white-listed command", j.Cmd[0])
+			fmt.Fprintf(multierr, "'%v' is not a white-listed command in %v", j.Cmd[0], j.whitelist)
 			return
 		}
 	}
