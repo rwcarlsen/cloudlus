@@ -168,6 +168,7 @@ func buildIter(lb, ub []float64) (optim.Method, *optim.CacheEvaler) {
 		swarm.DB(db),
 	)
 	return pattern.New(points[0],
+		pattern.ResetStep(.001),
 		pattern.Evaler(ev),
 		pattern.SearchMethod(swarm, pattern.Share),
 		pattern.DB(db),
