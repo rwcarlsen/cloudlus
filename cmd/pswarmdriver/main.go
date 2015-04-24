@@ -36,6 +36,7 @@ var (
 	runlog       = flag.String("runlog", "run.log", "file to log local cyclus run output")
 	maxeval      = flag.Int("maxeval", 50000, "max number of objective evaluations")
 	maxiter      = flag.Int("maxiter", 500, "max number of optimizer iterations")
+	pollrandn    = flag.Int("pollrandn", 0, "use `n` random direction polling")
 	maxnoimprove = flag.Int("maxnoimprove", 100, "max iterations with no objective improvement(zero -> infinite)")
 	dbname       = flag.String("db", "pswarm.sqlite", "name for database containing optimizer work")
 )
@@ -170,6 +171,7 @@ func buildIter(lb, ub []float64) (optim.Method, *optim.CacheEvaler) {
 	return pattern.New(points[0],
 		pattern.ResetStep(.001),
 		pattern.Evaler(ev),
+		pattern.PollRandN(*pollrandn),
 		pattern.SearchMethod(swarm, pattern.Share),
 		pattern.DB(db),
 	), ev
