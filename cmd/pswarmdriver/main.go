@@ -207,7 +207,7 @@ func buildjob(scen *scen.Scenario) *cloudlus.Job {
 	check(err)
 
 	j := cloudlus.NewJobCmd("cycdriver", "-obj", "-out", outfile, "-scen", *scenfile)
-	j.Timeout = 2 * time.Hour
+	j.Timeout = 90 * time.Minute
 	j.AddInfile(scen.CyclusTmpl, tmpldata)
 	j.AddInfile(*scenfile, scendata)
 	j.AddOutfile(outfile)
