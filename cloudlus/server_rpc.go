@@ -1,10 +1,13 @@
 package cloudlus
 
+import "time"
+
 type RPC struct {
 	s *Server
 }
 
 func (r *RPC) Heartbeat(b Beat, unused *int) error {
+	b.Time = time.Now()
 	r.s.beat <- b
 	return nil
 }
