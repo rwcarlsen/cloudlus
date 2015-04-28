@@ -1,9 +1,10 @@
 <simulation>
   <schematype>flat</schematype>
   <control>
-    <duration>10</duration>
+    <duration>2400</duration>
     <startmonth>1</startmonth>
     <startyear>2000</startyear>
+    <decay>never</decay>
   </control>
 
   <archetypes>
@@ -24,6 +25,9 @@
     <spec><lib>agents</lib><name>Prey</name></spec>
     <spec><lib>agents</lib><name>Sink</name><alias>Sink2</alias></spec>
     <spec><lib>agents</lib><name>Source</name><alias>Source2</alias></spec>
+
+    <spec> <lib>rwc</lib> <name>Storage</name> </spec>
+    <spec> <lib>rwc</lib> <name>FleetReactor</name> </spec>
   </archetypes>
 
   <prototype>
@@ -40,65 +44,10 @@
   <agent><prototype>src</prototype><name>src1</name></agent>
 
   <recipe>
-    <name>lwr_fresh_fuel</name>
-    <basis>mass</basis>
-    <nuclide> <id>922350000</id><comp>0.04</comp></nuclide>
-    <nuclide><id>922380000</id><comp>0.96</comp></nuclide>
-  </recipe>
-
-  <recipe>
-    <name>dummy</name>
-    <basis>mass</basis>
-    <nuclide> <id>922350000</id><comp>1.0</comp></nuclide>
-  </recipe>
-
-  <recipe>
     <name>depleted_u</name>
     <basis>mass</basis>
-    <nuclide> <id>922350000</id><comp>0.003</comp></nuclide>
-    <nuclide><id>922380000</id><comp>0.997</comp></nuclide>
+    <nuclide> <id>U235</id><comp>0.0025</comp></nuclide>
+    <nuclide><id>U238</id><comp>0.9975</comp></nuclide>
   </recipe>
-
-  <recipe>
-    <name>lwr_mox_fuel</name>
-    <basis>mass</basis>
-    <nuclide> <id>922350000</id><comp>0.0027381</comp></nuclide>
-    <nuclide> <id>922380000</id><comp>0.9099619</comp></nuclide>
-    <nuclide> <id>942380000</id> <comp>0.001746</comp> </nuclide>
-    <nuclide> <id>942390000</id> <comp>0.045396</comp> </nuclide>
-    <nuclide> <id>942400000</id> <comp>0.020952</comp> </nuclide>
-    <nuclide> <id>942410000</id> <comp>0.013095</comp> </nuclide>
-    <nuclide> <id>942420000</id> <comp>0.005238</comp> </nuclide>
-  </recipe>
-
-  <recipe>
-    <name>mox_spent_fuel</name>
-    <basis>mass</basis>
-    <nuclide> <id>922350000</id><comp>0.0017381</comp></nuclide>
-    <nuclide> <id>922380000</id><comp>0.90</comp></nuclide>
-    <nuclide> <id>942380000</id> <comp>0.001746</comp> </nuclide>
-    <nuclide> <id>942390000</id> <comp>0.0134</comp> </nuclide>
-    <nuclide> <id>942400000</id> <comp>0.020952</comp> </nuclide>
-    <nuclide> <id>942410000</id> <comp>0.013095</comp> </nuclide>
-    <nuclide> <id>942420000</id> <comp>0.005238</comp> </nuclide>
-  </recipe>
-
-  <recipe>
-    <name>lwr_spent_fuel</name>
-    <basis>mass</basis>
-    <nuclide> <id>922350000</id> <comp>156.729</comp> </nuclide>
-    <nuclide> <id>922360000</id> <comp>102.103</comp> </nuclide>
-    <nuclide> <id>922380000</id> <comp>18280.324</comp> </nuclide>
-    <nuclide> <id>932370000</id> <comp>13.656</comp> </nuclide>
-    <nuclide> <id>942380000</id> <comp>5.043</comp> </nuclide>
-    <nuclide> <id>942390000</id> <comp>106.343</comp> </nuclide>
-    <nuclide> <id>942400000</id> <comp>41.357</comp> </nuclide>
-    <nuclide> <id>942410000</id> <comp>36.477</comp> </nuclide>
-    <nuclide> <id>942420000</id> <comp>15.387</comp> </nuclide>
-    <nuclide> <id>952410000</id> <comp>1.234</comp> </nuclide>
-    <nuclide> <id>952430000</id> <comp>3.607</comp> </nuclide>
-    <nuclide> <id>962440000</id> <comp>0.431</comp> </nuclide>
-    <nuclide> <id>962450000</id> <comp>1.263</comp> </nuclide>
-  </recipe> 
 
 </simulation>
