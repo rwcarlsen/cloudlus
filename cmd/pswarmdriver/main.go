@@ -161,7 +161,7 @@ func buildIter(lb, ub []float64) (optim.Method, *optim.CacheEvaler) {
 	points := optim.RandPop(n, lb, ub)
 	fmt.Printf("swarming with %v particles\n", n)
 
-	ev := optim.NewCacheEvaler(optim.ParallelEvaler{})
+	ev := optim.NewCacheEvaler(optim.ParallelEvaler{MinSuccessFrac: .85})
 	swarm := swarm.New(
 		swarm.NewPopulation(points, vmax),
 		swarm.Evaler(ev),
