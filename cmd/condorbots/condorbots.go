@@ -19,15 +19,16 @@ import (
 )
 
 var (
+	addr    = flag.String("addr", "", "ip:port of cloudlus server")
+	run     = flag.String("run", "", "name of script for condor to run")
+	n       = flag.Int("n", 0, "number of bots to deploy")
 	keyfile = flag.String("keyfile", filepath.Join(os.Getenv("HOME"), ".ssh/id_rsa"), "path to ssh private key file")
 	user    = flag.String("user", "rcarlsen", "condor (and via node) ssh username")
 	dst     = flag.String("dst", "submit-3.chtc.wisc.edu:22", "condor submit node URI")
 	via     = flag.String("via", "best-tux.cae.wisc.edu:22", "intermediate server URI (if needed)")
 	cpy     = flag.Bool("copy", false, "true to automatically copy all needed files to submit node")
 	local   = flag.Bool("local", false, "save local copies of generated files")
-	run     = flag.String("run", "", "name of script for condor to run")
-	addr    = flag.String("addr", "", "ip:port of cloudlus server")
-	n       = flag.Int("n", 0, "number of bots to deploy")
+	wkflags = flag.String("workflags", "", "flags to be passed straight to cloudlus worker invocation")
 )
 
 type CondorConfig struct {
@@ -57,7 +58,7 @@ const runfilename = "CLOUDLUS_runfile.sh"
 const runfile = `#!/bin/bash
 {{with .Runfile}}bash ./{{.}}{{end}}
 chmod a+x ./cloudlus
-./cloudlus -addr {{.Addr}} work -maxidle 150m
+./cloudlus -addr {{.Addr}} work {{.Flags}}
 `
 
 var condortmpl = template.Must(template.New("submitfile").Parse(condorfile))
@@ -101,7 +102,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	err = runtmpl.Execute(&runbuf, struct{ Runfile, Addr string }{*run, *addr})
+	err = runtmpl.Execute(&runbuf, struct{ Runfile, Addr, Flags string }{*run, *addr, *wkflags})
 	if err != nil {
 		log.Fatal(err)
 	}

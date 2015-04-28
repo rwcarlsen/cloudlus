@@ -29,15 +29,16 @@ import (
 
 var (
 	scenfile     = flag.String("scen", "scenario.json", "file containing problem scenification")
-	npar         = flag.Int("npar", 0, "number of particles (0 => choose automatically)")
 	addr         = flag.String("addr", "", "address to submit jobs to (otherwise, run locally)")
+	npar         = flag.Int("npar", 0, "number of particles (0 => choose automatically)")
 	seed         = flag.Int("seed", 1, "seed for random number generator")
-	objlog       = flag.String("objlog", "obj.log", "file to log unpenalized objective values")
-	runlog       = flag.String("runlog", "run.log", "file to log local cyclus run output")
 	maxeval      = flag.Int("maxeval", 50000, "max number of objective evaluations")
 	maxiter      = flag.Int("maxiter", 500, "max number of optimizer iterations")
 	pollrandn    = flag.Int("pollrandn", 0, "use `n` random direction polling")
 	maxnoimprove = flag.Int("maxnoimprove", 100, "max iterations with no objective improvement(zero -> infinite)")
+	timeout      = flag.Duration("timeout", 120*time.Minute, "max time before remote function eval times out")
+	objlog       = flag.String("objlog", "obj.log", "file to log unpenalized objective values")
+	runlog       = flag.String("runlog", "run.log", "file to log local cyclus run output")
 	dbname       = flag.String("db", "pswarm.sqlite", "name for database containing optimizer work")
 )
 
@@ -161,7 +162,7 @@ func buildIter(lb, ub []float64) (optim.Method, *optim.CacheEvaler) {
 	points := optim.RandPop(n, lb, ub)
 	fmt.Printf("swarming with %v particles\n", n)
 
-	ev := optim.NewCacheEvaler(optim.ParallelEvaler{MinSuccessFrac: .85})
+	ev := optim.NewCacheEvaler(optim.ParallelEvaler{ContinueOnErr: true})
 	swarm := swarm.New(
 		swarm.NewPopulation(points, vmax),
 		swarm.Evaler(ev),
@@ -207,7 +208,7 @@ func buildjob(scen *scen.Scenario) *cloudlus.Job {
 	check(err)
 
 	j := cloudlus.NewJobCmd("cycdriver", "-obj", "-out", outfile, "-scen", *scenfile)
-	j.Timeout = 90 * time.Minute
+	j.Timeout = *timeout
 	j.AddInfile(scen.CyclusTmpl, tmpldata)
 	j.AddInfile(*scenfile, scendata)
 	j.AddOutfile(outfile)
