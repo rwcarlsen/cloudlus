@@ -269,18 +269,36 @@ func (s *Server) dispatcher() {
 			} else {
 				s.log.Printf("[FETCH] job %v (worker %v)\n", j.Id, req.WorkerId)
 				s.jobinfo[j.Id] = NewBeat(req.WorkerId, j.Id)
+				j.Fetched = time.Now()
 				j.Status = StatusRunning
 				s.alljobs.Put(j)
 			}
 
 			req.Ch <- j
 		case b := <-s.beat:
-			// make sure that this job hasn't been reassigned to another worker
 			oldb := s.jobinfo[b.JobId]
+			j, err := s.alljobs.Get(b.JobId)
+			if err != nil {
+				s.log.Printf("[BEAT] error - job %v not found in db\n", b.JobId)
+				continue
+			}
+			kill := time.Now().Sub(j.Fetched) > j.Timeout
+
+			// make sure that this job hasn't been reassigned to another worker
 			if oldb.WorkerId == b.WorkerId {
 				s.log.Printf("[BEAT] job %v (worker %v)\n", b.JobId, b.WorkerId)
 				s.jobinfo[b.JobId] = b
+			} else {
+				// job has been reassigned
+				kill = true
 			}
+
+			if kill {
+				j.Status = StatusFailed
+				delete(s.jobinfo, j.Id)
+				s.alljobs.Put(j)
+			}
+			b.kill <- kill
 		}
 	}
 }

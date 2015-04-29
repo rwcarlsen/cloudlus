@@ -18,6 +18,7 @@ type Beat struct {
 	Time     time.Time
 	WorkerId WorkerId
 	JobId    JobId
+	kill     chan bool
 }
 
 func NewBeat(w WorkerId, j JobId) Beat {

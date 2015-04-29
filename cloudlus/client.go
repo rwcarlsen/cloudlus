@@ -23,18 +23,21 @@ func Dial(addr string) (*Client, error) {
 	return &Client{client: client}, nil
 }
 
-func (c *Client) Heartbeat(w WorkerId, j JobId, done chan struct{}) {
+func (c *Client) Heartbeat(w WorkerId, j JobId, done chan struct{}) (kill chan bool) {
+	kill = make(chan bool, 1)
 	go func() {
-		var unused int
 		tick := time.NewTicker(beatInterval)
 		defer tick.Stop()
-
 		for {
 			select {
 			case <-tick.C:
-				err := c.client.Call("RPC.Heartbeat", NewBeat(w, j), &unused)
+				var killval bool
+				err := c.client.Call("RPC.Heartbeat", NewBeat(w, j), &killval)
 				if err != nil {
 					log.Print(err)
+					return
+				} else if killval {
+					kill <- true
 					return
 				}
 			case <-done:
@@ -42,6 +45,7 @@ func (c *Client) Heartbeat(w WorkerId, j JobId, done chan struct{}) {
 			}
 		}
 	}()
+	return kill
 }
 
 func (c *Client) Retrieve(j JobId) (*Job, error) {

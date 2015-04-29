@@ -95,13 +95,13 @@ func (w *Worker) dojob() (wait bool, err error) {
 
 	done := make(chan struct{})
 	defer close(done)
-	client.Heartbeat(w.Id, j.Id, done)
+	kill := client.Heartbeat(w.Id, j.Id, done)
 
 	// run job
 	if w.nolog {
 		j.log = devnull
 	}
-	j.Execute()
+	j.Execute(kill)
 	j.WorkerId = w.Id
 	j.Infiles = nil // don't need to send back input files
 

@@ -12,6 +12,36 @@ const testaddr = "127.0.0.1:45687"
 
 const workerpoll = 1 * time.Second
 
+func TestRemoteKill(t *testing.T) {
+	kill1 := make(chan struct{})
+	w1 := &foreverWorker{ServerAddr: testaddr}
+	go w1.Run(kill1)
+
+	// empty path for in-memory db
+	db, _ := NewDB("", dblimit)
+	s := NewServer(testaddr, testaddr, db)
+	go s.ListenAndServe()
+	defer s.Close()
+
+	// submit job
+	j := NewJobCmd("sleep", "100")
+	j.Timeout = 3 * time.Second
+	s.Start(j, nil)
+
+	// wait for it to be running
+	<-time.After(2 * workerpoll)
+
+	if !w1.running {
+		t.Errorf("foreverWorker is not running, but should be")
+	}
+
+	<-time.After(beatLimit + 2*time.Second)
+
+	if w1.running {
+		t.Errorf("worker is still running, but should have been killed by the server")
+	}
+}
+
 func TestWorkerFailure(t *testing.T) {
 	kill1 := make(chan struct{})
 	kill2 := make(chan struct{})
@@ -99,7 +129,7 @@ func (w *goodWorker) dojob() error {
 
 	// run job
 	j.Whitelist("date")
-	j.Execute()
+	j.Execute(nil)
 	j.WorkerId = w.Id
 	j.Infiles = nil // don't need to send back input files
 
@@ -146,4 +176,62 @@ func (w *badWorker) dojob() error {
 	}
 
 	return nil
+}
+
+type foreverWorker struct {
+	Id         WorkerId
+	ServerAddr string
+	running    bool
+}
+
+func (w *foreverWorker) Run(kill chan struct{}) error {
+	uid := uuid.NewRandom()
+	copy(w.Id[:], uid)
+
+	for {
+		select {
+		case <-kill:
+			return nil
+		default:
+			err := w.dojob()
+			if err != nil {
+				log.Print(err)
+			}
+			<-time.After(workerpoll)
+		}
+	}
+}
+
+func (w *foreverWorker) dojob() error {
+	w.running = true
+	defer func() { w.running = false }()
+
+	client, err := Dial(w.ServerAddr)
+	if err != nil {
+		return err
+	}
+	defer client.Close()
+
+	tmp := &Worker{Id: w.Id}
+
+	j, err := client.Fetch(tmp)
+	if err == nojoberr {
+		return nil
+	} else if err != nil {
+		return err
+	}
+
+	// sneakily increase timeout
+	j.Timeout = 1000 * time.Hour
+	done := make(chan struct{})
+	defer close(done)
+	kill := client.Heartbeat(w.Id, j.Id, done)
+
+	// run job
+	j.Whitelist("sleep")
+	j.Execute(kill)
+	j.WorkerId = w.Id
+	j.Infiles = nil // don't need to send back input files
+
+	return client.Push(tmp, j)
 }

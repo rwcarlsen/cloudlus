@@ -6,9 +6,11 @@ type RPC struct {
 	s *Server
 }
 
-func (r *RPC) Heartbeat(b Beat, unused *int) error {
+func (r *RPC) Heartbeat(b Beat, kill *bool) error {
 	b.Time = time.Now()
+	b.kill = make(chan bool)
 	r.s.beat <- b
+	*kill = <-b.kill
 	return nil
 }
 

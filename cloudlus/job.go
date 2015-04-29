@@ -34,6 +34,7 @@ type Job struct {
 	Stderr    string
 	Timeout   time.Duration
 	Submitted time.Time
+	Fetched   time.Time
 	Started   time.Time
 	Finished  time.Time
 	WorkerId  WorkerId
@@ -112,7 +113,7 @@ func (j *Job) Size() int64 {
 	return int64(n) + 12*8
 }
 
-func (j *Job) Execute() {
+func (j *Job) Execute(kill chan bool) {
 	if j.log == nil {
 		j.log = os.Stdout
 	}
@@ -182,7 +183,13 @@ func (j *Job) Execute() {
 	case <-time.After(j.Timeout):
 		cmd.Process.Kill()
 		j.Status = StatusFailed
-		fmt.Fprintf(multierr, "\nJob timed out after %v", j.Timeout)
+		fmt.Fprintf(multierr, "\nJob timed out after %v\n", j.Timeout)
+		<-done
+		return
+	case <-kill:
+		cmd.Process.Kill()
+		j.Status = StatusFailed
+		fmt.Fprintf(multierr, "\nJob was terminated by server\n")
 		<-done
 		return
 	case <-done:
