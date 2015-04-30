@@ -183,7 +183,7 @@ func (j *Job) Execute(kill chan bool) {
 	case <-time.After(j.Timeout):
 		cmd.Process.Kill()
 		j.Status = StatusFailed
-		fmt.Fprintf(multierr, "\nJob timed out after %v\n", j.Timeout)
+		fmt.Fprintf(multierr, "\nJob timed out after %v\n", time.Now().Sub(j.Started))
 		<-done
 		return
 	case <-kill:
