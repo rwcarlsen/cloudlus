@@ -295,6 +295,15 @@ func (s *Server) dispatcher() {
 
 			if kill {
 				j.Status = StatusFailed
+				s.Stats.NFailed++
+
+				if ch, ok := s.submitchans[j.Id]; ok {
+					ch <- j
+					close(ch)
+					delete(s.submitchans, j.Id)
+				}
+
+				s.alljobs.Put(j)
 				delete(s.jobinfo, j.Id)
 				s.alljobs.Put(j)
 			}
