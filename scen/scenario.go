@@ -218,7 +218,7 @@ func (s *Scenario) TransformVars(vars []float64) (map[string][]Build, error) {
 		for j = 1; j < s.nvarsPerPeriod(); j++ {
 			val := vars[i*s.nvarsPerPeriod()+j]
 			fac := varfacs[j]
-			if fac.Cap > 0 {
+			if fac.Cap > 0 && fac.Available(t) {
 				facfrac := (1 - reactorfrac) * val
 				reactorfrac += facfrac
 
