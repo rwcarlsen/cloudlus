@@ -162,7 +162,12 @@ func buildIter(lb, ub []float64) (optim.Method, *optim.CacheEvaler) {
 	points := optim.RandPop(n, lb, ub)
 	fmt.Printf("swarming with %v particles\n", n)
 
-	ev := optim.NewCacheEvaler(optim.ParallelEvaler{ContinueOnErr: true})
+	parev := optim.ParallelEvaler{ContinueOnErr: true}
+	if *addr == "" {
+		parev.NConcurrent = 8
+	}
+	ev := optim.NewCacheEvaler(parev)
+
 	swarm := swarm.New(
 		swarm.NewPopulation(points, vmax),
 		swarm.Evaler(ev),
@@ -193,6 +198,7 @@ func (o *obj) Objective(v []float64) (float64, error) {
 		if err != nil {
 			return math.Inf(1), err
 		}
+		defer os.Remove(dbfile)
 
 		return objective.Calc(scencopy, dbfile, simid)
 	} else {
