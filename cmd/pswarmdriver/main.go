@@ -171,6 +171,7 @@ func buildIter(lb, ub []float64) (optim.Method, *optim.CacheEvaler) {
 	)
 	return pattern.New(points[0],
 		pattern.ResetStep(.001),
+		pattern.NsuccessGrow(2),
 		pattern.Evaler(ev),
 		pattern.PollRandN(*pollrandn),
 		pattern.SearchMethod(swarm, pattern.Share),

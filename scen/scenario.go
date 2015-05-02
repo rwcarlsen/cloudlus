@@ -189,6 +189,17 @@ func (s *Scenario) TransformVars(vars []float64) (map[string][]Build, error) {
 		return nil, fmt.Errorf("wrong number of vars: want %v, got %v", s.nvars(), len(vars))
 	}
 
+	up := s.UpperBounds()
+	low := s.LowerBounds()
+	for i, v := range vars {
+		if v < low[i] {
+			vars[i] = low[i]
+		}
+		if v > up[i] {
+			vars[i] = up[i]
+		}
+	}
+
 	builds := map[string][]Build{}
 	for _, b := range s.StartBuilds {
 		builds[b.Proto] = append(builds[b.Proto], b)
@@ -244,28 +255,30 @@ func (s *Scenario) TransformVars(vars []float64) (map[string][]Build, error) {
 
 		// handle last (implicit) reactor
 		fac := implicitreactor
-		facfrac := (1 - reactorfrac)
+		if fac.Available(t) {
+			facfrac := (1 - reactorfrac)
 
-		caperr := caperror[fac.Proto]
-		wantcap := facfrac*captobuild + caperr
-		wantcap = math.Min(wantcap, maxpow-currpower)
-		nbuild := int(math.Max(0, math.Floor(wantcap/fac.Cap+0.5)))
-		caperror[fac.Proto] = wantcap - float64(nbuild)*fac.Cap
+			caperr := caperror[fac.Proto]
+			wantcap := facfrac*captobuild + caperr
+			wantcap = math.Min(wantcap, maxpow-currpower)
+			nbuild := int(math.Max(0, math.Floor(wantcap/fac.Cap+0.5)))
+			caperror[fac.Proto] = wantcap - float64(nbuild)*fac.Cap
 
-		if nbuild > 0 {
-			builds[fac.Proto] = append(builds[fac.Proto], Build{
-				Time:  t,
-				Proto: fac.Proto,
-				N:     nbuild,
-				fac:   fac,
-			})
+			if nbuild > 0 {
+				builds[fac.Proto] = append(builds[fac.Proto], Build{
+					Time:  t,
+					Proto: fac.Proto,
+					N:     nbuild,
+					fac:   fac,
+				})
+			}
 		}
 
 		// handle other facilities
 		for ; j < s.nvarsPerPeriod(); j++ {
 			facfrac := vars[i*s.nvarsPerPeriod()+j]
 			fac := varfacs[j]
-			if fac.BuildAfter < 0 { // skip
+			if !fac.Available(t) { // skip
 				continue
 			}
 
