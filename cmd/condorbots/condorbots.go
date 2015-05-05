@@ -22,6 +22,8 @@ var (
 	addr    = flag.String("addr", "", "ip:port of cloudlus server")
 	run     = flag.String("run", "", "name of script for condor to run")
 	n       = flag.Int("n", 0, "number of bots to deploy")
+	ncpu    = flag.Int("ncpu", 1, "minimum number of cpus required per worker job")
+	mem     = flag.Int("mem", 512, "minimum `MiB` of memory required per worker job")
 	keyfile = flag.String("keyfile", filepath.Join(os.Getenv("HOME"), ".ssh/id_rsa"), "path to ssh private key file")
 	user    = flag.String("user", "rcarlsen", "condor (and via node) ssh username")
 	dst     = flag.String("dst", "submit-3.chtc.wisc.edu:22", "condor submit node URI")
@@ -35,6 +37,8 @@ type CondorConfig struct {
 	Executable string
 	Infiles    string
 	N          int
+	NCPU       int
+	Memory     int
 }
 
 const condorname = "condor.submit"
@@ -48,6 +52,8 @@ when_to_transfer_output = on_exit
 output = worker.$(PROCESS).output
 error = worker.$(PROCESS).error
 log = workers.log
+request_cpus = {{.NCPU}}
+request_memory = {{.Memory}}
 requirements = OpSys == "LINUX" && Arch == "x86_64" && (OpSysAndVer =?= "SL6")
 
 queue {{.N}}
@@ -96,7 +102,14 @@ func main() {
 	}
 
 	// build condor submit file and condor submit executable script
-	cc := CondorConfig{runfilename, strings.Join(dstfiles, ","), *n}
+	cc := CondorConfig{
+		runfilename,
+		strings.Join(dstfiles, ","),
+		*n,
+		*ncpu,
+		*mem,
+	}
+
 	var condorbuf, runbuf bytes.Buffer
 	err = condortmpl.Execute(&condorbuf, cc)
 	if err != nil {
