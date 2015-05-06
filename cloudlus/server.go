@@ -188,6 +188,7 @@ func (s *Server) dispatcher() {
 			for jid, b := range s.jobinfo {
 				if now.Sub(b.Time) > beatLimit {
 					j, err := s.alljobs.Get(jid)
+					delete(s.jobinfo, jid)
 					if err != nil {
 						log.Printf("cannot find job %v for reassignment", jid)
 					} else {
@@ -195,7 +196,6 @@ func (s *Server) dispatcher() {
 						s.log.Printf("[REQUEUE] job %v\n", jid)
 						j.Status = StatusQueued
 						s.queue = append([]JobId{j.Id}, s.queue...)
-						delete(s.jobinfo, jid)
 						s.alljobs.Put(j)
 					}
 				}
@@ -276,13 +276,21 @@ func (s *Server) dispatcher() {
 
 			req.Ch <- j
 		case b := <-s.beat:
-			oldb := s.jobinfo[b.JobId]
-			j, err := s.alljobs.Get(b.JobId)
-			if err != nil {
-				s.log.Printf("[BEAT] error - job %v not found in db\n", b.JobId)
-				continue
+			var err error
+			oldb, ok := s.jobinfo[b.JobId]
+			kill := false
+			var j *Job
+			if ok {
+				j, err = s.alljobs.Get(b.JobId)
+				if err != nil {
+					s.log.Printf("[BEAT] error - job %v not found in db\n", b.JobId)
+					continue
+				}
+				kill = time.Now().Sub(j.Fetched) > j.Timeout
+			} else {
+				// job was completed by another worker already
+				kill = true
 			}
-			kill := time.Now().Sub(j.Fetched) > j.Timeout
 
 			// make sure that this job hasn't been reassigned to another worker
 			if oldb.WorkerId == b.WorkerId {
@@ -293,7 +301,7 @@ func (s *Server) dispatcher() {
 				kill = true
 			}
 
-			if kill {
+			if kill && j != nil {
 				j.Status = StatusFailed
 				s.Stats.NFailed++
 
@@ -303,7 +311,6 @@ func (s *Server) dispatcher() {
 					delete(s.submitchans, j.Id)
 				}
 
-				s.alljobs.Put(j)
 				delete(s.jobinfo, j.Id)
 				s.alljobs.Put(j)
 			}

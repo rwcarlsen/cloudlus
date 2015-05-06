@@ -338,8 +338,12 @@ func (s *Scenario) Validate() error {
 		return fmt.Errorf("MaxPower length %v != MinPower length %v", max, min)
 	}
 
-	if s.tmpl == nil {
-		s.tmpl = template.Must(template.ParseFiles(s.CyclusTmpl))
+	var err error
+	if s.tmpl == nil && s.CyclusTmpl != "" {
+		s.tmpl, err = template.ParseFiles(s.CyclusTmpl)
+		if err != nil {
+			return err
+		}
 	}
 
 	np := s.nperiods()
