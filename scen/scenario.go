@@ -376,6 +376,14 @@ func (s *Scenario) Validate() error {
 		s.StartBuilds[i].fac = fac
 	}
 
+	for i, p := range s.Builds {
+		fac, ok := protos[p.Proto]
+		if !ok {
+			return fmt.Errorf("Build prototype '%v' is not defined in Facs", p.Proto)
+		}
+		s.Builds[i].fac = fac
+	}
+
 	return nil
 }
 
