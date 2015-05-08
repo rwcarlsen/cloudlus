@@ -298,7 +298,8 @@ func (s *Scenario) TransformVars(vars []float64) (map[string][]Build, error) {
 	}
 
 	s.Builds = nil
-	for _, blds := range builds {
+	for _, fac := range s.Facs {
+		blds := builds[fac.Proto]
 		for _, b := range blds {
 			s.Builds = append(s.Builds, b)
 		}
