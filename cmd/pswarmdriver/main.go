@@ -93,7 +93,7 @@ func main() {
 	// create and initialize solver
 	lb := scen.LowerBounds()
 	ub := scen.UpperBounds()
-	it, ev := buildIter(lb, ub)
+	it, _ := buildIter(lb, ub)
 
 	obj := &optim.ObjectiveLogger{Obj: &obj{scen, f4}, W: f1}
 
@@ -118,7 +118,7 @@ func main() {
 		f1.Close()
 		f4.Close()
 		fmt.Println("\n*** optimizer killed early ***")
-		final(solv, ev.UseCount, start)
+		final(solv, start)
 		os.Exit(1)
 	}()
 
@@ -127,13 +127,13 @@ func main() {
 		fmt.Printf("Iter %v (%v evals):  %v\n", solv.Niter(), solv.Neval(), solv.Best())
 	}
 
-	final(solv, ev.UseCount, start)
+	final(solv, start)
 }
 
-func final(s *optim.Solver, cache int, start time.Time) {
-	_, err := db.Exec("CREATE TABLE IF NOT EXISTS optiminfo (start INTEGER,end INTEGER,niter INTEGER,neval INTEGER,ncacheuses INTEGER);")
+func final(s *optim.Solver, start time.Time) {
+	_, err := db.Exec("CREATE TABLE IF NOT EXISTS optiminfo (start INTEGER,end INTEGER,niter INTEGER,neval INTEGER);")
 	check(err)
-	_, err = db.Exec("INSERT INTO optiminfo VALUES (?,?,?,?,?);", start, time.Now(), s.Niter(), s.Neval(), cache)
+	_, err = db.Exec("INSERT INTO optiminfo VALUES (?,?,?,?,?);", start, time.Now(), s.Niter(), s.Neval())
 	check(err)
 
 	if err := s.Err(); err != nil {
@@ -143,10 +143,9 @@ func final(s *optim.Solver, cache int, start time.Time) {
 	fmt.Printf("best: %v\n", s.Best())
 	fmt.Printf("%v optimizer iterations\n", s.Niter())
 	fmt.Printf("%v objective evaluations\n", s.Neval())
-	fmt.Printf("%v cached objective uses\n", cache)
 }
 
-func buildIter(lb, ub []float64) (optim.Method, *optim.CacheEvaler) {
+func buildIter(lb, ub []float64) (optim.Method, optim.Evaler) {
 	vmax := make([]float64, len(lb))
 	for i := range lb {
 		vmax[i] = (ub[i] - lb[i])
@@ -162,11 +161,10 @@ func buildIter(lb, ub []float64) (optim.Method, *optim.CacheEvaler) {
 	points := optim.RandPop(n, lb, ub)
 	fmt.Printf("swarming with %v particles\n", n)
 
-	parev := optim.ParallelEvaler{ContinueOnErr: true}
+	ev := optim.ParallelEvaler{ContinueOnErr: true}
 	if *addr == "" {
-		parev.NConcurrent = 8
+		ev.NConcurrent = 8
 	}
-	ev := optim.NewCacheEvaler(parev)
 
 	swarm := swarm.New(
 		swarm.NewPopulation(points, vmax),
@@ -175,8 +173,8 @@ func buildIter(lb, ub []float64) (optim.Method, *optim.CacheEvaler) {
 		swarm.DB(db),
 	)
 	return pattern.New(points[0],
-		pattern.ResetStep(.001),
-		pattern.NsuccessGrow(2),
+		pattern.ResetStep(.01),
+		pattern.NsuccessGrow(1),
 		pattern.Evaler(ev),
 		pattern.PollRandN(*pollrandn),
 		pattern.SearchMethod(swarm, pattern.Share),
