@@ -5,7 +5,9 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"os"
 	"strconv"
+	"text/tabwriter"
 
 	_ "github.com/mxk/go-sqlite/sqlite3"
 	"github.com/rwcarlsen/cloudlus/objective"
@@ -39,9 +41,12 @@ func main() {
 	}
 
 	if *transform {
+		tw := tabwriter.NewWriter(os.Stdout, 4, 4, 1, ' ', 0)
+		fmt.Fprint(tw, "Prototype\tBuildTime\tNumber\n")
 		for _, b := range scen.Builds {
-			fmt.Printf("%v t%v %v\n", b.Proto, b.Time, b.N)
+			fmt.Fprintf(tw, "%v\t%v\t%v\n", b.Proto, b.Time, b.N)
 		}
+		tw.Flush()
 	} else if *db != "" {
 		dbh, err := sql.Open("sqlite3", *db)
 		check(err)
