@@ -151,6 +151,11 @@ func buildIter(lb, ub []float64) (optim.Method, optim.Evaler) {
 		vmax[i] = (ub[i] - lb[i])
 	}
 
+	mask := make([]bool, len(ub))
+	for i := range mask {
+		mask[i] = lb[i] < ub[i]
+	}
+
 	n := 30 + 1*len(lb)
 	if *npar != 0 {
 		n = *npar
@@ -176,7 +181,7 @@ func buildIter(lb, ub []float64) (optim.Method, optim.Evaler) {
 		pattern.ResetStep(.01),
 		pattern.NsuccessGrow(1),
 		pattern.Evaler(ev),
-		pattern.PollRandN(*pollrandn),
+		pattern.PollRandNMask(*pollrandn, mask),
 		pattern.SearchMethod(swarm, pattern.Share),
 		pattern.DB(db),
 	), ev
