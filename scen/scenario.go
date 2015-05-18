@@ -471,12 +471,11 @@ func (s *Scenario) Run(stdout, stderr io.Writer) (dbfile string, simid []byte, e
 }
 
 func (s *Scenario) VarNames() []string {
-	nperiods := s.nperiods()
-	names := make([]string, s.nvars())
-	for f := range s.Facs {
-		for n, t := range s.periodTimes() {
-			i := f*nperiods + n
-			names[i] = fmt.Sprintf("f%v_t%v", f, t)
+	names := make([]string, 0, s.nvars())
+	varfacs, _ := s.periodFacOrder()
+	for i := range s.periodTimes() {
+		for j := range varfacs {
+			names = append(names, fmt.Sprintf("t%v_f%v", i, j))
 		}
 	}
 	return names

@@ -2,12 +2,10 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 	"text/template"
 
@@ -39,7 +37,8 @@ func main() {
 	params, err := ParseParams(paramsfile)
 	check(err)
 
-	args := append([]string{"-scen", *scenfile, "-addr", *addr}, params...)
+	args := []string{"-scen", *scenfile, "-addr", *addr, "-obj", "-out", objfile}
+	args = append(args, params...)
 	cmd := exec.Command("cycdriver", args...)
 
 	cmd.Stderr = os.Stderr
@@ -58,7 +57,6 @@ func ParseParams(fname string) ([]string, error) {
 	vals := []string{}
 	lines := strings.Split(string(data), "\n")
 	for i, l := range lines {
-		fmt.Println(l)
 		l = strings.TrimSpace(l)
 		lines[i] = l
 		fields := strings.Split(l, " ")
@@ -71,7 +69,7 @@ func ParseParams(fname string) ([]string, error) {
 			continue
 		}
 
-		if strings.HasPrefix(fields[1], "b_f") {
+		if strings.HasPrefix(fields[1], "t") && strings.Contains(fields[1], "_f") {
 			vals = append(vals, fields[0])
 		}
 	}
@@ -79,21 +77,15 @@ func ParseParams(fname string) ([]string, error) {
 }
 
 func genDakotaFile(tmplName string, addr string) {
-	genname := filepath.Base(tmplName) + ".gen"
-
 	scen := &scen.Scenario{}
 	err := scen.Load(*scenfile)
 	check(err)
 	scen.Addr = addr
 
-	f, err := os.Create(genname)
-	check(err)
-	defer f.Close()
-
 	tmpl, err := template.ParseFiles(tmplName)
 	check(err)
 
-	err = tmpl.Execute(f, scen)
+	err = tmpl.Execute(os.Stdout, scen)
 	check(err)
 }
 
