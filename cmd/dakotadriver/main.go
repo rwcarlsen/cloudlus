@@ -16,6 +16,10 @@ var (
 	genInfile = flag.String("gen-infile", "", "generate the dakota input file using the named template")
 	scenfile  = flag.String("scen", "scenario.json", "name of optimization scenario file")
 	addr      = flag.String("addr", "", "address to submit jobs to (otherwise, run locally)")
+	npop      = flag.Int("npop", 0, "population size  (0 => choose automatically)")
+	maxeval   = flag.Int("maxeval", 50000, "max number of objective evaluations")
+	maxiter   = flag.Int("maxiter", 500, "max number of optimizer iterations")
+	parallel  = flag.Int("parallel", 8, "max number of concurrent evaluations")
 )
 
 func main() {
@@ -76,6 +80,14 @@ func ParseParams(fname string) ([]string, error) {
 	return vals, nil
 }
 
+type Config struct {
+	*scen.Scenario
+	MaxIter    int
+	MaxEval    int
+	PopSize    int
+	MaxConcurr int
+}
+
 func genDakotaFile(tmplName string, addr string) {
 	scen := &scen.Scenario{}
 	err := scen.Load(*scenfile)
@@ -85,7 +97,22 @@ func genDakotaFile(tmplName string, addr string) {
 	tmpl, err := template.ParseFiles(tmplName)
 	check(err)
 
-	err = tmpl.Execute(os.Stdout, scen)
+	n := 100 + 1*len(scen.LowerBounds())
+	if *npop != 0 {
+		n = *npop
+	} else if n < 100 {
+		n = 100
+	}
+
+	config := &Config{
+		Scenario:   scen,
+		MaxIter:    *maxiter,
+		MaxEval:    *maxeval,
+		PopSize:    n,
+		MaxConcurr: *parallel,
+	}
+
+	err = tmpl.Execute(os.Stdout, config)
 	check(err)
 }
 
