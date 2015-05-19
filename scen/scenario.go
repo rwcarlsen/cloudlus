@@ -421,8 +421,6 @@ func (s *Scenario) GenCyclusInfile() ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	ioutil.WriteFile("foo.xml", buf.Bytes(), 0755)
-
 	return buf.Bytes(), nil
 }
 
