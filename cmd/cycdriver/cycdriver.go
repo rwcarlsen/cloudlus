@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -114,6 +115,7 @@ func submitjob(scen *scen.Scenario, j *cloudlus.Job) {
 
 func runjob(scen *scen.Scenario) {
 	dbfile, simid, err := scen.Run(nil, nil)
+	defer os.Remove(dbfile)
 	val, err := objective.Calc(scen, dbfile, simid)
 	err = ioutil.WriteFile(*out, []byte(fmt.Sprint(val)), 0644)
 	check(err)
