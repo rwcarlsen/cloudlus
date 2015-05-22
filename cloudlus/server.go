@@ -175,38 +175,38 @@ func (s *Server) Get(jid JobId) (*Job, error) {
 	return j, nil
 }
 
+// checkbeat checks for workers that have stopped responding and requeues their
+// jobs to try again.
+func (s *Server) checkbeat() {
+	now := time.Now()
+	for jid, b := range s.jobinfo {
+		if now.Sub(b.Time) > beatLimit {
+			j, err := s.alljobs.Get(jid)
+			delete(s.jobinfo, jid)
+			if err != nil {
+				log.Printf("cannot find job %v for reassignment", jid)
+			} else {
+				s.Stats.NRequeued++
+				s.log.Printf("[REQUEUE] job %v\n", jid)
+				j.Status = StatusQueued
+				s.queue = append([]JobId{j.Id}, s.queue...)
+				s.alljobs.Put(j)
+			}
+		}
+	}
+}
+
 func (s *Server) dispatcher() {
 	beatcheck := time.NewTicker(beatCheckFreq)
 	defer beatcheck.Stop()
 
 	for {
-		// check for workers that have stopped responding and requeue their
-		// jobs to try again.
-		select {
-		case <-beatcheck.C:
-			now := time.Now()
-			for jid, b := range s.jobinfo {
-				if now.Sub(b.Time) > beatLimit {
-					j, err := s.alljobs.Get(jid)
-					delete(s.jobinfo, jid)
-					if err != nil {
-						log.Printf("cannot find job %v for reassignment", jid)
-					} else {
-						s.Stats.NRequeued++
-						s.log.Printf("[REQUEUE] job %v\n", jid)
-						j.Status = StatusQueued
-						s.queue = append([]JobId{j.Id}, s.queue...)
-						s.alljobs.Put(j)
-					}
-				}
-			}
-		default: // don't block
-		}
-
 		s.Stats.CurrQueued = len(s.queue)
 		s.Stats.CurrRunning = len(s.jobinfo)
 
 		select {
+		case <-beatcheck.C:
+			s.checkbeat()
 		case <-s.kill:
 			return
 		case js := <-s.submitjobs:
