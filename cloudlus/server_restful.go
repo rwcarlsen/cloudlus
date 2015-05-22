@@ -57,6 +57,10 @@ func (s *Server) handleJob(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (s *Server) handleReset(w http.ResponseWriter, r *http.Request) {
+	s.ResetQueue()
+}
+
 func (s *Server) handleJobStat(w http.ResponseWriter, r *http.Request) {
 	idstr := r.URL.Path[len("/api/v1/job-stat/"):]
 	j, err := s.getjob(idstr)

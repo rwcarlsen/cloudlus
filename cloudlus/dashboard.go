@@ -35,6 +35,7 @@ var dashtmplstr = `
 `
 var tmpl = template.Must(template.New("dashtable").Parse(dashtmplstr))
 var hometmpl = template.Must(template.New("home").Parse(home))
+var resettmpl = template.Must(template.New("reset").Parse(resetPage))
 
 const ncompleted = 100
 
@@ -81,6 +82,14 @@ func (s *Server) dashboard(w http.ResponseWriter, r *http.Request) {
 func (s *Server) dashmain(w http.ResponseWriter, r *http.Request) {
 	w.Header().Add("Access-Control-Allow-Origin", "*")
 	err := hometmpl.Execute(w, s)
+	if err != nil {
+		httperror(w, err.Error(), http.StatusInternalServerError)
+	}
+}
+
+func (s *Server) dashreset(w http.ResponseWriter, r *http.Request) {
+	w.Header().Add("Access-Control-Allow-Origin", "*")
+	err := resettmpl.Execute(w, s)
 	if err != nil {
 		httperror(w, err.Error(), http.StatusInternalServerError)
 	}
@@ -332,6 +341,31 @@ const home = `
 
         loadDefaultInfile();
         loadDash();
+    </script>
+
+</body>
+</html>
+`
+
+var resetPage = `
+<!DOCTYPE html>
+<html class="no-js" lang="en-US">
+<head>
+    <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.11.1/jquery.min.js"></script>
+</head>
+<body lang="en">
+
+    <br>
+	<h2>Reset Cyclus Server</h2>
+	<p>Warning: you probably shouldn't do this!</p>
+    <br>
+	<button onclick="reset()">Don't Click</button>
+
+    <script> 
+        var server = "{{.Host}}"
+        function reset() {
+            $.post(server + "/api/v1/reset-queue", "")
+        }
     </script>
 
 </body>

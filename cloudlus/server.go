@@ -35,6 +35,7 @@ type Server struct {
 	retrievejobs chan jobRequest
 	pushjobs     chan *Job
 	fetchjobs    chan workRequest
+	reset        chan struct{}
 	queue        []JobId
 	alljobs      *DB
 	rpc          *RPC
@@ -68,6 +69,7 @@ func NewServer(httpaddr, rpcaddr string, db *DB) *Server {
 		fetchjobs:    make(chan workRequest),
 		jobinfo:      map[JobId]Beat{},
 		beat:         make(chan Beat),
+		reset:        make(chan struct{}),
 		rpcaddr:      rpcaddr,
 		log:          log.New(os.Stdout, "", log.LstdFlags),
 		kill:         make(chan struct{}),
@@ -93,6 +95,9 @@ func NewServer(httpaddr, rpcaddr string, db *DB) *Server {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", s.dashmain)
+	mux.HandleFunc("/reset", s.dashreset)
+	mux.HandleFunc("/reset/", s.dashreset)
+	mux.HandleFunc("/api/v1/reset-queue", s.handleReset)
 	mux.HandleFunc("/api/v1/job", s.handleJob)
 	mux.HandleFunc("/api/v1/job/", s.handleJob)
 	mux.HandleFunc("/api/v1/job-stat/", s.handleJobStat)
@@ -175,6 +180,11 @@ func (s *Server) Get(jid JobId) (*Job, error) {
 	return j, nil
 }
 
+// ResetQueue removes all jobs from the queue permanently.
+func (s *Server) ResetQueue() {
+	s.reset <- struct{}{}
+}
+
 // checkbeat checks for workers that have stopped responding and requeues their
 // jobs to try again.
 func (s *Server) checkbeat() {
@@ -207,6 +217,17 @@ func (s *Server) dispatcher() {
 		select {
 		case <-beatcheck.C:
 			s.checkbeat()
+		case <-s.reset:
+			for _, jid := range s.queue {
+				j, err := s.alljobs.Get(jid)
+				if err == nil {
+					j.Status = StatusFailed
+					j.Stderr += "\nkilled by server reset\n"
+				}
+				s.alljobs.Put(j)
+			}
+			s.Stats.NFailed += len(s.queue)
+			s.queue = s.queue[:0]
 		case <-s.kill:
 			return
 		case js := <-s.submitjobs:
