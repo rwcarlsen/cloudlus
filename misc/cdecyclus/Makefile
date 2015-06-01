@@ -2,17 +2,29 @@
 cyclus_path = $(subst /,\/,$(shell which cyclus))
 cycdriver_path = $(subst /,\/,$(shell which cycdriver))
 cyan_path = $(subst /,\/,$(shell which cyan))
+cloudlus_path = $(subst /,\/,$(shell which cloudlus))
+
 
 all: cyc-cde.tar.gz init.sh
 
-cyc-cde.tar.gz: sample-sim.xml
+worker: cyc-cde init.sh
+	@echo "cloudlus -addr=cycrun.fuelcycle.org:80 work -interval 3s -whitelist=cyclus,cyan,cycdriver" >> init.sh
+	@cp $(cloudlus_path) ./
+	tar -czf cyc-cde.tar.gz cyc-cde cloudlus
+	@rm -rf cloudlus
+	@rm -rf cyc-cde
+	@rm -f cde.options
+
+cyc-cde.tar.gz: cyc-cde
+	tar -czf cyc-cde.tar.gz cyc-cde
+	@rm -rf cyc-cde
+	@rm -f cde.options
+
+cyc-cde: sample-sim.xml
 	cde cyclus $< 1> /dev/null
 	- cde cycdriver -h
 	mv cde-package cyc-cde
-	tar -czf cyc-cde.tar.gz cyc-cde
 	@rm cyclus.sqlite
-	@rm -rf cyc-cde
-	@rm -f cde.options
 
 init.sh: init.sh.in
 	sed "s/{{CYCLUS_PATH}}/$(cyclus_path)/" $< > tmpinit.sh
