@@ -38,7 +38,7 @@ RUN pacman -S --noconfirm python2-nose
 RUN pacman -S --noconfirm python2-pytables
 RUN ln -s /usr/bin/python2 /usr/local/bin/python
 
-ENV version=1.2.0
+ENV version=1.3.0
 # install cyclus and cycamore
 RUN wget "https://github.com/cyclus/cyclus/archive/$version.tar.gz" -O "cyclus-$version.tar.gz"
 RUN tar -xzf "cyclus-$version.tar.gz" && mkdir -p "cyclus-$version/Release"
@@ -47,7 +47,6 @@ RUN cmake .. -DCMAKE_BUILD_TYPE=Release
 RUN make && make install
 WORKDIR /
 
-ENV version=1.2.0
 RUN wget "https://github.com/rwcarlsen/cycamore/archive/$version.tar.gz" -O "cycamore-$version.tar.gz"
 RUN tar -xzf "cycamore-$version.tar.gz" && mkdir -p "cycamore-$version/Release"
 WORKDIR cycamore-$version/Release
@@ -60,6 +59,6 @@ RUN echo "1"
 
 ENV GOPATH /
 RUN go get github.com/rwcarlsen/cloudlus/...
-RUN go get github.com/rwcarlsen/cyan/...
+RUN go get github.com/rwcarlsen/cyan/cmd/cyan
 
-ENTRYPOINT ["/bin/cloudlus", "-addr", "cycrun.fuelcycle.org:80", "work", "-interval", "3s", "-whitelist", "cyclus"]
+ENTRYPOINT ["/bin/cloudlus", "-addr", "cycrun.fuelcycle.org:80", "work", "-interval", "3s", "-whitelist", "cyclus", "cyan"]
