@@ -8,7 +8,7 @@ cloudlus_path = $(subst /,\/,$(shell which cloudlus))
 all: cyc-cde.tar.gz init.sh
 
 worker: cyc-cde init.sh
-	@echo "cloudlus -addr=cycrun.fuelcycle.org:80 work -interval 3s -whitelist=cyclus,cyan,cycdriver" >> init.sh
+	@echo "./cloudlus -addr=cycrun.fuelcycle.org:80 work -interval 3s -whitelist=cyclus,cyan,cycdriver" >> init.sh
 	@cp $(cloudlus_path) ./
 	tar -czf cyc-cde.tar.gz cyc-cde cloudlus init.sh
 	@rm -rf cloudlus
