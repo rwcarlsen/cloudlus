@@ -10,3 +10,6 @@ echo '#!/bin/bash' > cycdriver
 echo "$PWD/cyc-cde/cde-exec {{CYCDRIVER_PATH}} \$@" >> cycdriver
 chmod a+x cycdriver
 
+echo '#!/bin/bash' > cyan
+echo "$PWD/cyc-cde/cde-exec {{CYAN_PATH}} \$@" >> cyan
+chmod a+x cyan
