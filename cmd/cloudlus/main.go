@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
 	"os"
@@ -189,9 +190,33 @@ func run(jobs []*cloudlus.Job, async bool) {
 		err := ioutil.WriteFile(fname, saveJob(j), 0644)
 		if err != nil {
 			log.Println(err)
-		} else {
-			fmt.Println(fname)
+			continue
 		}
+
+		func() {
+			rc, err := client.RetrieveOutfile(j.Id)
+			if err != nil {
+				log.Println(err)
+				return
+			}
+			defer rc.Close()
+
+			fname = fmt.Sprintf("outdata-%v.zip", j.Id)
+			f, err := os.Create(fname)
+			if err != nil {
+				log.Println(err)
+				return
+			}
+			defer f.Close()
+
+			_, err = io.Copy(f, rc)
+			if err != nil {
+				log.Println(err)
+				return
+			}
+		}()
+
+		fmt.Println(fname)
 	}
 }
 

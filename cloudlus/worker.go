@@ -1,6 +1,7 @@
 package cloudlus
 
 import (
+	"io"
 	"log"
 	"os"
 	"time"
@@ -101,7 +102,22 @@ func (w *Worker) dojob() (wait bool, err error) {
 	if w.nolog {
 		j.log = devnull
 	}
-	j.Execute(kill)
+
+	pr, pw := io.Pipe()
+
+	rundone := make(chan bool)
+	go func() {
+		j.Execute(kill, pw)
+		pw.Close()
+		close(rundone)
+	}()
+	err = client.PushOutfile(j.Id, pr)
+	if err != nil {
+		return false, err
+	}
+	<-rundone
+	pr.Close()
+
 	j.WorkerId = w.Id
 	j.Infiles = nil // don't need to send back input files
 

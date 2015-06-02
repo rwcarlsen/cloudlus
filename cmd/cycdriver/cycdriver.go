@@ -105,12 +105,9 @@ func submitjob(scen *scen.Scenario, j *cloudlus.Job) {
 
 	j, err = client.Run(j)
 	check(err)
-	for _, f := range j.Outfiles {
-		if f.Name == *out {
-			fmt.Printf("%s\n", f.Data)
-			break
-		}
-	}
+
+	data, err := client.RetrieveOutfileData(j, *out)
+	fmt.Printf("%s\n", data)
 }
 
 func runjob(scen *scen.Scenario) {
