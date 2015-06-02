@@ -1,7 +1,11 @@
 package cloudlus
 
 import (
+	"bytes"
+	"io"
+	"io/ioutil"
 	"log"
+	"net/http"
 	"net/rpc"
 	"strings"
 	"time"
@@ -10,6 +14,7 @@ import (
 type Client struct {
 	client *rpc.Client
 	err    error
+	addr   string
 }
 
 func Dial(addr string) (*Client, error) {
@@ -20,7 +25,10 @@ func Dial(addr string) (*Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Client{client: client}, nil
+	if !strings.HasPrefix(addr, "http://") {
+		addr = "http://" + addr
+	}
+	return &Client{client: client, addr: addr}, nil
 }
 
 func (c *Client) Heartbeat(w WorkerId, j JobId, done chan struct{}) (kill chan bool) {
@@ -55,6 +63,52 @@ func (c *Client) Retrieve(j JobId) (*Job, error) {
 		return nil, err
 	}
 	return result, nil
+}
+
+func (c *Client) PushOutfile(j JobId, r io.Reader) error {
+	path := "/api/v1/job-outfiles/" + j.String()
+
+	req, err := http.NewRequest("POST", c.addr+path, r)
+	if err != nil {
+		return err
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	return resp.Body.Close()
+}
+
+func (c *Client) RetrieveOutfile(j JobId) (io.ReadCloser, error) {
+	path := "/api/v1/job-outfiles/" + j.String()
+	resp, err := http.Get(c.addr + path)
+	if err != nil {
+		return nil, err
+	}
+	return resp.Body, nil
+}
+
+func (c *Client) RetrieveOutfileData(j *Job, fname string) ([]byte, error) {
+	path := "/api/v1/job-outfiles/" + j.Id.String()
+	resp, err := http.Get(c.addr + path)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	data, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	rc, err := j.GetOutfile(bytes.NewReader(data), len(data), fname)
+	if err != nil {
+		return nil, err
+	}
+	defer rc.Close()
+
+	return ioutil.ReadAll(rc)
 }
 
 func (c *Client) Submit(j *Job) error {

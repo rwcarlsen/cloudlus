@@ -1,8 +1,6 @@
 package cloudlus
 
 import (
-	"archive/zip"
-	"bytes"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -10,6 +8,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
 )
 
 func httperror(w http.ResponseWriter, msg string, code int) {
@@ -113,49 +112,58 @@ func (s *Server) handleSubmitInfile(w http.ResponseWriter, r *http.Request) {
 	s.createJob(r, w, j)
 }
 
-func (s *Server) handleRetrieveZip(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleOutfiles(w http.ResponseWriter, r *http.Request) {
 	idstr := r.URL.Path[len("/api/v1/job-outfiles/"):]
 	j, err := s.getjob(idstr)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		log.Print(err)
 		return
-	} else if j.Status != StatusComplete {
-		msg := fmt.Sprintf("job %v status: %v", idstr, j.Status)
-		http.Error(w, msg, http.StatusBadRequest)
-		log.Print(msg)
-		return
 	}
 
-	w.Header().Add("Content-Disposition", fmt.Sprintf("filename=\"results-%v.zip\"", j.Id))
-
-	// return single zip file
-	var buf bytes.Buffer
-	zipbuf := zip.NewWriter(&buf)
-	for _, fd := range j.Outfiles {
-		f, err := zipbuf.Create(fd.Name)
+	if r.Method == "POST" {
+		fname := outfileName(j)
+		f, err := os.Create(fname)
 		if err != nil {
+			msg := fmt.Sprintf("job %v outfile subission failed: %v", idstr, err)
+			http.Error(w, msg, http.StatusBadRequest)
+			log.Print(msg)
+			return
+		}
+		defer f.Close()
+
+		_, err = io.Copy(f, r.Body)
+		if err != nil {
+			msg := fmt.Sprintf("job %v outfile subission failed: %v", idstr, err)
+			http.Error(w, msg, http.StatusBadRequest)
+			log.Print(msg)
+			return
+		}
+	} else if r.Method == "GET" {
+		if j.Status != StatusComplete {
+			msg := fmt.Sprintf("job %v status: %v", idstr, j.Status)
+			http.Error(w, msg, http.StatusBadRequest)
+			log.Print(msg)
+			return
+		}
+
+		w.Header().Add("Content-Disposition", fmt.Sprintf("filename=\"results-%v.zip\"", j.Id))
+
+		f, err := os.Open(outfileName(j))
+		if err != nil {
+			msg := fmt.Sprintf("job %v output files not found", idstr)
+			http.Error(w, msg, http.StatusBadRequest)
+			log.Print(msg)
+			return
+		}
+		defer f.Close()
+
+		_, err = io.Copy(w, f)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 			log.Print(err)
 			return
 		}
-		_, err = f.Write(fd.Data)
-		if err != nil {
-			log.Print(err)
-			return
-		}
-	}
-	err = zipbuf.Close()
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		log.Print(err)
-		return
-	}
-
-	_, err = io.Copy(w, &buf)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		log.Print(err)
-		return
 	}
 }
 

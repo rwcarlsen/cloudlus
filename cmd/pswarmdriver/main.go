@@ -237,17 +237,18 @@ func submitjob(scen *scen.Scenario, j *cloudlus.Job) (float64, error) {
 		return math.Inf(1), err
 	}
 
-	for _, f := range j.Outfiles {
-		if f.Name == outfile {
-			s := fmt.Sprintf("%s", f.Data)
-			val, err := strconv.ParseFloat(s, 64)
-			if err != nil {
-				log.Printf("job returned invalid objective string '%v'", s)
-				return math.Inf(1), nil
-			} else {
-				return val, nil
-			}
-		}
+	data, err := client.RetrieveOutfileData(j, outfile)
+	if err != nil {
+		return math.Inf(1), err
+	}
+
+	s := fmt.Sprintf("%s", data)
+	val, err := strconv.ParseFloat(s, 64)
+	if err != nil {
+		log.Printf("job returned invalid objective string '%v'", s)
+		return math.Inf(1), nil
+	} else {
+		return val, nil
 	}
 
 	return math.Inf(1), errors.New("job didn't return proper output file")

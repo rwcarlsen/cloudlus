@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -128,6 +129,7 @@ func (d *DB) GC() (npurged, nremain int, err error) {
 		}
 
 		if j.Done() && now.Sub(j.Finished) > d.PurgeAge {
+			os.Remove(outfileName(j))
 			d.db.Delete(it.Key(), nil)
 			d.db.Delete(finishKey(j), nil)
 			d.db.Delete(currentKey(j), nil)
@@ -331,4 +333,8 @@ func (d *DB) Put(j *Job) error {
 	}
 
 	return d.db.Put(j.Id[:], data, nil)
+}
+
+func outfileName(j *Job) string {
+	return fmt.Sprintf("%s-outdata.zip", j.Id)
 }

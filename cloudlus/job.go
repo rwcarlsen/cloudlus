@@ -1,6 +1,7 @@
 package cloudlus
 
 import (
+	"archive/zip"
 	"bytes"
 	"fmt"
 	"io"
@@ -48,6 +49,7 @@ type Job struct {
 type File struct {
 	Name  string
 	Data  []byte
+	Size  int
 	Cache bool
 }
 
@@ -91,15 +93,15 @@ func (j *Job) Done() bool {
 }
 
 func (j *Job) AddOutfile(fname string) {
-	j.Outfiles = append(j.Outfiles, File{fname, nil, false})
+	j.Outfiles = append(j.Outfiles, File{fname, nil, 0, false})
 }
 
 func (j *Job) AddInfile(fname string, data []byte) {
-	j.Infiles = append(j.Infiles, File{fname, data, false})
+	j.Infiles = append(j.Infiles, File{fname, data, len(data), false})
 }
 
 func (j *Job) AddInfileCached(fname string, data []byte) {
-	j.Infiles = append(j.Infiles, File{fname, data, true})
+	j.Infiles = append(j.Infiles, File{fname, data, len(data), true})
 }
 
 func (j *Job) Size() int64 {
@@ -108,12 +110,12 @@ func (j *Job) Size() int64 {
 		n += len(f.Data)
 	}
 	for _, f := range j.Outfiles {
-		n += len(f.Data)
+		n += f.Size
 	}
 	return int64(n) + 12*8
 }
 
-func (j *Job) Execute(kill chan bool) {
+func (j *Job) Execute(kill chan bool, outbuf io.Writer) {
 	if j.log == nil {
 		j.log = os.Stdout
 	}
@@ -134,7 +136,7 @@ func (j *Job) Execute(kill chan bool) {
 	// make sure job is valid/acceptable
 	if len(j.Cmd) == 0 {
 		j.Status = StatusFailed
-		fmt.Fprint(multierr, "job has no command to run")
+		fmt.Fprint(multierr, "job has no command to run\n")
 		return
 	} else if len(j.whitelist) > 0 {
 		approved := false
@@ -146,7 +148,7 @@ func (j *Job) Execute(kill chan bool) {
 		}
 		if !approved {
 			j.Status = StatusFailed
-			fmt.Fprintf(multierr, "'%v' is not a white-listed command in %v", j.Cmd[0], j.whitelist)
+			fmt.Fprintf(multierr, "'%v' is not a white-listed command in %v\n", j.Cmd[0], j.whitelist)
 			return
 		}
 	}
@@ -196,13 +198,57 @@ func (j *Job) Execute(kill chan bool) {
 	}
 
 	// collect output data
+	zw := zip.NewWriter(outbuf)
 	for i, f := range j.Outfiles {
-		j.Outfiles[i].Data, err = ioutil.ReadFile(f.Name)
+		w, err := zw.Create(f.Name)
 		if err != nil {
 			j.Status = StatusFailed
-			fmt.Fprintf(multierr, "%v", err)
+			fmt.Fprintf(multierr, "%v\n", err)
+			break
+		}
+
+		func() {
+			r, err := os.Open(f.Name)
+			if err != nil {
+				j.Status = StatusFailed
+				fmt.Fprintf(multierr, "%v\n", err)
+				return
+			}
+			defer r.Close()
+
+			n, err := io.Copy(w, r)
+			if err != nil {
+				j.Status = StatusFailed
+				fmt.Fprintf(multierr, "%v\n", err)
+				return
+			}
+
+			j.Outfiles[i].Size = int(n)
+		}()
+	}
+
+	err = zw.Close()
+	if err != nil {
+		j.Status = StatusFailed
+		fmt.Fprintf(multierr, "%v\n", err)
+	}
+}
+
+func (j *Job) GetOutfile(outbuf io.ReaderAt, size int, fname string) (io.ReadCloser, error) {
+	r, err := zip.NewReader(outbuf, int64(size))
+	if err != nil {
+		return nil, err
+	}
+	for _, f := range r.File {
+		if f.Name == fname {
+			rc, err := f.Open()
+			if err != nil {
+				return nil, err
+			}
+			return rc, nil
 		}
 	}
+	return nil, fmt.Errorf("outfile '%v' not found for job %v", fname, j.Id)
 }
 
 func (j *Job) setup() error {
