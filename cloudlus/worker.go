@@ -20,7 +20,10 @@ func init() {
 }
 
 type Worker struct {
-	Id         WorkerId
+	Id WorkerId
+	// JobTimeout, if nonzero, is a timeout that overrides any timeout
+	// specified on each job.
+	JobTimeout time.Duration
 	ServerAddr string
 	FileCache  map[string][]byte
 	Wait       time.Duration
@@ -78,6 +81,10 @@ func (w *Worker) dojob() (wait bool, err error) {
 		return false, nil
 	} else if err != nil {
 		return true, err
+	}
+
+	if w.JobTimeout > 0 {
+		j.Timeout = w.JobTimeout
 	}
 
 	j.Whitelist(w.Whitelist...)

@@ -106,6 +106,7 @@ func work(cmd string, args []string) {
 	fs := newFlagSet(cmd, "", "run a worker polling for jobs and workers")
 	wait := fs.Duration("interval", 10*time.Second, "time interval between work polls when idle")
 	maxidle := fs.Duration("maxidle", 0*time.Minute, "idle time at which the worker shuts down (default is infinite)")
+	timeout := fs.Duration("timeout", 0, "maximum run time for jobs before force killed - default is to use each job's custom timeout")
 	whitelist := fs.String("whitelist", "", "comma-separated list of allowed commands for jobs (default allows all commands)")
 	fs.Parse(args)
 
@@ -118,7 +119,13 @@ func work(cmd string, args []string) {
 		}
 	}
 
-	w := &cloudlus.Worker{ServerAddr: *addr, Wait: *wait, Whitelist: cmds, MaxIdle: *maxidle}
+	w := &cloudlus.Worker{
+		ServerAddr: *addr,
+		Wait:       *wait,
+		Whitelist:  cmds,
+		MaxIdle:    *maxidle,
+		JobTimeout: *timeout,
+	}
 	w.Run()
 }
 
