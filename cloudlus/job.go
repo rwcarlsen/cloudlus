@@ -9,6 +9,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"syscall"
 	"time"
 
 	"code.google.com/p/go-uuid/uuid"
@@ -163,6 +164,7 @@ func (j *Job) Execute(kill chan bool, outbuf io.Writer) {
 	var err error
 
 	cmd := exec.Command(j.Cmd[0], j.Cmd[1:]...)
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true} // required to kill all child processes together with parent
 	fmt.Fprintf(j.log, "running job %v command: %v\n", j.Id, cmd.Args)
 
 	cmd.Stderr = multierr
@@ -183,13 +185,14 @@ func (j *Job) Execute(kill chan bool, outbuf io.Writer) {
 	// wait for job to finish or timeout
 	select {
 	case <-time.After(j.Timeout):
-		cmd.Process.Kill()
+		fmt.Fprintf(multierr, "\nKilling job...")
+		killall(multierr, cmd)
 		j.Status = StatusFailed
 		fmt.Fprintf(multierr, "\nJob timed out after %v\n", time.Now().Sub(j.Started))
 		<-done
 		return
 	case <-kill:
-		cmd.Process.Kill()
+		killall(multierr, cmd)
 		j.Status = StatusFailed
 		fmt.Fprintf(multierr, "\nJob was terminated by server\n")
 		<-done
@@ -321,5 +324,16 @@ func NewJobStat(j *Job) *JobStat {
 		Submitted: j.Submitted,
 		Started:   j.Started,
 		Finished:  j.Finished,
+	}
+}
+
+func killall(multierr io.Writer, cmd *exec.Cmd) {
+	cmd.Start()
+
+	pgid, err := syscall.Getpgid(cmd.Process.Pid)
+	if err == nil {
+		syscall.Kill(-pgid, 15) // note the minus sign
+	} else {
+		fmt.Fprintf(multierr, "\n%v\n", err)
 	}
 }

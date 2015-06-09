@@ -83,6 +83,14 @@ func (w *Worker) dojob() (wait bool, err error) {
 		return true, err
 	}
 
+	defer func() {
+		err2 := client.Push(w, j)
+		w.lastjob = time.Now()
+		if err == nil && err2 != nil {
+			err = err2
+		}
+	}()
+
 	if w.JobTimeout > 0 {
 		j.Timeout = w.JobTimeout
 	}
@@ -118,6 +126,7 @@ func (w *Worker) dojob() (wait bool, err error) {
 		pw.Close()
 		close(rundone)
 	}()
+
 	err = client.PushOutfile(j.Id, pr)
 	if err != nil {
 		return false, err
@@ -128,7 +137,5 @@ func (w *Worker) dojob() (wait bool, err error) {
 	j.WorkerId = w.Id
 	j.Infiles = nil // don't need to send back input files
 
-	err = client.Push(w, j)
-	w.lastjob = time.Now()
-	return false, err
+	return false, nil
 }
