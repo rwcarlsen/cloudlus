@@ -333,6 +333,7 @@ func killall(multierr io.Writer, cmd *exec.Cmd) {
 	pgid, err := syscall.Getpgid(cmd.Process.Pid)
 	if err == nil {
 		syscall.Kill(-pgid, 15) // note the minus sign
+		cmd.Wait()
 	} else {
 		fmt.Fprintf(multierr, "\n%v\n", err)
 	}
