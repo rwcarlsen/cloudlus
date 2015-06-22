@@ -1,19 +1,17 @@
-package objective
+package scen
 
 import (
-	"bytes"
 	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"math"
 
-	"github.com/rwcarlsen/cloudlus/scen"
 	"github.com/rwcarlsen/cyan/nuc"
 	"github.com/rwcarlsen/cyan/query"
 )
 
-type Facility struct {
+type ANSFacility struct {
 	Proto string
 	// Cap is the total Power output capacity of the facility.
 	Cap float64
@@ -33,7 +31,7 @@ type Facility struct {
 	WasteDiscount float64
 }
 
-type Scenario struct {
+type ANSScenario struct {
 	// SimDur is the simulation duration in timesteps (months)
 	SimDur int
 	// BuildPeriod is the number of timesteps between timesteps in which
@@ -47,12 +45,12 @@ type Scenario struct {
 	Discount float64
 	// Facs is a list of facilities that could be built and associated
 	// parameters relevant to the optimization objective.
-	Facs []Facility
+	Facs []ANSFacility
 }
 
-func (s *Scenario) Load(fname string) error {
+func (s *ANSScenario) Load(fname string) error {
 	if s == nil {
-		s = &Scenario{}
+		s = &ANSScenario{}
 	}
 	data, err := ioutil.ReadFile(fname)
 	if err != nil {
@@ -68,8 +66,8 @@ func (s *Scenario) Load(fname string) error {
 	return nil
 }
 
-func Calc2(scen *scen.Scenario, dbfile string, simid []byte) (float64, error) {
-	s := &Scenario{}
+func ObjANS2014(scen *Scenario, dbfile string, simid []byte) (float64, error) {
+	s := &ANSScenario{}
 	err := s.Load(scen.File)
 	if err != nil {
 		return math.Inf(1), err
@@ -164,54 +162,7 @@ func Calc2(scen *scen.Scenario, dbfile string, simid []byte) (float64, error) {
 	return totcost / (mwh + 1e-30) * mult, nil
 }
 
-func Calc(scen *scen.Scenario, dbfile string, simid []byte) (float64, error) {
-	db, err := sql.Open("sqlite3", dbfile)
-	if err != nil {
-		return 0, err
-	}
-	defer db.Close()
-
-	// add up overnight and operating costs converted to PV(t=0)
-	q1 := `
-    	SELECT SUM(Value) FROM timeseriespower AS p
-           JOIN agents AS a ON a.agentid=p.agentid AND a.simid=p.simid
-           WHERE a.Prototype=?
-		`
-
-	slowpower := 0.0
-	err = db.QueryRow(q1, "slow_reactor").Scan(&slowpower)
-	if err != nil {
-		return math.Inf(1), err
-	}
-
-	fastpower := 0.0
-	err = db.QueryRow(q1, "fast_reactor").Scan(&fastpower)
-	if err != nil {
-		return math.Inf(1), err
-	}
-
-	return slowpower / (slowpower + fastpower), nil
-}
-
 func PV(amt float64, nt int, rate float64) float64 {
 	monrate := rate / 12
 	return amt / math.Pow(1+monrate, float64(nt))
-}
-
-func findLine(data []byte, pos int64) (line, col int) {
-	line = 1
-	buf := bytes.NewBuffer(data)
-	for n := int64(0); n < pos; n++ {
-		b, err := buf.ReadByte()
-		if err != nil {
-			panic(err) //I don't really see how this could happen
-		}
-		if b == '\n' {
-			line++
-			col = 1
-		} else {
-			col++
-		}
-	}
-	return
 }

@@ -10,7 +10,6 @@ import (
 	"text/tabwriter"
 
 	_ "github.com/mxk/go-sqlite/sqlite3"
-	"github.com/rwcarlsen/cloudlus/objective"
 	"github.com/rwcarlsen/cloudlus/scen"
 	"github.com/rwcarlsen/cyan/post"
 )
@@ -52,12 +51,12 @@ func main() {
 		check(err)
 		defer dbh.Close()
 		simids, err := post.Process(dbh)
-		val, err := objective.Calc(scen, *db, simids[0])
+		val, err := scen.CalcObjective(*db, simids[0])
 		check(err)
 		fmt.Println(val)
 	} else {
 		dbfile, simid, err := scen.Run(nil, nil)
-		val, err := objective.Calc(scen, dbfile, simid)
+		val, err := scen.CalcObjective(dbfile, simid)
 		check(err)
 		fmt.Println(val)
 	}

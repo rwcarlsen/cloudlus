@@ -13,8 +13,6 @@ import (
 	"text/template"
 
 	"code.google.com/p/go-uuid/uuid"
-
-	_ "github.com/gonum/blas/native"
 	_ "github.com/mxk/go-sqlite/sqlite3"
 	"github.com/rwcarlsen/cyan/post"
 )
@@ -91,6 +89,10 @@ type Scenario struct {
 	// NuclideCost represents the waste cost per kg material per time step for
 	// each nuclide in the entire simulation (repository's exempt).
 	NuclideCost map[string]float64
+	// ObjFunc is the name of the objective function in the
+	// github.com/rwcarlsen/cloudlus/objective.ObjFuncs map to be used for
+	// objective value calculations.
+	ObjFunc string
 	// Discount represents the nominal annual discount rate (including
 	// inflation) for the simulation.
 	Discount float64
@@ -405,6 +407,14 @@ func (s *Scenario) Load(fname string) error {
 
 	s.File = fname
 	return s.Validate()
+}
+
+func (s *Scenario) CalcObjective(dbfile string, simid []byte) (float64, error) {
+	if fn, ok := ObjFuncs[s.ObjFunc]; ok {
+		return fn(s, dbfile, simid)
+	} else {
+		return math.Inf(1), fmt.Errorf("invalid objective name '%v'", s.ObjFunc)
+	}
 }
 
 func (s *Scenario) GenCyclusInfile() ([]byte, error) {

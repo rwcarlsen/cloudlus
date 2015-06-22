@@ -175,9 +175,9 @@ func TestTransformVars(t *testing.T) {
 func TestVarNames(t *testing.T) {
 	facs := []Facility{
 		Facility{Proto: "Proto1", Cap: 1},
-		Facility{Proto: "Proto2"},
-		Facility{Proto: "Proto3"},
-		Facility{Proto: "Proto4"},
+		Facility{Proto: "Proto2", FracOfProtos: []string{"Proto1"}},
+		Facility{Proto: "Proto3", FracOfProtos: []string{"Proto1"}},
+		Facility{Proto: "Proto4", FracOfProtos: []string{"Proto1"}},
 	}
 	s := &Scenario{
 		SimDur:      10,

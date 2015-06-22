@@ -1,6 +1,7 @@
 package cloudlus
 
 import (
+	"io/ioutil"
 	"log"
 	"testing"
 	"time"
@@ -129,7 +130,7 @@ func (w *goodWorker) dojob() error {
 
 	// run job
 	j.Whitelist("date")
-	j.Execute(nil)
+	j.Execute(nil, ioutil.Discard)
 	j.WorkerId = w.Id
 	j.Infiles = nil // don't need to send back input files
 
@@ -229,7 +230,7 @@ func (w *foreverWorker) dojob() error {
 
 	// run job
 	j.Whitelist("sleep")
-	j.Execute(kill)
+	j.Execute(kill, ioutil.Discard)
 	j.WorkerId = w.Id
 	j.Infiles = nil // don't need to send back input files
 

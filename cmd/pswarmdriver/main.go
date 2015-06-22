@@ -20,7 +20,6 @@ import (
 
 	_ "github.com/mxk/go-sqlite/sqlite3"
 	"github.com/rwcarlsen/cloudlus/cloudlus"
-	"github.com/rwcarlsen/cloudlus/objective"
 	"github.com/rwcarlsen/cloudlus/scen"
 	"github.com/rwcarlsen/optim"
 	"github.com/rwcarlsen/optim/pattern"
@@ -203,7 +202,7 @@ func (o *obj) Objective(v []float64) (float64, error) {
 		}
 		defer os.Remove(dbfile)
 
-		return objective.Calc(scencopy, dbfile, simid)
+		return scencopy.CalcObjective(dbfile, simid)
 	} else {
 		j := buildjob(scencopy)
 		return submitjob(scencopy, j)
