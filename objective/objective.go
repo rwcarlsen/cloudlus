@@ -164,29 +164,6 @@ func Calc2(scen *scen.Scenario, dbfile string, simid []byte) (float64, error) {
 	return totcost / (mwh + 1e-30) * mult, nil
 }
 
-func PV(amt float64, nt int, rate float64) float64 {
-	monrate := rate / 12
-	return amt / math.Pow(1+monrate, float64(nt))
-}
-
-func findLine(data []byte, pos int64) (line, col int) {
-	line = 1
-	buf := bytes.NewBuffer(data)
-	for n := int64(0); n < pos; n++ {
-		b, err := buf.ReadByte()
-		if err != nil {
-			panic(err) //I don't really see how this could happen
-		}
-		if b == '\n' {
-			line++
-			col = 1
-		} else {
-			col++
-		}
-	}
-	return
-}
-
 func Calc(scen *scen.Scenario, dbfile string, simid []byte) (float64, error) {
 	db, err := sql.Open("sqlite3", dbfile)
 	if err != nil {
@@ -214,4 +191,27 @@ func Calc(scen *scen.Scenario, dbfile string, simid []byte) (float64, error) {
 	}
 
 	return slowpower / (slowpower + fastpower), nil
+}
+
+func PV(amt float64, nt int, rate float64) float64 {
+	monrate := rate / 12
+	return amt / math.Pow(1+monrate, float64(nt))
+}
+
+func findLine(data []byte, pos int64) (line, col int) {
+	line = 1
+	buf := bytes.NewBuffer(data)
+	for n := int64(0); n < pos; n++ {
+		b, err := buf.ReadByte()
+		if err != nil {
+			panic(err) //I don't really see how this could happen
+		}
+		if b == '\n' {
+			line++
+			col = 1
+		} else {
+			col++
+		}
+	}
+	return
 }
