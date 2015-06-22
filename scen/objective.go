@@ -13,6 +13,12 @@ var ObjFuncs = map[string]ObjFunc{
 	"ans2014":   ObjANS2014,
 }
 
+// ObjSlowVsFastPowerFueled tries to minimize:
+//
+//    (thermal reactor energy) / (fast reactor energy)
+//
+// where slow_reactor and fast_reactor must be the names of the thermal and
+// fast reactor prototypes respectively.
 func ObjSlowVsFastPower(scen *Scenario, dbfile string, simid []byte) (float64, error) {
 	db, err := sql.Open("sqlite3", dbfile)
 	if err != nil {
@@ -40,4 +46,11 @@ func ObjSlowVsFastPower(scen *Scenario, dbfile string, simid []byte) (float64, e
 	}
 
 	return slowpower / (slowpower + fastpower), nil
+}
+
+// ObjSlowVsFastPowerFueled tries to minimize:
+//
+//    (thermal reactor energy) / (fast reactor energy) + penalty?
+func ObjSlowVsFastPowerFueled(scen *Scenario, dbfile string, simid []byte) (float64, error) {
+	panic("not implemented")
 }
