@@ -13,8 +13,8 @@ import (
 	"text/template"
 
 	"code.google.com/p/go-uuid/uuid"
-	_ "github.com/mxk/go-sqlite/sqlite3"
 	"github.com/rwcarlsen/cyan/post"
+	_ "github.com/rwcarlsen/go-sqlite/sqlite3"
 )
 
 // Facility represents a cyclus agent prototype that could be built by the

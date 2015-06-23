@@ -30,17 +30,17 @@ func ObjSlowVsFastPower(scen *Scenario, dbfile string, simid []byte) (float64, e
 	q1 := `
     	SELECT SUM(Value) FROM timeseriespower AS p
            JOIN agents AS a ON a.agentid=p.agentid AND a.simid=p.simid
-           WHERE a.Prototype=?
+           WHERE a.Prototype=? AND p.simid=?
 		`
 
 	slowpower := 0.0
-	err = db.QueryRow(q1, "slow_reactor").Scan(&slowpower)
+	err = db.QueryRow(q1, "slow_reactor", simid).Scan(&slowpower)
 	if err != nil {
 		return math.Inf(1), err
 	}
 
 	fastpower := 0.0
-	err = db.QueryRow(q1, "fast_reactor").Scan(&fastpower)
+	err = db.QueryRow(q1, "fast_reactor", simid).Scan(&fastpower)
 	if err != nil {
 		return math.Inf(1), err
 	}

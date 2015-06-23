@@ -9,9 +9,9 @@ import (
 	"strconv"
 	"text/tabwriter"
 
-	_ "github.com/mxk/go-sqlite/sqlite3"
 	"github.com/rwcarlsen/cloudlus/scen"
 	"github.com/rwcarlsen/cyan/post"
+	_ "github.com/rwcarlsen/go-sqlite/sqlite3"
 )
 
 var (
