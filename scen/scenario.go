@@ -145,6 +145,15 @@ func (s *Scenario) notreactors() []Facility {
 	return fs
 }
 
+func (s *Scenario) Prototype(proto string) (Facility, error) {
+	for _, fac := range s.Facs {
+		if fac.Proto == proto {
+			return fac, nil
+		}
+	}
+	return Facility{}, fmt.Errorf("no prototype named '%v'", proto)
+}
+
 func (s *Scenario) nvars() int { return s.nvarsPerPeriod() * s.nperiods() }
 
 func (s *Scenario) nvarsPerPeriod() int {
