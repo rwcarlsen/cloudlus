@@ -132,7 +132,7 @@ func main() {
 func final(s *optim.Solver, start time.Time) {
 	_, err := db.Exec("CREATE TABLE IF NOT EXISTS optiminfo (start INTEGER,end INTEGER,niter INTEGER,neval INTEGER);")
 	check(err)
-	_, err = db.Exec("INSERT INTO optiminfo VALUES (?,?,?,?,?);", start, time.Now(), s.Niter(), s.Neval())
+	_, err = db.Exec("INSERT INTO optiminfo VALUES (?,?,?,?);", start, time.Now(), s.Niter(), s.Neval())
 	check(err)
 
 	if err := s.Err(); err != nil {
