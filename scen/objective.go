@@ -2,7 +2,6 @@ package scen
 
 import (
 	"database/sql"
-	"fmt"
 	"math"
 )
 
@@ -20,7 +19,8 @@ var ObjFuncs = map[string]ObjFunc{
 //    (thermal reactor energy) / (total energy)
 //
 // where 'slow_reactor' and 'fast_reactor' must be the names of the thermal
-// and fast reactor prototypes respectively.
+// and fast reactor prototypes respectively.  It is assumed that there are no
+// other reactor prototypes deployed in the simulation.
 func ObjSlowVsFastPower(scen *Scenario, dbfile string, simid []byte) (float64, error) {
 	db, err := sql.Open("sqlite3", dbfile)
 	if err != nil {
@@ -55,7 +55,8 @@ func ObjSlowVsFastPower(scen *Scenario, dbfile string, simid []byte) (float64, e
 //     [(thermal reactor energy) + (total reactor capacity)] / (total energy)
 //
 // where 'slow_reactor' and 'fast_reactor' must be the names of the thermal
-// and fast reactor prototypes respectively.
+// and fast reactor prototypes respectively.  It is assumed that there are no
+// other reactor prototypes deployed in the simulation.
 func ObjSlowVsFastPowerFueled(scen *Scenario, dbfile string, simid []byte) (float64, error) {
 	db, err := sql.Open("sqlite3", dbfile)
 	if err != nil {
@@ -82,30 +83,15 @@ func ObjSlowVsFastPowerFueled(scen *Scenario, dbfile string, simid []byte) (floa
 		return math.Inf(1), err
 	}
 
-	q2 := `
-    	SELECT TOTAL(%v) FROM timeseriespower AS p
-           JOIN agents AS a ON a.agentid=p.agentid AND a.simid=p.simid
-           WHERE a.Prototype=? AND p.simid=?
-		`
-	fac, err := scen.Prototype("slow_reactor")
-	if err != nil {
-		return math.Inf(1), err
+	// total capacity
+	builds := map[string][]Build{}
+	for _, b := range scen.Builds {
+		builds[b.Proto] = append(builds[b.Proto], b)
 	}
-	slowcap := 0.0
-	err = db.QueryRow(fmt.Sprintf(q2, fac.Cap), "slow_reactor", simid).Scan(&slowcap)
-	if err != nil {
-		return math.Inf(1), err
+	totcap := 0.0
+	for t := 0; t < scen.SimDur; t++ {
+		totcap += scen.PowerCap(builds, t)
 	}
 
-	fac, err = scen.Prototype("fast_reactor")
-	if err != nil {
-		return math.Inf(1), err
-	}
-	fastcap := 0.0
-	err = db.QueryRow(fmt.Sprintf(q2, fac.Cap), "fast_reactor", simid).Scan(&fastcap)
-	if err != nil {
-		return math.Inf(1), err
-	}
-
-	return (slowpower + slowcap + fastcap) / (slowpower + fastpower), nil
+	return (slowpower + totcap) / (slowpower + fastpower), nil
 }

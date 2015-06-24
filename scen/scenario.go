@@ -221,7 +221,7 @@ func (s *Scenario) TransformVars(vars []float64) (map[string][]Build, error) {
 	for i, t := range s.periodTimes() {
 		minpow := s.MinPower[i]
 		maxpow := s.MaxPower[i]
-		currpower := s.powercap(builds, t)
+		currpower := s.PowerCap(builds, t)
 		powervar := vars[i*s.nvarsPerPeriod()]
 
 		toterr := 0.0
@@ -332,7 +332,7 @@ func (s *Scenario) naliveproto(facs map[string][]Build, t int, protos ...string)
 	return count
 }
 
-func (s *Scenario) powercap(builds map[string][]Build, t int) float64 {
+func (s *Scenario) PowerCap(builds map[string][]Build, t int) float64 {
 	pow := 0.0
 	for _, buildsproto := range builds {
 		for _, b := range buildsproto {
