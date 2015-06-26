@@ -12,7 +12,7 @@ import (
 	"syscall"
 	"time"
 
-	"code.google.com/p/go-uuid/uuid"
+	"github.com/rwcarlsen/cloudlus/Godeps/_workspace/src/code.google.com/p/go-uuid/uuid"
 )
 
 const (

@@ -18,12 +18,12 @@ import (
 	"syscall"
 	"time"
 
+	_ "github.com/rwcarlsen/cloudlus/Godeps/_workspace/src/github.com/rwcarlsen/go-sqlite/sqlite3"
+	"github.com/rwcarlsen/cloudlus/Godeps/_workspace/src/github.com/rwcarlsen/optim"
+	"github.com/rwcarlsen/cloudlus/Godeps/_workspace/src/github.com/rwcarlsen/optim/pattern"
+	"github.com/rwcarlsen/cloudlus/Godeps/_workspace/src/github.com/rwcarlsen/optim/swarm"
 	"github.com/rwcarlsen/cloudlus/cloudlus"
 	"github.com/rwcarlsen/cloudlus/scen"
-	_ "github.com/rwcarlsen/go-sqlite/sqlite3"
-	"github.com/rwcarlsen/optim"
-	"github.com/rwcarlsen/optim/pattern"
-	"github.com/rwcarlsen/optim/swarm"
 )
 
 var (

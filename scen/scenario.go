@@ -12,9 +12,9 @@ import (
 	"os/exec"
 	"text/template"
 
-	"code.google.com/p/go-uuid/uuid"
-	"github.com/rwcarlsen/cyan/post"
-	_ "github.com/rwcarlsen/go-sqlite/sqlite3"
+	"github.com/rwcarlsen/cloudlus/Godeps/_workspace/src/code.google.com/p/go-uuid/uuid"
+	"github.com/rwcarlsen/cloudlus/Godeps/_workspace/src/github.com/rwcarlsen/cyan/post"
+	_ "github.com/rwcarlsen/cloudlus/Godeps/_workspace/src/github.com/rwcarlsen/go-sqlite/sqlite3"
 )
 
 // Facility represents a cyclus agent prototype that could be built by the

@@ -11,9 +11,9 @@ import (
 	"strings"
 	"time"
 
+	_ "github.com/rwcarlsen/cloudlus/Godeps/_workspace/src/github.com/rwcarlsen/go-sqlite/sqlite3"
 	"github.com/rwcarlsen/cloudlus/cloudlus"
 	"github.com/rwcarlsen/cloudlus/scen"
-	_ "github.com/rwcarlsen/go-sqlite/sqlite3"
 )
 
 var (

@@ -1,0 +1,65 @@
+{
+	"ImportPath": "github.com/rwcarlsen/cloudlus",
+	"GoVersion": "go1.4.2",
+	"Packages": [
+		"./..."
+	],
+	"Deps": [
+		{
+			"ImportPath": "code.google.com/p/go-uuid/uuid",
+			"Comment": "null-12",
+			"Rev": "7dda39b2e7d5e265014674c5af696ba4186679e9"
+		},
+		{
+			"ImportPath": "github.com/gonum/blas",
+			"Rev": "e06780c11e613897e67eef1a2d51ed7db1a66b40"
+		},
+		{
+			"ImportPath": "github.com/gonum/internal/asm",
+			"Rev": "5b84ddfb9d3e72d73b8de858c97650be140935c0"
+		},
+		{
+			"ImportPath": "github.com/gonum/lapack",
+			"Rev": "ee6c48b740264e52b3777bea25a724f7957f199f"
+		},
+		{
+			"ImportPath": "github.com/gonum/matrix/mat64",
+			"Rev": "46e996048ce15d613b112a8a620b83153e5509b4"
+		},
+		{
+			"ImportPath": "github.com/rwcarlsen/cyan/nuc",
+			"Comment": "v0.4-7-gaae74e1",
+			"Rev": "aae74e132e7c6ab3702b84eaf957499b516f12f8"
+		},
+		{
+			"ImportPath": "github.com/rwcarlsen/cyan/post",
+			"Comment": "v0.4-7-gaae74e1",
+			"Rev": "aae74e132e7c6ab3702b84eaf957499b516f12f8"
+		},
+		{
+			"ImportPath": "github.com/rwcarlsen/cyan/query",
+			"Comment": "v0.4-7-gaae74e1",
+			"Rev": "aae74e132e7c6ab3702b84eaf957499b516f12f8"
+		},
+		{
+			"ImportPath": "github.com/rwcarlsen/go-sqlite/sqlite3",
+			"Rev": "edfd1f2f10849f70836668936e59ca3cf095ea24"
+		},
+		{
+			"ImportPath": "github.com/rwcarlsen/optim",
+			"Rev": "2ffd8c080cf735e5aa51fab338d5de9edb99ec75"
+		},
+		{
+			"ImportPath": "github.com/syndtr/goleveldb/leveldb",
+			"Rev": "63c9e642efad852f49e20a6f90194cae112fd2ac"
+		},
+		{
+			"ImportPath": "github.com/syndtr/gosnappy/snappy",
+			"Rev": "ce8acff4829e0c2458a67ead32390ac0a381c862"
+		},
+		{
+			"ImportPath": "golang.org/x/crypto/ssh",
+			"Rev": "4ed45ec682102c643324fae5dff8dab085b6c300"
+		}
+	]
+}
