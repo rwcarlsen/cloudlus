@@ -97,7 +97,9 @@ type Scenario struct {
 	// inflation) for the simulation.
 	Discount float64
 	// Facs is a list of facilities that could be built and associated
-	// parameters relevant to the optimization objective.
+	// parameters relevant to the optimization objective.  Reactors should be
+	// placed in order of availability date - earlier available reactors
+	// should be placed first.
 	Facs []Facility
 	// MinPower is a series of min deployed power capacity requirements that
 	// must be maintained for each build period.
@@ -217,38 +219,31 @@ func (s *Scenario) TransformVars(vars []float64) (map[string][]Build, error) {
 	}
 
 	varfacs, implicitreactor := s.periodFacOrder()
-	caperror := map[string]float64{}
 	for i, t := range s.periodTimes() {
 		minpow := s.MinPower[i]
 		maxpow := s.MaxPower[i]
+		powerrange := maxpow - minpow
 		currpower := s.PowerCap(builds, t)
 		powervar := vars[i*s.nvarsPerPeriod()]
-
-		toterr := 0.0
-		for _, caperr := range caperror {
-			toterr += caperr
-		}
-		shouldhavepower := currpower + toterr
-
-		captobuild := math.Max(minpow-shouldhavepower, 0)
-		powerrange := maxpow - (shouldhavepower + captobuild)
-		captobuild += powervar * powerrange
+		wantpower := minpow + powerrange*powervar
+		captobuild := math.Max(wantpower-currpower, 0)
+		//fmt.Printf("t%v: wantpower=%v, powervar=%v, captobuild=%v\n", t, wantpower, powervar, captobuild)
 
 		// handle reactor builds
 		reactorfrac := 0.0
 		j := 1 // skip j = 0 which is the power cap variable
 		for j = 1; j < s.nvarsPerPeriod(); j++ {
-			val := vars[i*s.nvarsPerPeriod()+j]
+			facfrac := vars[i*s.nvarsPerPeriod()+j]
 			fac := varfacs[j]
 			if fac.Cap > 0 && fac.Available(t) {
-				facfrac := (1 - reactorfrac) * val
 				reactorfrac += facfrac
-
-				caperr := caperror[fac.Proto]
-				wantcap := facfrac*captobuild + caperr
-				wantcap = math.Min(wantcap, maxpow-currpower)
-				nbuild := int(math.Max(0, math.Floor(wantcap/fac.Cap+0.5)))
-				caperror[fac.Proto] = wantcap - float64(nbuild)*fac.Cap
+				wantcap := wantpower * facfrac
+				havecap := float64(s.naliveproto(builds, t, fac.Proto)) * fac.Cap
+				capadd := math.Max(0, wantcap-havecap)
+				capadd = math.Min(capadd, captobuild)
+				captobuild -= capadd
+				nbuild := int(math.Max(0, math.Floor(capadd/fac.Cap+0.5)))
+				//fmt.Printf("    wantcap=%v, havecap=%v, capadd=%v, nbuild=%v\n", wantcap, havecap, capadd, nbuild)
 
 				if nbuild > 0 {
 					builds[fac.Proto] = append(builds[fac.Proto], Build{
@@ -269,11 +264,12 @@ func (s *Scenario) TransformVars(vars []float64) (map[string][]Build, error) {
 		if fac.Available(t) {
 			facfrac := (1 - reactorfrac)
 
-			caperr := caperror[fac.Proto]
-			wantcap := facfrac*captobuild + caperr
-			wantcap = math.Min(wantcap, maxpow-currpower)
-			nbuild := int(math.Max(0, math.Floor(wantcap/fac.Cap+0.5)))
-			caperror[fac.Proto] = wantcap - float64(nbuild)*fac.Cap
+			wantcap := wantpower * facfrac
+			havecap := float64(s.naliveproto(builds, t, fac.Proto)) * fac.Cap
+			capadd := math.Max(0, wantcap-havecap)
+			capadd = math.Min(capadd, captobuild)
+			nbuild := int(math.Max(0, math.Floor(capadd/fac.Cap+0.5)))
+			//fmt.Printf("    wantcap=%v, havecap=%v, capadd=%v, nbuild=%v\n", wantcap, havecap, capadd, nbuild)
 
 			if nbuild > 0 {
 				builds[fac.Proto] = append(builds[fac.Proto], Build{
