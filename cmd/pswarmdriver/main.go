@@ -96,7 +96,7 @@ func main() {
 
 	obj := &optim.ObjectiveLogger{Obj: &obj{scen, f4}, W: f1}
 
-	m := &optim.BoxMesh{Mesh: &optim.InfMesh{StepSize: 0.2}, Lower: lb, Upper: ub}
+	m := &optim.BoxMesh{Mesh: &optim.InfMesh{StepSize: (ub[0] - lb[0]) / 10}, Lower: lb, Upper: ub}
 
 	// this is here so that signals goroutine can close over it
 	solv := &optim.Solver{
@@ -145,11 +145,6 @@ func final(s *optim.Solver, start time.Time) {
 }
 
 func buildIter(lb, ub []float64) (optim.Method, optim.Evaler) {
-	vmax := make([]float64, len(lb))
-	for i := range lb {
-		vmax[i] = (ub[i] - lb[i])
-	}
-
 	mask := make([]bool, len(ub))
 	for i := range mask {
 		mask[i] = lb[i] < ub[i]
@@ -162,7 +157,6 @@ func buildIter(lb, ub []float64) (optim.Method, optim.Evaler) {
 		n = 30
 	}
 
-	points := optim.RandPop(n, lb, ub)
 	fmt.Printf("swarming with %v particles\n", n)
 
 	ev := optim.ParallelEvaler{ContinueOnErr: true}
@@ -170,13 +164,14 @@ func buildIter(lb, ub []float64) (optim.Method, optim.Evaler) {
 		ev.NConcurrent = 8
 	}
 
+	pop := swarm.NewPopulationRand(n, lb, ub)
 	swarm := swarm.New(
-		swarm.NewPopulation(points, vmax),
+		pop,
 		swarm.Evaler(ev),
 		swarm.VmaxBounds(lb, ub),
 		swarm.DB(db),
 	)
-	return pattern.New(points[0],
+	return pattern.New(pop[0].Point,
 		pattern.ResetStep(.01),
 		pattern.NsuccessGrow(2),
 		pattern.Evaler(ev),
