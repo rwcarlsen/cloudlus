@@ -172,7 +172,7 @@ func buildIter(lb, ub []float64) (optim.Method, optim.Evaler) {
 		swarm.DB(db),
 	)
 	return pattern.New(pop[0].Point,
-		pattern.ResetStep(.01),
+		pattern.ResetStep(.0001),
 		pattern.NsuccessGrow(2),
 		pattern.Evaler(ev),
 		pattern.PollRandNMask(*pollrandn, mask),
