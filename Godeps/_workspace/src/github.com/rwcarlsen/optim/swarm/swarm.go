@@ -352,7 +352,7 @@ func (m *Method) initdb() {
 		return
 	}
 
-	s := "CREATE TABLE IF NOT EXISTS " + TblParticles + " (particle INTEGER, iter INTEGER, val REAL, posid BLOB);"
+	s := "CREATE TABLE IF NOT EXISTS " + TblParticles + " (particle INTEGER, iter INTEGER, val REAL, posid BLOB, velid BLOB);"
 	_, err := m.Db.Exec(s)
 	if checkdberr(err) {
 		return
@@ -388,7 +388,7 @@ func (m *Method) updateDb(mesh optim.Mesh) {
 	}
 	defer tx.Commit()
 
-	s0, err := tx.Prepare("INSERT INTO " + TblParticles + " (particle,iter,val,posid) VALUES (?,?,?,?);")
+	s0, err := tx.Prepare("INSERT INTO " + TblParticles + " (particle,iter,val,posid,velid) VALUES (?,?,?,?,?);")
 	if checkdberr(err) {
 		return
 	}
@@ -404,9 +404,11 @@ func (m *Method) updateDb(mesh optim.Mesh) {
 	pts := []*optim.Point{}
 
 	for _, p := range m.Pop {
+		vel := &optim.Point{Pos: p.Vel}
 		pts = append(pts, p.Point)
+		pts = append(pts, vel)
 
-		_, err := s0.Exec(p.Id, m.count, p.Val, p.HashSlice())
+		_, err := s0.Exec(p.Id, m.count, p.Val, p.HashSlice(), vel.HashSlice())
 		if checkdberr(err) {
 			return
 		}
