@@ -179,6 +179,93 @@ func (s *Scenario) periodFacOrder() (varfacs []Facility, implicitreactor Facilit
 	return facs, s.reactors()[0]
 }
 
+func (s *Scenario) TransformSched() ([]float64, error) {
+	err := s.Validate()
+	if err != nil {
+		return nil, err
+	}
+
+	builds := map[string][]Build{}
+	periods := make([][]Build, s.nperiods())
+	for _, b := range s.Builds {
+		builds[b.Proto] = append(builds[b.Proto], b)
+		p := s.periodOf(b.Time)
+		periods[p] = append(periods[p], b)
+	}
+
+	varfacs, _ := s.periodFacOrder()
+	vars := make([]float64, s.nvars())
+	for i, t := range s.periodTimes() {
+		currpow := s.PowerCap(builds, t)
+		capbuilt := s.CapBuilt(s.Builds, t)
+		prevpow := currpow - capbuilt
+		if i == 0 {
+			prevpow = s.PowerCap(builds, 0)
+		}
+		maxpow := s.MaxPower[i]
+		fmt.Printf("t%v: capbuilt=%v, currpow=%v, prevpow=%v, maxpow=%v\n", t, capbuilt, currpow, prevpow, maxpow)
+
+		powervar := capbuilt / (maxpow - prevpow)
+		vars[i*s.nvarsPerPeriod()] = powervar
+
+		// handle reactor builds
+		capleft := (maxpow - prevpow)
+		// skip j = 0 which is the power cap variable
+		j := 1
+		for j = 1; j < s.nvarsPerPeriod(); j++ {
+			fac := varfacs[j]
+			if fac.Cap > 0 && fac.Available(t) {
+				protocap := s.CapBuilt(builds[fac.Proto], t)
+				index := i*s.nvarsPerPeriod() + j
+				vars[index] = protocap / (maxpow - prevpow)
+				capleft -= protocap
+			} else {
+				// done processing reactors (except last one)
+				break
+			}
+		}
+
+		// handle other facilities
+		for ; j < s.nvarsPerPeriod(); j++ {
+			fac := varfacs[j]
+			if !fac.Available(t) { // skip
+				continue
+			}
+
+			nref := s.naliveproto(builds, t, fac.FracOfProtos...)
+			nhave := s.naliveproto(builds, t, fac.Proto)
+
+			index := i*s.nvarsPerPeriod() + j
+			vars[index] = float64(nhave) / float64(nref)
+		}
+	}
+	return vars, nil
+}
+
+func (s *Scenario) NBuilt(builds []Build, t int) int {
+	n := 0
+	for _, b := range builds {
+		if b.Time == t {
+			n += b.N
+		}
+	}
+	return n
+}
+
+func (s *Scenario) CapBuilt(builds []Build, t int) float64 {
+	tot := 0.0
+	for _, b := range builds {
+		if b.Time == t {
+			fac, err := s.Prototype(b.Proto)
+			if err != nil {
+				panic(err.Error())
+			}
+			tot += float64(b.N) * fac.Cap
+		}
+	}
+	return tot
+}
+
 // TransformVars takes a sequence of input variables for the scenario and
 // transforms them into a set of prototype/facility deployments. The sequence
 // of the vars follows this pattern: fac1_t1, fac1_t2, ..., fac1_tn, fac2_t1,
