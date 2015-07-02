@@ -38,9 +38,9 @@ func main() {
 		scn.PrintStats()
 	} else if *transform && !*sched {
 		tw := tabwriter.NewWriter(os.Stdout, 4, 4, 1, ' ', 0)
-		fmt.Fprint(tw, "Prototype\tBuildTime\tNumber\n")
+		fmt.Fprint(tw, "Prototype\tBuildTime\tLifetime\tNumber\n")
 		for _, b := range scn.Builds {
-			fmt.Fprintf(tw, "%v\t%v\t%v\n", b.Proto, b.Time, b.N)
+			fmt.Fprintf(tw, "%v\t%v\t%v\t%v\n", b.Proto, b.Time, b.Lifetime(), b.N)
 		}
 		tw.Flush()
 	} else if *transform && *sched {
@@ -89,9 +89,11 @@ func parseSched(r io.Reader) []scen.Build {
 		proto := fields[0]
 		t, err := strconv.Atoi(fields[1])
 		check(err)
-		n, err := strconv.Atoi(fields[2])
+		life, err := strconv.Atoi(fields[2])
 		check(err)
-		builds = append(builds, scen.Build{Proto: proto, Time: t, N: n})
+		n, err := strconv.Atoi(fields[3])
+		check(err)
+		builds = append(builds, scen.Build{Proto: proto, Time: t, N: n, Life: life})
 	}
 	return builds
 }
@@ -133,4 +135,6 @@ func parseSchedVars(scn *scen.Scenario) {
 		_, err = scn.TransformVars(params)
 		check(err)
 	}
+	err = scn.Validate()
+	check(err)
 }
