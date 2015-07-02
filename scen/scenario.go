@@ -226,7 +226,6 @@ func (s *Scenario) TransformSched() ([]float64, error) {
 			prevpow = s.PowerCap(startbuilds, t)
 		}
 		maxpow := s.MaxPower[i]
-		//fmt.Printf("t%v: capbuilt=%v, currpow=%v, prevpow=%v, maxpow=%v\n", t, capbuilt, currpow, prevpow, maxpow)
 
 		powervar := capbuilt / (maxpow - prevpow)
 		vars[i*s.NVarsPerPeriod()] = powervar
