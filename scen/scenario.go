@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
 	"math"
 	"os"
 	"os/exec"
@@ -154,9 +155,9 @@ func (s *Scenario) Prototype(proto string) (Facility, error) {
 	return Facility{}, fmt.Errorf("no prototype named '%v'", proto)
 }
 
-func (s *Scenario) nvars() int { return s.nvarsPerPeriod() * s.nperiods() }
+func (s *Scenario) NVars() int { return s.NVarsPerPeriod() * s.nperiods() }
 
-func (s *Scenario) nvarsPerPeriod() int {
+func (s *Scenario) NVarsPerPeriod() int {
 	numFacVars := len(s.Facs) - 1
 	numPowerVars := 1
 	return numFacVars + numPowerVars
@@ -179,6 +180,25 @@ func (s *Scenario) periodFacOrder() (varfacs []Facility, implicitreactor Facilit
 	return facs, s.reactors()[0]
 }
 
+func (s *Scenario) PrintStats() {
+	err := s.Validate()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	builds := map[string][]Build{}
+	for _, b := range s.Builds {
+		builds[b.Proto] = append(builds[b.Proto], b)
+	}
+
+	for i, t := range s.periodTimes() {
+		currpow := s.PowerCap(builds, t)
+		capbuilt := s.CapBuilt(s.Builds, t)
+		maxpow := s.MaxPower[i]
+		fmt.Printf("t%v: capbuilt=%v, currpow=%v, maxpow=%v\n", t, capbuilt, currpow, maxpow)
+	}
+}
+
 func (s *Scenario) TransformSched() ([]float64, error) {
 	err := s.Validate()
 	if err != nil {
@@ -186,15 +206,12 @@ func (s *Scenario) TransformSched() ([]float64, error) {
 	}
 
 	builds := map[string][]Build{}
-	periods := make([][]Build, s.nperiods())
 	for _, b := range s.Builds {
 		builds[b.Proto] = append(builds[b.Proto], b)
-		p := s.periodOf(b.Time)
-		periods[p] = append(periods[p], b)
 	}
 
 	varfacs, _ := s.periodFacOrder()
-	vars := make([]float64, s.nvars())
+	vars := make([]float64, s.NVars())
 	for i, t := range s.periodTimes() {
 		currpow := s.PowerCap(builds, t)
 		capbuilt := s.CapBuilt(s.Builds, t)
@@ -203,20 +220,20 @@ func (s *Scenario) TransformSched() ([]float64, error) {
 			prevpow = s.PowerCap(builds, 0)
 		}
 		maxpow := s.MaxPower[i]
-		fmt.Printf("t%v: capbuilt=%v, currpow=%v, prevpow=%v, maxpow=%v\n", t, capbuilt, currpow, prevpow, maxpow)
+		//fmt.Printf("t%v: capbuilt=%v, currpow=%v, prevpow=%v, maxpow=%v\n", t, capbuilt, currpow, prevpow, maxpow)
 
 		powervar := capbuilt / (maxpow - prevpow)
-		vars[i*s.nvarsPerPeriod()] = powervar
+		vars[i*s.NVarsPerPeriod()] = powervar
 
 		// handle reactor builds
 		capleft := (maxpow - prevpow)
 		// skip j = 0 which is the power cap variable
 		j := 1
-		for j = 1; j < s.nvarsPerPeriod(); j++ {
+		for j = 1; j < s.NVarsPerPeriod(); j++ {
 			fac := varfacs[j]
 			if fac.Cap > 0 && fac.Available(t) {
 				protocap := s.CapBuilt(builds[fac.Proto], t)
-				index := i*s.nvarsPerPeriod() + j
+				index := i*s.NVarsPerPeriod() + j
 				vars[index] = protocap / (maxpow - prevpow)
 				capleft -= protocap
 			} else {
@@ -226,7 +243,7 @@ func (s *Scenario) TransformSched() ([]float64, error) {
 		}
 
 		// handle other facilities
-		for ; j < s.nvarsPerPeriod(); j++ {
+		for ; j < s.NVarsPerPeriod(); j++ {
 			fac := varfacs[j]
 			if !fac.Available(t) { // skip
 				continue
@@ -235,7 +252,7 @@ func (s *Scenario) TransformSched() ([]float64, error) {
 			nref := s.naliveproto(builds, t, fac.FracOfProtos...)
 			nhave := s.naliveproto(builds, t, fac.Proto)
 
-			index := i*s.nvarsPerPeriod() + j
+			index := i*s.NVarsPerPeriod() + j
 			vars[index] = float64(nhave) / float64(nref)
 		}
 	}
@@ -283,8 +300,8 @@ func (s *Scenario) TransformVars(vars []float64) (map[string][]Build, error) {
 	err := s.Validate()
 	if err != nil {
 		return nil, err
-	} else if len(vars) != s.nvars() {
-		return nil, fmt.Errorf("wrong number of vars: want %v, got %v", s.nvars(), len(vars))
+	} else if len(vars) != s.NVars() {
+		return nil, fmt.Errorf("wrong number of vars: want %v, got %v", s.NVars(), len(vars))
 	}
 
 	up := s.UpperBounds()
@@ -309,7 +326,7 @@ func (s *Scenario) TransformVars(vars []float64) (map[string][]Build, error) {
 		minpow := s.MinPower[i]
 		maxpow := s.MaxPower[i]
 		currpower := s.PowerCap(builds, t)
-		powervar := vars[i*s.nvarsPerPeriod()]
+		powervar := vars[i*s.NVarsPerPeriod()]
 
 		toterr := 0.0
 		for _, caperr := range caperror {
@@ -324,8 +341,8 @@ func (s *Scenario) TransformVars(vars []float64) (map[string][]Build, error) {
 		// handle reactor builds
 		reactorfrac := 0.0
 		j := 1 // skip j = 0 which is the power cap variable
-		for j = 1; j < s.nvarsPerPeriod(); j++ {
-			val := vars[i*s.nvarsPerPeriod()+j]
+		for j = 1; j < s.NVarsPerPeriod(); j++ {
+			val := vars[i*s.NVarsPerPeriod()+j]
 			fac := varfacs[j]
 			if fac.Cap > 0 && fac.Available(t) {
 				facfrac := (1 - reactorfrac) * val
@@ -373,8 +390,8 @@ func (s *Scenario) TransformVars(vars []float64) (map[string][]Build, error) {
 		}
 
 		// handle other facilities
-		for ; j < s.nvarsPerPeriod(); j++ {
-			facfrac := vars[i*s.nvarsPerPeriod()+j]
+		for ; j < s.NVarsPerPeriod(); j++ {
+			facfrac := vars[i*s.NVarsPerPeriod()+j]
 			fac := varfacs[j]
 			if !fac.Available(t) { // skip
 				continue
@@ -575,7 +592,7 @@ func (s *Scenario) Run(stdout, stderr io.Writer) (dbfile string, simid []byte, e
 }
 
 func (s *Scenario) VarNames() []string {
-	names := make([]string, 0, s.nvars())
+	names := make([]string, 0, s.NVars())
 	varfacs, _ := s.periodFacOrder()
 	for i := range s.periodTimes() {
 		for j := range varfacs {
@@ -586,12 +603,12 @@ func (s *Scenario) VarNames() []string {
 }
 
 func (s *Scenario) LowerBounds() []float64 {
-	return make([]float64, s.nvars())
+	return make([]float64, s.NVars())
 }
 
 func (s *Scenario) UpperBounds() []float64 {
 	facs, _ := s.periodFacOrder()
-	up := make([]float64, 0, s.nvars())
+	up := make([]float64, 0, s.NVars())
 	for _, t := range s.periodTimes() {
 		for j, fac := range facs {
 			if j == 0 { // power var
