@@ -332,25 +332,21 @@ func (s *Scenario) TransformVars(vars []float64) (map[string][]Build, error) {
 		currpower := s.PowerCap(builds, t)
 		powervar := vars[i*s.NVarsPerPeriod()]
 
-		shouldhavepower := currpower
-
-		captobuild := math.Max(minpow-shouldhavepower, 0)
-		powerrange := maxpow - (shouldhavepower + captobuild)
-		captobuild += powervar * powerrange
+		lowerbound := math.Max(currpower, minpow)
+		powerrange := maxpow - lowerbound
+		newpower := powervar*powerrange + lowerbound
+		captobuild := math.Max(newpower-currpower, 0)
 
 		// handle reactor builds
-		reactorfrac := 0.0
+		capleft := captobuild
 		j := 1 // skip j = 0 which is the power cap variable
 		for j = 1; j < s.NVarsPerPeriod(); j++ {
 			val := vars[i*s.NVarsPerPeriod()+j]
 			fac := varfacs[j]
 			if fac.Cap > 0 && fac.Available(t) {
-				facfrac := (1 - reactorfrac) * val
-				reactorfrac += facfrac
-
-				wantcap := facfrac * captobuild
-				wantcap = math.Min(wantcap, maxpow-currpower)
+				wantcap := val * capleft
 				nbuild := int(math.Max(0, math.Floor(wantcap/fac.Cap+0.5)))
+				capleft -= float64(nbuild) * fac.Cap
 
 				if nbuild > 0 {
 					builds[fac.Proto] = append(builds[fac.Proto], Build{
@@ -369,10 +365,7 @@ func (s *Scenario) TransformVars(vars []float64) (map[string][]Build, error) {
 		// handle last (implicit) reactor
 		fac := implicitreactor
 		if fac.Available(t) {
-			facfrac := (1 - reactorfrac)
-
-			wantcap := facfrac * captobuild
-			wantcap = math.Min(wantcap, maxpow-currpower)
+			wantcap := capleft
 			nbuild := int(math.Max(0, math.Floor(wantcap/fac.Cap+0.5)))
 
 			if nbuild > 0 {
