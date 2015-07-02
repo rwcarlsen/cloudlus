@@ -222,12 +222,10 @@ func (s *Scenario) TransformSched() ([]float64, error) {
 		currpow := s.PowerCap(builds, t)
 		capbuilt := s.CapBuilt(s.Builds, t)
 		prevpow := currpow - capbuilt
-		if i == 0 {
-			prevpow = s.PowerCap(startbuilds, t)
-		}
 		maxpow := s.MaxPower[i]
 
-		powervar := capbuilt / (maxpow - prevpow)
+		powervar := math.Min(1, capbuilt/(maxpow-prevpow))
+		powervar = math.Max(0, powervar)
 		vars[i*s.NVarsPerPeriod()] = powervar
 
 		// handle reactor builds
@@ -239,7 +237,8 @@ func (s *Scenario) TransformSched() ([]float64, error) {
 			if fac.Cap > 0 && fac.Available(t) {
 				protocap := s.CapBuilt(builds[fac.Proto], t)
 				index := i*s.NVarsPerPeriod() + j
-				vars[index] = protocap / (maxpow - prevpow)
+				vars[index] = math.Min(1, protocap/capleft)
+				vars[index] = math.Max(0, vars[index])
 				capleft -= protocap
 			} else {
 				// done processing reactors (except last one)
@@ -258,7 +257,8 @@ func (s *Scenario) TransformSched() ([]float64, error) {
 			nhave := s.naliveproto(builds, t, fac.Proto)
 
 			index := i*s.NVarsPerPeriod() + j
-			vars[index] = float64(nhave) / float64(nref)
+			vars[index] = math.Min(1, float64(nhave)/float64(nref))
+			vars[index] = math.Max(0, vars[index])
 		}
 	}
 	return vars, nil
