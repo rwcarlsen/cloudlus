@@ -195,7 +195,8 @@ func (s *Scenario) PrintStats() {
 		currpow := s.PowerCap(builds, t)
 		capbuilt := s.CapBuilt(s.Builds, t)
 		maxpow := s.MaxPower[i]
-		fmt.Printf("t%v: capbuilt=%v, currpow=%v, maxpow=%v\n", t, capbuilt, currpow, maxpow)
+		minpow := s.MinPower[i]
+		fmt.Printf("t%v: capbuilt=%v, currpow=%v, minpow=%v, maxpow=%v\n", t, capbuilt, currpow, minpow, maxpow)
 	}
 }
 
@@ -210,6 +211,11 @@ func (s *Scenario) TransformSched() ([]float64, error) {
 		builds[b.Proto] = append(builds[b.Proto], b)
 	}
 
+	startbuilds := map[string][]Build{}
+	for _, b := range s.StartBuilds {
+		startbuilds[b.Proto] = append(startbuilds[b.Proto], b)
+	}
+
 	varfacs, _ := s.periodFacOrder()
 	vars := make([]float64, s.NVars())
 	for i, t := range s.periodTimes() {
@@ -217,7 +223,7 @@ func (s *Scenario) TransformSched() ([]float64, error) {
 		capbuilt := s.CapBuilt(s.Builds, t)
 		prevpow := currpow - capbuilt
 		if i == 0 {
-			prevpow = s.PowerCap(builds, 0)
+			prevpow = s.PowerCap(startbuilds, t)
 		}
 		maxpow := s.MaxPower[i]
 		//fmt.Printf("t%v: capbuilt=%v, currpow=%v, prevpow=%v, maxpow=%v\n", t, capbuilt, currpow, prevpow, maxpow)
