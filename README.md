@@ -225,3 +225,31 @@ The api consists of the following endpoints:
 
  Send a GET request to `/api/v1/job` and use the text from the `Stdout` field
  of the JSON in the response body.
+
+Updating the Cloudlus Server's Cyclus Instance
+----------------------------------------------
+
+Make sure the server has the appropriate tools
+
+```bash
+sudo apt-get install git docker
+```
+
+Get a copy of cloudlus
+
+```bash
+git clone https://github.com/rwcarlsen/cloudlus.git cloudlus-repo
+```
+
+Build the Docker image
+
+```bash
+cd cloudlus-repo
+docker build -t cyclus/tip .
+```
+
+Run docker
+
+```bash
+docker run
+```
