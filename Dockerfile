@@ -1,6 +1,8 @@
 
 FROM base/archlinux
 
+RUN echo "1"
+
 # this trusts all keys and allows the system update to run
 RUN mv /etc/pacman.conf /etc/pacman.conf.back
 RUN sed 's/^SigLevel *= .*/SigLevel = TrustAll/' /etc/pacman.conf.back > /etc/pacman.conf
@@ -19,16 +21,6 @@ RUN pacman -S --noconfirm go
 RUN pacman -S --noconfirm wget
 
 # cyclus dependencies
-RUN git clone https://github.com/rwcarlsen/arch-abs
-
-RUN pacman -S --noconfirm --asdeps lapack blas 
-# can't run makepkg as root anymore
-USER nobody
-RUN cp -R arch-abs/coin-cbc /tmp/
-RUN cd /tmp/coin-cbc && makepkg
-USER root
-RUN pacman -U --noconfirm /tmp/coin-cbc/coin-cbc*.xz
-
 RUN pacman -S --noconfirm sqlite
 RUN pacman -S --noconfirm boost
 RUN pacman -S --noconfirm libxml++
@@ -36,9 +28,10 @@ RUN pacman -S --noconfirm hdf5
 RUN pacman -S --noconfirm python2
 RUN pacman -S --noconfirm python2-nose
 RUN pacman -S --noconfirm python2-pytables
+RUN pacman -S --noconfirm coin-or-cbc
 RUN ln -s /usr/bin/python2 /usr/local/bin/python
 
-ENV version=1.3.0
+ENV version=develop
 # install cyclus and cycamore
 RUN wget "https://github.com/cyclus/cyclus/archive/$version.tar.gz" -O "cyclus-$version.tar.gz"
 RUN tar -xzf "cyclus-$version.tar.gz" && mkdir -p "cyclus-$version/Release"
@@ -61,4 +54,4 @@ ENV GOPATH /
 RUN go get github.com/rwcarlsen/cloudlus/...
 RUN go get github.com/rwcarlsen/cyan/cmd/cyan
 
-ENTRYPOINT ["/bin/cloudlus", "-addr", "cycrun.fuelcycle.org:80", "work", "-interval", "3s", "-whitelist", "cyclus", "cyan"]
+ENTRYPOINT ["/bin/cloudlus", "-addr", "cycrun.fuelcycle.org:80", "work", "-interval", "3s", "-whitelist", "cyclus", "cyan", "-timeout=3m"]
