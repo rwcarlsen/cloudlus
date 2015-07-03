@@ -191,7 +191,7 @@ func TestVarNames(t *testing.T) {
 	for _, fac := range s.Facs {
 		t.Logf("   %+v", fac)
 	}
-	t.Logf("nvars: %+v", s.nvars())
+	t.Logf("nvars: %+v", s.NVars())
 	t.Logf("nperiods: %+v", s.nperiods())
 
 	t.Log("VarNames:")
