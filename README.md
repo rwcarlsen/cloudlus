@@ -248,8 +248,15 @@ cd cloudlus-repo
 docker build -t cyclus/tip .
 ```
 
-Run docker
+Kill previous workser
 
 ```bash
-docker run
+ps -ef | grep 'cloudlus.*work' | awk '{ print $2 }' | xargs kill
 ```
+
+Run a couple of docker containers
+
+```bash
+for i in $(seq 10); do docker run -d cyclus/tip; done
+```
+
