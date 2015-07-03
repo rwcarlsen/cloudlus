@@ -222,9 +222,13 @@ func (s *Scenario) TransformSched() ([]float64, error) {
 		currpow := s.PowerCap(builds, t)
 		capbuilt := s.CapBuilt(s.Builds, t)
 		prevpow := currpow - capbuilt
-		maxpow := s.MaxPower[i]
 
-		powervar := math.Min(1, capbuilt/(maxpow-prevpow))
+		maxpow := s.MaxPower[i]
+		lower := math.Max(s.MinPower[i], prevpow)
+		powerrange := math.Max(1e-10, maxpow-lower)
+		minbuild := math.Max(0, lower-prevpow)
+
+		powervar := math.Min(1, (capbuilt-minbuild)/powerrange)
 		powervar = math.Max(0, powervar)
 		vars[i*s.NVarsPerPeriod()] = powervar
 
