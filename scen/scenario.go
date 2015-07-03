@@ -220,16 +220,20 @@ func (s *Scenario) TransformSched() ([]float64, error) {
 	vars := make([]float64, s.NVars())
 	for i, t := range s.periodTimes() {
 		currpow := s.PowerCap(builds, t)
-		capbuilt := s.CapBuilt(s.Builds, t)
+		capbuilt := s.CapBuilt(s.Builds, t) - s.CapBuilt(s.StartBuilds, t)
 		prevpow := currpow - capbuilt
-		maxpow := s.MaxPower[i]
 
-		powervar := math.Min(1, capbuilt/(maxpow-prevpow))
+		maxpow := s.MaxPower[i]
+		lower := math.Max(s.MinPower[i], prevpow)
+		powerrange := math.Max(1e-10, maxpow-lower)
+		minbuild := math.Max(0, lower-prevpow)
+
+		powervar := math.Min(1, (capbuilt-minbuild)/powerrange)
 		powervar = math.Max(0, powervar)
 		vars[i*s.NVarsPerPeriod()] = powervar
 
 		// handle reactor builds
-		capleft := (maxpow - prevpow)
+		capleft := math.Max(1e-10, capbuilt)
 		// skip j = 0 which is the power cap variable
 		j := 1
 		for j = 1; j < s.NVarsPerPeriod(); j++ {
@@ -333,7 +337,7 @@ func (s *Scenario) TransformVars(vars []float64) (map[string][]Build, error) {
 		powervar := vars[i*s.NVarsPerPeriod()]
 
 		lowerbound := math.Max(currpower, minpow)
-		powerrange := maxpow - lowerbound
+		powerrange := math.Max(0, maxpow-lowerbound)
 		newpower := powervar*powerrange + lowerbound
 		captobuild := math.Max(newpower-currpower, 0)
 
