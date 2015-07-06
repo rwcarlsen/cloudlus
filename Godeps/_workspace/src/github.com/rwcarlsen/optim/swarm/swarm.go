@@ -81,6 +81,14 @@ type Particle struct {
 	Best *optim.Point
 }
 
+func (p *Particle) L2Vel() float64 {
+	tot := 0.0
+	for _, v := range p.Vel {
+		tot += v * v
+	}
+	return math.Sqrt(tot)
+}
+
 func (p *Particle) Move(gbest *optim.Point, vmax []float64, inertia, social, cognition float64) {
 	// update velocity
 	for i, currv := range p.Vel {
@@ -352,7 +360,7 @@ func (m *Method) initdb() {
 		return
 	}
 
-	s := "CREATE TABLE IF NOT EXISTS " + TblParticles + " (particle INTEGER, iter INTEGER, val REAL, posid BLOB, velid BLOB);"
+	s := "CREATE TABLE IF NOT EXISTS " + TblParticles + " (particle INTEGER, iter INTEGER, val REAL, posid BLOB, velid BLOB, vel INTEGER);"
 	_, err := m.Db.Exec(s)
 	if checkdberr(err) {
 		return
@@ -388,7 +396,7 @@ func (m *Method) updateDb(mesh optim.Mesh) {
 	}
 	defer tx.Commit()
 
-	s0, err := tx.Prepare("INSERT INTO " + TblParticles + " (particle,iter,val,posid,velid) VALUES (?,?,?,?,?);")
+	s0, err := tx.Prepare("INSERT INTO " + TblParticles + " (particle,iter,val,posid,velid,vel) VALUES (?,?,?,?,?,?);")
 	if checkdberr(err) {
 		return
 	}
@@ -408,7 +416,7 @@ func (m *Method) updateDb(mesh optim.Mesh) {
 		pts = append(pts, p.Point)
 		pts = append(pts, vel)
 
-		_, err := s0.Exec(p.Id, m.count, p.Val, p.HashSlice(), vel.HashSlice())
+		_, err := s0.Exec(p.Id, m.count, p.Val, p.HashSlice(), vel.HashSlice(), p.L2Vel())
 		if checkdberr(err) {
 			return
 		}
