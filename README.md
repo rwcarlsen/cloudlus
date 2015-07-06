@@ -248,7 +248,7 @@ cd cloudlus-repo
 docker build -t cyclus/tip .
 ```
 
-Kill previous workser
+Kill previous workers
 
 ```bash
 ps -ef | grep 'cloudlus.*work' | awk '{ print $2 }' | xargs kill
