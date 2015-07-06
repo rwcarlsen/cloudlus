@@ -17,6 +17,7 @@ var (
 	scenfile  = flag.String("scen", "scenario.json", "name of optimization scenario file")
 	addr      = flag.String("addr", "", "address to submit jobs to (otherwise, run locally)")
 	npop      = flag.Int("npop", 0, "population size  (0 => choose automatically)")
+	seed      = flag.Int("seed", 1001, "rng seed value")
 	maxeval   = flag.Int("maxeval", 50000, "max number of objective evaluations")
 	maxiter   = flag.Int("maxiter", 500, "max number of optimizer iterations")
 	parallel  = flag.Int("parallel", 8, "max number of concurrent evaluations")
@@ -86,6 +87,7 @@ type Config struct {
 	MaxEval    int
 	PopSize    int
 	MaxConcurr int
+	Seed       int
 }
 
 func genDakotaFile(tmplName string, addr string) {
@@ -110,6 +112,7 @@ func genDakotaFile(tmplName string, addr string) {
 		MaxEval:    *maxeval,
 		PopSize:    n,
 		MaxConcurr: *parallel,
+		Seed:       *seed,
 	}
 
 	err = tmpl.Execute(os.Stdout, config)
