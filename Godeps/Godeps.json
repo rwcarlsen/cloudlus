@@ -47,7 +47,7 @@
 		},
 		{
 			"ImportPath": "github.com/rwcarlsen/optim",
-			"Rev": "ccea2e59c6de47eb4bb684dd3be3593b12e22c55"
+			"Rev": "7c26eeab05b60bc3fb677b3c7c9fcce0b10176f4"
 		},
 		{
 			"ImportPath": "github.com/syndtr/goleveldb/leveldb",

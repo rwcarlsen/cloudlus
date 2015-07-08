@@ -254,6 +254,10 @@ func FixedInertia(v float64) Option {
 	}
 }
 
+func InitIter(iter int) Option {
+	return func(m *Method) { m.iter = iter }
+}
+
 type Method struct {
 	// Xtol is the distance from the global best under which particles are
 	// considered to removal.  This must occur simultaneously with the Vtol
@@ -269,10 +273,10 @@ type Method struct {
 	InertiaFn func(iter int) float64
 	// Vmax is the speed limit per dimension for particles.  If nil,
 	// infinity is used.
-	Vmax  []float64
-	Db    *sql.DB
-	count int
-	best  *optim.Point
+	Vmax []float64
+	Db   *sql.DB
+	iter int
+	best *optim.Point
 }
 
 func New(pop Population, opts ...Option) *Method {
@@ -300,7 +304,7 @@ func New(pop Population, opts ...Option) *Method {
 }
 
 func (m *Method) Iterate(obj optim.Objectiver, mesh optim.Mesh) (best *optim.Point, neval int, err error) {
-	m.count++
+	defer func() { m.iter++ }()
 
 	// project positions onto mesh
 	pmap := make(map[*optim.Point]*Particle, len(m.Pop))
@@ -329,7 +333,7 @@ func (m *Method) Iterate(obj optim.Objectiver, mesh optim.Mesh) (best *optim.Poi
 
 	// move particles and update current best
 	for _, p := range m.Pop {
-		p.Move(m.best, m.Vmax, m.InertiaFn(m.count), m.Social, m.Cognition)
+		p.Move(m.best, m.Vmax, m.InertiaFn(m.iter), m.Social, m.Cognition)
 	}
 
 	// TODO: write test to make sure this checks pbest.Best.Val instead of p.Val.
@@ -414,20 +418,21 @@ func (m *Method) updateDb(mesh optim.Mesh) {
 	for _, p := range m.Pop {
 		vel := &optim.Point{Pos: p.Vel}
 		pts = append(pts, p.Point)
+		pts = append(pts, p.Best) // best might be a projected location and not present in normal eval points
 		pts = append(pts, vel)
 
-		_, err := s0.Exec(p.Id, m.count, p.Val, p.HashSlice(), vel.HashSlice(), p.L2Vel())
+		_, err := s0.Exec(p.Id, m.iter, p.Val, p.HashSlice(), vel.HashSlice(), p.L2Vel())
 		if checkdberr(err) {
 			return
 		}
 
-		_, err = s1.Exec(p.Id, m.count, p.Best.Val, p.Best.HashSlice())
+		_, err = s1.Exec(p.Id, m.iter, p.Best.Val, p.Best.HashSlice())
 		if checkdberr(err) {
 			return
 		}
 
 		pp := &optim.Point{mesh.Nearest(p.Pos), p.Val}
-		_, err = s0b.Exec(p.Id, m.count, p.Val, pp.HashSlice())
+		_, err = s0b.Exec(p.Id, m.iter, p.Val, pp.HashSlice())
 		if checkdberr(err) {
 			return
 		}
@@ -435,7 +440,7 @@ func (m *Method) updateDb(mesh optim.Mesh) {
 
 	s2, err := tx.Prepare("INSERT INTO " + TblBest + " (iter,val,posid) VALUES (?,?,?);")
 	glob := m.best
-	_, err = s2.Exec(m.count, glob.Val, glob.HashSlice())
+	_, err = s2.Exec(m.iter, glob.Val, glob.HashSlice())
 	if checkdberr(err) {
 		return
 	}
