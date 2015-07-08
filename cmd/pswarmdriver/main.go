@@ -13,6 +13,7 @@ import (
 	"math/rand"
 	"os"
 	"os/signal"
+	"runtime"
 	"strconv"
 	"strings"
 	"syscall"
@@ -39,6 +40,7 @@ var (
 	objlog       = flag.String("objlog", "obj.log", "file to log unpenalized objective values")
 	runlog       = flag.String("runlog", "run.log", "file to log local cyclus run output")
 	dbname       = flag.String("db", "pswarm.sqlite", "name for database containing optimizer work")
+	restart      = flag.Int("restart", -1, "iteration to restart from (default is no restart)")
 )
 
 const outfile = "objective.out"
@@ -60,16 +62,19 @@ func main() {
 	flag.Parse()
 	optim.Rand = rand.New(rand.NewSource(int64(*seed)))
 
+	if _, err := os.Stat(*dbname); !os.IsNotExist(err) && *restart < 0 {
+		log.Fatalf("db file '%v' already exists", *dbname)
+	}
+
+	db, err = sql.Open("sqlite3", *dbname)
+	check(err)
+	defer db.Close()
+
 	if *addr != "" {
 		client, err = cloudlus.Dial(*addr)
 		check(err)
 		defer client.Close()
 	}
-
-	os.Remove(*dbname)
-	db, err = sql.Open("sqlite3", *dbname)
-	check(err)
-	defer db.Close()
 
 	params := make([]int, flag.NArg())
 	for i, s := range flag.Args() {
@@ -92,11 +97,19 @@ func main() {
 	// create and initialize solver
 	lb := scen.LowerBounds()
 	ub := scen.UpperBounds()
-	it, _ := buildIter(lb, ub)
+
+	step := (ub[0] - lb[0]) / 10
+	var it optim.Method
+
+	if *restart >= 0 {
+		it, step = loadIter(lb, ub, *restart)
+	} else {
+		it = buildIter(lb, ub)
+	}
 
 	obj := &optim.ObjectiveLogger{Obj: &obj{scen, f4}, W: f1}
 
-	m := &optim.BoxMesh{Mesh: &optim.InfMesh{StepSize: (ub[0] - lb[0]) / 10}, Lower: lb, Upper: ub}
+	m := &optim.BoxMesh{Mesh: &optim.InfMesh{StepSize: step}, Lower: lb, Upper: ub}
 
 	// this is here so that signals goroutine can close over it
 	solv := &optim.Solver{
@@ -144,7 +157,7 @@ func final(s *optim.Solver, start time.Time) {
 	fmt.Printf("%v objective evaluations\n", s.Neval())
 }
 
-func buildIter(lb, ub []float64) (optim.Method, optim.Evaler) {
+func buildIter(lb, ub []float64) optim.Method {
 	mask := make([]bool, len(ub))
 	for i := range mask {
 		mask[i] = lb[i] < ub[i]
@@ -178,7 +191,93 @@ func buildIter(lb, ub []float64) (optim.Method, optim.Evaler) {
 		pattern.PollRandNMask(*pollrandn, mask),
 		pattern.SearchMethod(swarm, pattern.Share),
 		pattern.DB(db),
-	), ev
+	)
+}
+
+func loadPoint(query string, args ...interface{}) *optim.Point {
+	rows, err := db.Query(query, args...)
+	check(err)
+	defer rows.Close()
+	posmap := map[int]float64{}
+	var obj float64
+	for rows.Next() {
+		var dim int
+		var val float64
+		err := rows.Scan(&dim, &val, &obj)
+		check(err)
+		posmap[dim] = val
+	}
+	check(rows.Err())
+
+	pos := make([]float64, len(posmap))
+	for dim, val := range posmap {
+		pos[dim] = val
+	}
+	return &optim.Point{Pos: pos, Val: obj}
+}
+
+func loadIter(lb, ub []float64, iter int) (md optim.Method, initstep float64) {
+
+	_, err := db.Exec("CREATE INDEX IF NOT EXISTS points_posid ON points (posid ASC);")
+	check(err)
+
+	query := "SELECT pt.dim,pt.val,pi.val FROM points AS pt JOIN patterninfo AS pi ON pi.posid=pt.posid WHERE pi.iter=?;"
+	initPoint := loadPoint(query, iter)
+
+	row := db.QueryRow("SELECT step FROM patterninfo WHERE iter=?;", iter)
+	err = row.Scan(&initstep)
+	check(err)
+
+	mask := make([]bool, len(ub))
+	for i := range mask {
+		mask[i] = lb[i] < ub[i]
+	}
+
+	row = db.QueryRow("SELECT COUNT(*) FROM swarmparticles WHERE iter=?;", iter)
+	var npar int
+	err = row.Scan(&npar)
+	check(err)
+
+	pop := make(swarm.Population, npar)
+	for i := 0; i < npar; i++ {
+		query := "SELECT pt.dim,pt.val,s.val FROM points AS pt JOIN swarmparticles AS s ON s.posid=pt.posid WHERE s.iter=? AND s.particle=?;"
+		pt := loadPoint(query, iter, i)
+		query = "SELECT pt.dim,pt.val,s.best FROM points AS pt JOIN swarmparticlesbest AS s ON s.posid=pt.posid WHERE s.iter=? AND s.particle=?;"
+		best := loadPoint(query, iter, i)
+		query = "SELECT pt.dim,pt.val,0 FROM points AS pt JOIN swarmparticles AS s ON s.velid=pt.posid WHERE s.iter=? AND s.particle=?;"
+		vel := loadPoint(query, iter, i)
+		par := &swarm.Particle{
+			Id:    i,
+			Point: pt,
+			Best:  best,
+			Vel:   vel.Pos,
+		}
+		pop[i] = par
+		//fmt.Printf("DEBUG par %v: pos[10]=%v obj=%v bestpos[10]=%v bestobj=%v\n", i, par.Pos[10], par.Val, par.Best.Pos[10], par.Best.Val)
+	}
+
+	fmt.Printf("swarming with %v particles\n", len(pop))
+
+	ev := optim.ParallelEvaler{ContinueOnErr: true}
+	if *addr == "" {
+		ev.NConcurrent = runtime.NumCPU()
+	}
+
+	swarm := swarm.New(
+		pop,
+		swarm.Evaler(ev),
+		swarm.VmaxBounds(lb, ub),
+		swarm.DB(db),
+		swarm.InitIter(iter+1),
+	)
+	return pattern.New(initPoint,
+		pattern.ResetStep(.0001),
+		pattern.NsuccessGrow(4),
+		pattern.Evaler(ev),
+		pattern.PollRandNMask(*pollrandn, mask),
+		pattern.SearchMethod(swarm, pattern.Share),
+		pattern.DB(db),
+	), initstep
 }
 
 type obj struct {
