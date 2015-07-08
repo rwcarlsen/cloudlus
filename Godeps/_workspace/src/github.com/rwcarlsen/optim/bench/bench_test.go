@@ -29,7 +29,7 @@ func TestBenchSwarmRosen(t *testing.T) {
 	npar := 30
 	maxiter := 10000
 	successfrac := 1.00
-	avgiter := 600.0
+	avgiter := 500.0
 
 	fn := bench.Rosenbrock{ndim}
 	sfn := func() *optim.Solver {
@@ -48,7 +48,7 @@ func TestBenchPSwarmRosen(t *testing.T) {
 	npar := 30
 	maxiter := 10000
 	successfrac := 1.0
-	avgiter := 400.0
+	avgiter := 300.0
 
 	fn := bench.Rosenbrock{ndim}
 	sfn := func() *optim.Solver {
@@ -72,7 +72,7 @@ func TestBenchPSwarmGriewank(t *testing.T) {
 	npar := 30
 	maxiter := 10000
 	successfrac := 1.00
-	avgiter := 250.0
+	avgiter := 220.0
 
 	fn := bench.Griewank{ndim}
 	sfn := func() *optim.Solver {
@@ -93,7 +93,7 @@ func TestBenchPSwarmRastrigrin(t *testing.T) {
 	npar := 30
 	maxiter := 10000
 	successfrac := 1.00
-	avgiter := 150.0
+	avgiter := 130.0
 
 	fn := bench.Rastrigrin{ndim}
 	sfn := func() *optim.Solver {

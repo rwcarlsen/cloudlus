@@ -331,15 +331,15 @@ func (m *Method) Iterate(obj optim.Objectiver, mesh optim.Mesh) (best *optim.Poi
 	}
 	m.updateDb(mesh)
 
-	// move particles and update current best
-	for _, p := range m.Pop {
-		p.Move(m.best, m.Vmax, m.InertiaFn(m.iter), m.Social, m.Cognition)
-	}
-
 	// TODO: write test to make sure this checks pbest.Best.Val instead of p.Val.
 	pbest := m.Pop.Best()
 	if pbest != nil && pbest.Best.Val < m.best.Val {
 		m.best = pbest.Best
+	}
+
+	// move particles and update current best
+	for _, p := range m.Pop {
+		p.Move(m.best, m.Vmax, m.InertiaFn(m.iter), m.Social, m.Cognition)
 	}
 
 	// Kill slow particles near global optimum.
