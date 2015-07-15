@@ -40,7 +40,7 @@ RUN cmake .. -DCMAKE_BUILD_TYPE=Release
 RUN make && make install
 WORKDIR /
 
-RUN wget "https://github.com/rwcarlsen/cycamore/archive/$version.tar.gz" -O "cycamore-$version.tar.gz"
+RUN wget "https://github.com/cyclus/cycamore/archive/$version.tar.gz" -O "cycamore-$version.tar.gz"
 RUN tar -xzf "cycamore-$version.tar.gz" && mkdir -p "cycamore-$version/Release"
 WORKDIR cycamore-$version/Release
 RUN cmake .. -DCMAKE_BUILD_TYPE=Release
