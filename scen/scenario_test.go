@@ -39,7 +39,7 @@ func TestPeriodTimes(t *testing.T) {
 	}
 }
 
-func TestTransformVars(t *testing.T) {
+func TestTransformVars(tt *testing.T) {
 	tests := []struct {
 		Scen     *Scenario
 		Vars     []float64
@@ -60,6 +60,23 @@ func TestTransformVars(t *testing.T) {
 			PowerExp: []float64{10, 15, 28, 44, 70},
 			BuildExp: map[string][]int{
 				"Proto1": {10, 5, 13, 16, 26},
+			},
+		}, {
+			Scen: &Scenario{
+				SimDur:      10,
+				BuildPeriod: 2,
+				Facs: []Facility{
+					{Proto: "Proto1", Cap: 1, Life: 0},
+					{Proto: "Proto2", Cap: 1, Life: 0, BuildAfter: -1},
+				},
+				MaxPower: []float64{10, 20, 40, 60, 70},
+				MinPower: []float64{10, 10, 10, 10, 70},
+			},
+			Vars:     []float64{.5, .5, .5, .5, .5},
+			PowerExp: []float64{10, 15, 28, 44, 70},
+			BuildExp: map[string][]int{
+				"Proto1": {10, 5, 13, 16, 26},
+				"Proto2": {0, 0, 0, 0, 0},
 			},
 		}, {
 			Scen: &Scenario{
@@ -138,14 +155,16 @@ func TestTransformVars(t *testing.T) {
 	}
 
 	for i, test := range tests {
-		t.Logf("test %v", i)
+		tt.Logf("test %v", i)
 		s := test.Scen
 		vars := test.Vars
 
 		builds, err := s.TransformVars(vars)
 		if err != nil {
-			t.Fatal(err)
+			tt.Fatal("  ", err)
 		}
+
+		tt.Log("  - single transform:")
 
 		timepowers := make([]float64, s.nperiods())
 		for n, t := range s.periodTimes() {
@@ -156,18 +175,71 @@ func TestTransformVars(t *testing.T) {
 					}
 				}
 			}
+			if test.PowerExp[n] != timepowers[n] {
+				tt.Errorf("     power cap want: %v", test.PowerExp)
+				tt.Errorf("     power cap  got: %v", timepowers)
+				break
+			}
 		}
-
-		t.Logf("  power cap want: %v", test.PowerExp)
-		t.Logf("  power cap got: %v", timepowers)
 
 		for proto, buildsp := range builds {
 			nbuilt := make([]int, s.nperiods())
 			for _, b := range buildsp {
 				nbuilt[s.periodOf(b.Time)] += b.N
 			}
-			t.Logf("  proto %v nbuilt want: %v", proto, test.BuildExp[proto])
-			t.Logf("  proto %v nbuilt got: %v", proto, nbuilt)
+			for i := range test.BuildExp[proto] {
+				want := test.BuildExp[proto][i]
+				got := nbuilt[i]
+				if want != got {
+					tt.Errorf("     nbuilt want: %v", test.BuildExp[proto])
+					tt.Errorf("     nbuilt  got: %v", nbuilt)
+					break
+				}
+			}
+		}
+
+		vars, err = s.TransformSched()
+		if err != nil {
+			tt.Fatal("  ", err)
+		}
+
+		builds, err = s.TransformVars(vars)
+		if err != nil {
+			tt.Fatal("  ", err)
+		}
+
+		tt.Log("  - round trip transform:")
+
+		timepowers = make([]float64, s.nperiods())
+		for n, t := range s.periodTimes() {
+			for _, buildsp := range builds {
+				for _, b := range buildsp {
+					if b.Alive(t) {
+						timepowers[n] += b.fac.Cap * float64(b.N)
+					}
+				}
+			}
+			if test.PowerExp[n] != timepowers[n] {
+				tt.Errorf("     power cap want: %v", test.PowerExp)
+				tt.Errorf("     power cap  got: %v", timepowers)
+				break
+			}
+		}
+
+		for proto, buildsp := range builds {
+			nbuilt := make([]int, s.nperiods())
+			for _, b := range buildsp {
+				nbuilt[s.periodOf(b.Time)] += b.N
+			}
+			for i := range test.BuildExp[proto] {
+				want := test.BuildExp[proto][i]
+				got := nbuilt[i]
+				if want != got {
+					tt.Errorf("     nbuilt want: %v", test.BuildExp[proto])
+					tt.Errorf("     nbuilt  got: %v", nbuilt)
+					break
+				}
+			}
 		}
 	}
 }

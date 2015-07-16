@@ -129,7 +129,7 @@ type Scenario struct {
 func (s *Scenario) reactors() []Facility {
 	rs := []Facility{}
 	for _, fac := range s.Facs {
-		if fac.Cap > 0 {
+		if fac.Cap > 0 && fac.BuildAfter >= 0 {
 			rs = append(rs, fac)
 		}
 	}
@@ -139,7 +139,7 @@ func (s *Scenario) reactors() []Facility {
 func (s *Scenario) notreactors() []Facility {
 	fs := []Facility{}
 	for _, fac := range s.Facs {
-		if fac.Cap == 0 {
+		if fac.Cap == 0 && fac.BuildAfter >= 0 {
 			fs = append(fs, fac)
 		}
 	}
@@ -158,7 +158,7 @@ func (s *Scenario) Prototype(proto string) (Facility, error) {
 func (s *Scenario) NVars() int { return s.NVarsPerPeriod() * s.nperiods() }
 
 func (s *Scenario) NVarsPerPeriod() int {
-	numFacVars := len(s.Facs) - 1
+	numFacVars := len(s.reactors()) + len(s.notreactors()) - 1
 	numPowerVars := 1
 	return numFacVars + numPowerVars
 }
