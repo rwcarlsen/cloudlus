@@ -41,7 +41,11 @@ func main() {
 	defer f.Close()
 
 	params, err := ParseParams(paramsfile)
-	check(err)
+	if err != nil {
+		log.Print(err)
+		f.Write([]byte("1e100"))
+		return
+	}
 
 	args := []string{"-scen", *scenfile, "-addr", *addr, "-out", objfile}
 	if *addr == "" {
@@ -54,7 +58,11 @@ func main() {
 	cmd.Stdout = f
 
 	err = cmd.Run()
-	check(err)
+	if err != nil {
+		log.Print(err)
+		f.Write([]byte("1e100"))
+		return
+	}
 }
 
 func ParseParams(fname string) ([]string, error) {
