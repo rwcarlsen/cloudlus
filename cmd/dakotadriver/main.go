@@ -1,12 +1,15 @@
 package main
 
 import (
+	"bytes"
 	"flag"
+	"io"
 	"io/ioutil"
 	"log"
 	"math/rand"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"text/template"
 
@@ -47,6 +50,8 @@ func main() {
 		return
 	}
 
+	var buf bytes.Buffer
+
 	args := []string{"-scen", *scenfile, "-addr", *addr, "-out", objfile}
 	if *addr == "" {
 		args = append(args, "-obj")
@@ -55,9 +60,21 @@ func main() {
 	cmd := exec.Command("cycdriver", args...)
 
 	cmd.Stderr = os.Stderr
-	cmd.Stdout = f
+	cmd.Stdout = &buf
 
 	err = cmd.Run()
+	if err != nil {
+		log.Print(err)
+		f.Write([]byte("1e100"))
+		return
+	}
+
+	if _, err := strconv.ParseFloat(strings.TrimSpace(buf.String()), 64); err != nil {
+		f.Write([]byte("1e100"))
+		return
+	}
+
+	_, err = io.Copy(f, &buf)
 	if err != nil {
 		log.Print(err)
 		f.Write([]byte("1e100"))
