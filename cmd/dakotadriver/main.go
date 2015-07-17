@@ -4,6 +4,7 @@ import (
 	"flag"
 	"io/ioutil"
 	"log"
+	"math/rand"
 	"os"
 	"os/exec"
 	"strings"
@@ -91,6 +92,7 @@ type Config struct {
 	PopSize    int
 	MaxConcurr int
 	Seed       int
+	InitPoint  []float64
 }
 
 func genDakotaFile(tmplName string, addr string) {
@@ -109,6 +111,12 @@ func genDakotaFile(tmplName string, addr string) {
 		n = 100
 	}
 
+	rand.Seed(int64(*seed))
+	p := make([]float64, scen.NVars())
+	for i := range p {
+		p[i] = rand.Float64()
+	}
+
 	config := &Config{
 		Scenario:   scen,
 		MaxIter:    *maxiter,
@@ -116,6 +124,7 @@ func genDakotaFile(tmplName string, addr string) {
 		PopSize:    n,
 		MaxConcurr: *parallel,
 		Seed:       *seed,
+		InitPoint:  p,
 	}
 
 	err = tmpl.Execute(os.Stdout, config)
