@@ -98,7 +98,7 @@ func main() {
 	lb := scen.LowerBounds()
 	ub := scen.UpperBounds()
 
-	step := (ub[0] - lb[0]) / 10
+	step := (ub[0] - lb[0]) / 1
 	var it optim.Method
 
 	if *restart >= 0 {
@@ -185,7 +185,7 @@ func buildIter(lb, ub []float64) optim.Method {
 		swarm.DB(db),
 	)
 	return pattern.New(pop[0].Point,
-		pattern.ResetStep(.0001),
+		pattern.ResetStep(.001),
 		pattern.NsuccessGrow(4),
 		pattern.Evaler(ev),
 		pattern.PollRandNMask(*pollrandn, mask),
@@ -271,7 +271,7 @@ func loadIter(lb, ub []float64, iter int) (md optim.Method, initstep float64) {
 		swarm.InitIter(iter+1),
 	)
 	return pattern.New(initPoint,
-		pattern.ResetStep(.0001),
+		pattern.ResetStep(.001),
 		pattern.NsuccessGrow(4),
 		pattern.Evaler(ev),
 		pattern.PollRandNMask(*pollrandn, mask),
