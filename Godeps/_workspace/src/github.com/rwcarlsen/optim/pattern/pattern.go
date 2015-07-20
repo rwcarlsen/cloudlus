@@ -85,8 +85,8 @@ func SkipEps(eps float64) Option { return func(m *Method) { m.Poller.SkipEps = e
 
 func Nkeep(n int) Option { return func(m *Method) { m.Poller.Nkeep = n } }
 
-func ResetStep(threshold float64) Option {
-	return func(m *Method) { m.ResetStep = threshold }
+func ResetStep(threshold, tostep float64) Option {
+	return func(m *Method) { m.ResetStep = threshold; m.ResetStepSize = tostep }
 }
 
 type Method struct {
@@ -98,13 +98,14 @@ type Method struct {
 	nsuccess       int  // (internal) number of successive successful polls
 	Db             *sql.DB
 	// ResetStep is a step size threshold below which the mesh step is reset
-	// to its original starting value.  This can be useful for problems where
+	// to ResetStepSize.  This can be useful for problems where
 	// the significance of a particular step size of one variable may be a
 	// function of the value other variables.
-	ResetStep float64
-	origstep  float64
-	count     int
-	ev        optim.Evaler
+	ResetStep     float64
+	ResetStepSize float64
+	origstep      float64
+	count         int
+	ev            optim.Evaler
 }
 
 func New(start *optim.Point, opts ...Option) *Method {
@@ -135,7 +136,7 @@ func (m *Method) Iterate(o optim.Objectiver, mesh optim.Mesh) (best *optim.Point
 	if m.count == 0 {
 		m.origstep = mesh.Step()
 	} else if mesh.Step() < m.ResetStep {
-		mesh.SetStep(m.origstep)
+		mesh.SetStep(m.ResetStepSize)
 	}
 
 	var nevalsearch, nevalpoll int
@@ -257,12 +258,16 @@ type Poller struct {
 	// SkipEps is the distance from the center point within which a poll point
 	// is excluded from evaluation.  This can occur if a mesh projection
 	// results in a point being projected back near the poll origin point.
-	SkipEps    float64
-	Spanner    Spanner
-	keepdirecs []direc
-	points     []*optim.Point
-	prevhash   [sha1.Size]byte
-	prevstep   float64
+	SkipEps     float64
+	Spanner     Spanner
+	keepdirecs  []direc
+	points      []*optim.Point
+	prevhash    [sha1.Size]byte
+	prevstep    float64
+	nConsecFail int
+	// FlipCompass is the number of iterations of consecutive failed polls
+	// after which the poller switches to CompassNp1 polling permanently.
+	FlipCompass int
 }
 
 func (cp *Poller) Points() []*optim.Point { return cp.points }
@@ -297,16 +302,12 @@ func (cp *Poller) Poll(obj optim.Objectiver, ev optim.Evaler, m optim.Mesh, from
 	// before.  DONT DELETE - this can fire sometimes if the mesh isn't
 	// allowed to contract below a certain step (i.e. integer meshes).
 	h := from.Hash()
-	if h != cp.prevhash || cp.prevstep != m.Step() {
-		// TODO: write test that checks we poll compass dirs again if only mesh
-		// step changed (and not from point)
-		pollpoints = genPollPoints(from, cp.Spanner, m)
-		cp.prevhash = h
-	} else {
-		// Use random directions instead.
-		n := len(genPollPoints(from, cp.Spanner, m))
-		pollpoints = genPollPoints(from, &RandomN{N: n}, m)
+	if cp.FlipCompass > 0 && cp.nConsecFail >= cp.FlipCompass {
+		// Use compass directions instead
+		cp.Spanner = CompassNp1{}
 	}
+	pollpoints = genPollPoints(from, cp.Spanner, m)
+	cp.prevhash = h
 	cp.prevstep = m.Step()
 
 	// Add successful directions from last poll.  We want to add these points
@@ -321,9 +322,12 @@ func (cp *Poller) Poll(obj optim.Objectiver, ev optim.Evaler, m optim.Mesh, from
 		max = len(perms)
 	}
 
-	for i, dir := range cp.keepdirecs[:max] {
-		swapindex := perms[i]
-		pollpoints[swapindex] = pointFromDirec(from, dir.dir, m)
+	c2n := Compass2N{}
+	if cp.Spanner != c2n {
+		for i, dir := range cp.keepdirecs[:max] {
+			swapindex := perms[i]
+			pollpoints[swapindex] = pointFromDirec(from, dir.dir, m)
+		}
 	}
 
 	// project points onto feasible region and mesh grid
@@ -352,6 +356,7 @@ func (cp *Poller) Poll(obj optim.Objectiver, ev optim.Evaler, m optim.Mesh, from
 	objstop := &objStopper{Objectiver: obj, Best: from.Val}
 	results, n, err := ev.Eval(objstop, cp.points...)
 	if err != nil && err != FoundBetterErr {
+		cp.nConsecFail++
 		return false, best, n, err
 	}
 
@@ -381,8 +386,10 @@ func (cp *Poller) Poll(obj optim.Objectiver, ev optim.Evaler, m optim.Mesh, from
 	}
 
 	if best.Val < from.Val {
+		cp.nConsecFail = 0
 		return true, best, n, nil
 	} else {
+		cp.nConsecFail++
 		return false, from, n, nil
 	}
 }

@@ -53,6 +53,37 @@ func TestDb(t *testing.T) {
 	}
 }
 
+func TestRandomN(t *testing.T) {
+	r := &RandomN{
+		N:    10,
+		Mask: []bool{true, true, true, false, true, true, false},
+	}
+
+	type update struct {
+		Step        float64
+		PrevSuccess bool
+	}
+	upds := []update{
+		{1, false},
+		{.5, true},
+		{.5, true},
+		{.5, true},
+		{.5, true},
+		{1, false},
+		{0.5, false},
+	}
+
+	for _, upd := range upds {
+		r.Update(upd.Step, upd.PrevSuccess)
+	}
+
+	dirs := r.Span(len(r.Mask))
+
+	for i, dir := range dirs {
+		t.Logf("dir %v: %v", i, dir)
+	}
+}
+
 func patternsolver(fn bench.Func, db *sql.DB) (optim.Method, optim.Mesh) {
 	low, up := fn.Bounds()
 	max, min := up[0], low[0]

@@ -19,6 +19,15 @@ type Mesh interface {
 	Origin() []float64
 }
 
+type MaxStepMesh struct {
+	Mesh
+	MaxStep float64
+}
+
+func (m *MaxStepMesh) SetStep(step float64) {
+	m.Mesh.SetStep(math.Min(m.MaxStep, step))
+}
+
 type IntMesh struct {
 	Mesh
 }
