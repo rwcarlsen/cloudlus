@@ -34,7 +34,6 @@ var (
 	seed         = flag.Int("seed", 1, "seed for random number generator")
 	maxeval      = flag.Int("maxeval", 50000, "max number of objective evaluations")
 	maxiter      = flag.Int("maxiter", 500, "max number of optimizer iterations")
-	pollrandn    = flag.Int("pollrandn", 0, "use `n` random direction polling")
 	maxnoimprove = flag.Int("maxnoimprove", 100, "max iterations with no objective improvement(zero -> infinite)")
 	timeout      = flag.Duration("timeout", 120*time.Minute, "max time before remote function eval times out")
 	objlog       = flag.String("objlog", "obj.log", "file to log unpenalized objective values")
@@ -98,7 +97,7 @@ func main() {
 	lb := scen.LowerBounds()
 	ub := scen.UpperBounds()
 
-	step := (ub[0] - lb[0]) / 1
+	step := (ub[0] - lb[0]) / 10
 	var it optim.Method
 
 	if *restart >= 0 {
@@ -109,7 +108,10 @@ func main() {
 
 	obj := &optim.ObjectiveLogger{Obj: &obj{scen, f4}, W: f1}
 
-	m := &optim.BoxMesh{Mesh: &optim.InfMesh{StepSize: step}, Lower: lb, Upper: ub}
+	m := &optim.MaxStepMesh{
+		Mesh:    &optim.BoxMesh{Mesh: &optim.InfMesh{StepSize: step}, Lower: lb, Upper: ub},
+		MaxStep: 1.999,
+	}
 
 	// this is here so that signals goroutine can close over it
 	solv := &optim.Solver{
@@ -137,6 +139,9 @@ func main() {
 	// solve and print results
 	for solv.Next() {
 		fmt.Printf("Iter %v (%v evals):  %v\n", solv.Niter(), solv.Neval(), solv.Best())
+	}
+	if solv.Err() != nil {
+		log.Print(err)
 	}
 
 	final(solv, start)
@@ -185,10 +190,10 @@ func buildIter(lb, ub []float64) optim.Method {
 		swarm.DB(db),
 	)
 	return pattern.New(pop[0].Point,
-		pattern.ResetStep(.001),
+		pattern.ResetStep(.01, 1.6),
 		pattern.NsuccessGrow(4),
 		pattern.Evaler(ev),
-		pattern.PollRandNMask(*pollrandn, mask),
+		pattern.PollRandNMask(n, mask),
 		pattern.SearchMethod(swarm, pattern.Share),
 		pattern.DB(db),
 	)
@@ -271,10 +276,10 @@ func loadIter(lb, ub []float64, iter int) (md optim.Method, initstep float64) {
 		swarm.InitIter(iter+1),
 	)
 	return pattern.New(initPoint,
-		pattern.ResetStep(.001),
+		pattern.ResetStep(.01, 1.6),
 		pattern.NsuccessGrow(4),
 		pattern.Evaler(ev),
-		pattern.PollRandNMask(*pollrandn, mask),
+		pattern.PollRandNMask(npar, mask),
 		pattern.SearchMethod(swarm, pattern.Share),
 		pattern.DB(db),
 	), initstep
