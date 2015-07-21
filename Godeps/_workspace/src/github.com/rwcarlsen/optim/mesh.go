@@ -25,7 +25,9 @@ type MaxStepMesh struct {
 }
 
 func (m *MaxStepMesh) SetStep(step float64) {
-	m.Mesh.SetStep(math.Min(m.MaxStep, step))
+	if step <= m.MaxStep {
+		m.Mesh.SetStep(step)
+	}
 }
 
 type IntMesh struct {

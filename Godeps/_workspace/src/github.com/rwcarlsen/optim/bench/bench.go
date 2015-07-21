@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
+	"sort"
 	"testing"
 
 	"github.com/rwcarlsen/cloudlus/Godeps/_workspace/src/github.com/rwcarlsen/optim"
@@ -351,11 +352,15 @@ var BenchSeed int64 = 7
 // are logged to t.
 func Benchmark(t *testing.T, fn Func, sfn func() *optim.Solver, successfrac, avgiter float64) {
 	optim.Rand = rand.New(rand.NewSource(BenchSeed))
-	nrun := 20
+	nrun := 44
+	ndrop := 2
+	nkeep := nrun - 2*ndrop
 	neval := 0
 	niter := 0
 	nsuccess := 0
 	sum := 0.0
+
+	solvs := []*optim.Solver{}
 	for i := 0; i < nrun; i++ {
 		s := sfn()
 
@@ -368,6 +373,12 @@ func Benchmark(t *testing.T, fn Func, sfn func() *optim.Solver, successfrac, avg
 			t.Errorf("[%v:ERROR] %v", fn.Name(), err)
 		}
 
+		solvs = append(solvs, s)
+	}
+
+	sort.Sort(byevals(solvs))
+
+	for _, s := range solvs[ndrop : len(solvs)-ndrop] {
 		neval += s.Neval()
 		niter += s.Niter()
 		sum += s.Best().Val
@@ -376,19 +387,25 @@ func Benchmark(t *testing.T, fn Func, sfn func() *optim.Solver, successfrac, avg
 		}
 	}
 
-	frac := float64(nsuccess) / float64(nrun)
-	gotavg := float64(niter) / float64(nrun)
+	frac := float64(nsuccess) / float64(nkeep)
+	gotavg := float64(niter) / float64(nkeep)
 
-	t.Logf("[%v] %v/%v runs, %v iters, %v evals, want < %.3f, averaged %.3f", fn.Name(), nsuccess, nrun, gotavg, neval/nrun, fn.Tol(), sum/float64(nrun))
+	t.Logf("[%v] %v/%v runs, %v iters, %v evals, want < %.3f, averaged %.3f", fn.Name(), nsuccess, nkeep, gotavg, neval/nkeep, fn.Tol(), sum/float64(nkeep))
 
 	if frac < successfrac {
-		t.Errorf("    FAIL: only %v/%v runs succeeded, want %v/%v", nsuccess, nrun, math.Ceil(successfrac*float64(nrun)), nrun)
+		t.Errorf("    FAIL: only %v/%v runs succeeded, want %v/%v", nsuccess, nkeep, math.Ceil(successfrac*float64(nkeep)), nkeep)
 	}
 
 	if gotavg > avgiter {
 		t.Errorf("    FAIL: too many iterations: want %v, averaged %.2f", avgiter, gotavg)
 	}
 }
+
+type byevals []*optim.Solver
+
+func (b byevals) Less(i, j int) bool { return b[i].Neval() < b[j].Neval() }
+func (b byevals) Len() int           { return len(b) }
+func (b byevals) Swap(i, j int)      { b[i], b[j] = b[j], b[i] }
 
 var ErrMax = errors.New("hit max eval or iter limit")
 

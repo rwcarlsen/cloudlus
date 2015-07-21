@@ -12,7 +12,6 @@ import (
 )
 
 var FoundBetterErr = errors.New("better position discovered")
-var ZeroStepErr = errors.New("poll step size contracted to zero")
 
 const (
 	TblPolls = "patternpolls"
@@ -190,9 +189,8 @@ func (m *Method) Iterate(o optim.Objectiver, mesh optim.Mesh) (best *optim.Point
 	} else {
 		m.nsuccess = 0
 		var err error
-		mesh.SetStep(mesh.Step() * 0.5)
-		if mesh.Step() == 0 {
-			err = ZeroStepErr
+		if nextstep := mesh.Step() * 0.5; nextstep > 0 {
+			mesh.SetStep(mesh.Step() * 0.5)
 		}
 		return m.Curr, n, err
 	}
@@ -293,7 +291,12 @@ func (b byval) Swap(i, j int)      { b[i], b[j] = b[j], b[i] }
 func (cp *Poller) Poll(obj optim.Objectiver, ev optim.Evaler, m optim.Mesh, from *optim.Point) (success bool, best *optim.Point, neval int, err error) {
 	best = from
 	if cp.Spanner == nil {
-		cp.Spanner = Compass2N{}
+		ndim := len(from.Pos)
+		if ndim > 10 {
+			cp.Spanner = &RandomN{N: len(from.Pos)}
+		} else {
+			cp.Spanner = Compass2N{}
+		}
 	}
 
 	pollpoints := []*optim.Point{}

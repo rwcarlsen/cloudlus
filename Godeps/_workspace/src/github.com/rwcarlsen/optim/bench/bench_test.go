@@ -48,14 +48,11 @@ func TestBenchPSwarmRosen(t *testing.T) {
 	npar := 30
 	maxiter := 10000
 	successfrac := 1.0
-	avgiter := 300.0
+	avgiter := 350.0
 
 	fn := bench.Rosenbrock{ndim}
 	sfn := func() *optim.Solver {
 		m, mesh := pswarmsolver(fn, nil, npar)
-		low, _ := fn.Bounds()
-		ndim := len(low)
-		m.Poller = &pattern.Poller{Spanner: &pattern.RandomN{N: ndim}}
 		return &optim.Solver{
 			Method:  m,
 			Obj:     optim.Func(fn.Eval),
@@ -72,7 +69,7 @@ func TestBenchPSwarmGriewank(t *testing.T) {
 	npar := 30
 	maxiter := 10000
 	successfrac := 1.00
-	avgiter := 220.0
+	avgiter := 250.0
 
 	fn := bench.Griewank{ndim}
 	sfn := func() *optim.Solver {
@@ -89,11 +86,11 @@ func TestBenchPSwarmGriewank(t *testing.T) {
 }
 
 func TestBenchPSwarmRastrigrin(t *testing.T) {
-	ndim := 30
+	ndim := 12
 	npar := 30
 	maxiter := 10000
-	successfrac := 1.00
-	avgiter := 130.0
+	successfrac := 0.80
+	avgiter := 1250.0
 
 	fn := bench.Rastrigrin{ndim}
 	sfn := func() *optim.Solver {
@@ -113,13 +110,12 @@ func TestOverviewPattern(t *testing.T) {
 	maxeval := 50000
 	maxiter := 5000
 	successfrac := 0.50
-	avgiter := 2500.0
+	avgiter := 3000.0
 
 	// ONLY test plain pattern search on convex functions
 	for _, fn := range []bench.Func{bench.Rosenbrock{NDim: 2}} {
 		sfn := func() *optim.Solver {
 			m, mesh := patternsolver(fn, nil)
-			m.Poller = &pattern.Poller{Spanner: pattern.CompassNp1{}}
 			return &optim.Solver{
 				Method:  m,
 				Obj:     optim.Func(fn.Eval),
@@ -175,7 +171,7 @@ func TestOverviewPSwarm(t *testing.T) {
 func patternsolver(fn bench.Func, db *sql.DB) (*pattern.Method, optim.Mesh) {
 	low, up := fn.Bounds()
 	max, min := up[0], low[0]
-	mesh := &optim.InfMesh{StepSize: (max - min) / 10}
+	mesh := &optim.InfMesh{StepSize: (max - min) / 1}
 	p := initialpoint(fn)
 	mesh.SetOrigin(p.Pos)
 	return pattern.New(p, pattern.DB(db)), mesh
@@ -201,7 +197,7 @@ func swarmsolver(fn bench.Func, db *sql.DB, n int) optim.Method {
 func pswarmsolver(fn bench.Func, db *sql.DB, n int) (*pattern.Method, optim.Mesh) {
 	low, up := fn.Bounds()
 	max, min := up[0], low[0]
-	mesh := &optim.InfMesh{StepSize: (max - min) / 10}
+	mesh := &optim.InfMesh{StepSize: (max - min) / 9}
 	p := initialpoint(fn)
 	mesh.SetOrigin(p.Pos)
 
