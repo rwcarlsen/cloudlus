@@ -11,6 +11,7 @@ import (
 	"math"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"text/template"
 
 	"github.com/rwcarlsen/cloudlus/Godeps/_workspace/src/code.google.com/p/go-uuid/uuid"
@@ -82,7 +83,8 @@ type Scenario struct {
 	// TrailingDur is the number of timesteps of the simulation duration that
 	// are reserved for wind-down - no new deployments will be made.
 	TrailingDur int
-	// CyclusTmpl is the path to the text templated cyclus input file.
+	// CyclusTmpl is the relative path to the text templated cyclus input file
+	// rooted from the directory of the scenario file.
 	CyclusTmpl string
 	// BuildPeriod is the number of timesteps between timesteps in which
 	// facilities are deployed
@@ -441,6 +443,10 @@ func (s *Scenario) PowerCap(builds map[string][]Build, t int) float64 {
 	return pow
 }
 
+func (s *Scenario) tmplRelPath() string {
+	return filepath.Join(filepath.Dir(s.File), s.CyclusTmpl)
+}
+
 // Validate returns an error if the scenario is ill-configured.
 func (s *Scenario) Validate() error {
 	if min, max := len(s.MinPower), len(s.MaxPower); min != max {
@@ -449,7 +455,7 @@ func (s *Scenario) Validate() error {
 
 	var err error
 	if s.tmpl == nil && s.CyclusTmpl != "" {
-		s.tmpl, err = template.ParseFiles(s.CyclusTmpl)
+		s.tmpl, err = template.ParseFiles(s.tmplRelPath())
 		if err != nil {
 			return err
 		}
@@ -529,7 +535,7 @@ func (s *Scenario) GenCyclusInfile() ([]byte, error) {
 	}
 
 	if s.tmpl == nil {
-		s.tmpl = template.Must(template.ParseFiles(s.CyclusTmpl))
+		s.tmpl = template.Must(template.ParseFiles(s.tmplRelPath()))
 	}
 
 	var buf bytes.Buffer
