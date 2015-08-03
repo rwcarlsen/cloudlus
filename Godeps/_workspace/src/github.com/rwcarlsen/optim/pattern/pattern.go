@@ -102,6 +102,7 @@ type Method struct {
 	// function of the value other variables.
 	ResetStep     float64
 	ResetStepSize float64
+	StepMult      float64
 	origstep      float64
 	count         int
 	ev            optim.Evaler
@@ -114,6 +115,7 @@ func New(start *optim.Point, opts ...Option) *Method {
 		Poller:       &Poller{Nkeep: start.Len() / 4, SkipEps: 1e-10},
 		Searcher:     NullSearcher{},
 		NsuccessGrow: -1,
+		StepMult:     1.0 / 1.7,
 	}
 
 	for _, opt := range opts {
@@ -176,7 +178,7 @@ func (m *Method) Iterate(o optim.Objectiver, mesh optim.Mesh) (best *optim.Point
 		m.Curr = best
 		m.nsuccess++
 		if m.nsuccess == m.NsuccessGrow { // == allows -1 to mean never grow
-			mesh.SetStep(mesh.Step() * 2.0)
+			mesh.SetStep(mesh.Step() / m.StepMult)
 			m.nsuccess = 0 // reset after resize
 		}
 
@@ -189,8 +191,8 @@ func (m *Method) Iterate(o optim.Objectiver, mesh optim.Mesh) (best *optim.Point
 	} else {
 		m.nsuccess = 0
 		var err error
-		if nextstep := mesh.Step() * 0.5; nextstep > 0 {
-			mesh.SetStep(mesh.Step() * 0.5)
+		if nextstep := mesh.Step() * m.StepMult; nextstep > 0 {
+			mesh.SetStep(mesh.Step() * m.StepMult)
 		}
 		return m.Curr, n, err
 	}
