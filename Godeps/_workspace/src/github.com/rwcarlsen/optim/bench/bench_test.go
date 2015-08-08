@@ -109,8 +109,8 @@ func TestBenchPSwarmRastrigrin(t *testing.T) {
 func TestOverviewPattern(t *testing.T) {
 	maxeval := 50000
 	maxiter := 5000
-	successfrac := 0.50
-	avgiter := 3000.0
+	successfrac := 0.25
+	avgiter := 4000.0
 
 	// ONLY test plain pattern search on convex functions
 	for _, fn := range []bench.Func{bench.Rosenbrock{NDim: 2}} {
