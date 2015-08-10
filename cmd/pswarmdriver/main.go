@@ -30,6 +30,7 @@ import (
 var (
 	scenfile     = flag.String("scen", "scenario.json", "file containing problem scenification")
 	addr         = flag.String("addr", "", "address to submit jobs to (otherwise, run locally)")
+	swarmonly    = flag.Bool("swarmonly", false, "Don't do pattern search - only particle swarm")
 	npar         = flag.Int("npar", 0, "number of particles (0 => choose automatically)")
 	seed         = flag.Int("seed", 1, "seed for random number generator")
 	maxeval      = flag.Int("maxeval", 50000, "max number of objective evaluations")
@@ -189,14 +190,19 @@ func buildIter(lb, ub []float64) optim.Method {
 		swarm.VmaxBounds(lb, ub),
 		swarm.DB(db),
 	)
-	return pattern.New(pop[0].Point,
-		pattern.ResetStep(.01, 1.0),
-		pattern.NsuccessGrow(4),
-		pattern.Evaler(ev),
-		pattern.PollRandNMask(n, mask),
-		pattern.SearchMethod(swarm, pattern.Share),
-		pattern.DB(db),
-	)
+
+	if *swarmonly {
+		return swarm
+	} else {
+		return pattern.New(pop[0].Point,
+			pattern.ResetStep(.01, 1.0),
+			pattern.NsuccessGrow(4),
+			pattern.Evaler(ev),
+			pattern.PollRandNMask(n, mask),
+			pattern.SearchMethod(swarm, pattern.Share),
+			pattern.DB(db),
+		)
+	}
 }
 
 func loadPoint(query string, args ...interface{}) *optim.Point {
