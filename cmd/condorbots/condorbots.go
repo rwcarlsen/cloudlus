@@ -45,6 +45,7 @@ type CondorConfig struct {
 
 const condorname = "condor.submit"
 
+// rank = Kflops is to prefer faster FLOPS machines.
 const condorfile = `
 universe = vanilla
 executable = {{.Executable}}
@@ -56,6 +57,7 @@ error = worker.$(PROCESS).error
 log = workers.log
 request_cpus = {{.NCPU}}
 request_memory = {{.Memory}}
+Rank = Kflops
 requirements = OpSys == "LINUX" && Arch == "x86_64" && (OpSysAndVer =?= "SL6") {{.ClassAds}}
 
 queue {{.N}}
