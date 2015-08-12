@@ -24,6 +24,7 @@ var (
 	n       = flag.Int("n", 0, "number of bots to deploy")
 	ncpu    = flag.Int("ncpu", 1, "minimum number of cpus required per worker job")
 	mem     = flag.Int("mem", 512, "minimum `MiB` of memory required per worker job")
+	classad = flag.String("classad", "", "literal classad constraints (e.g. 'Mips >= 20000' for faster cpus)")
 	keyfile = flag.String("keyfile", filepath.Join(os.Getenv("HOME"), ".ssh/id_rsa"), "path to ssh private key file")
 	user    = flag.String("user", "rcarlsen", "condor (and via node) ssh username")
 	dst     = flag.String("dst", "submit-3.chtc.wisc.edu:22", "condor submit node URI")
@@ -39,6 +40,7 @@ type CondorConfig struct {
 	N          int
 	NCPU       int
 	Memory     int
+	ClassAds   string
 }
 
 const condorname = "condor.submit"
@@ -54,7 +56,7 @@ error = worker.$(PROCESS).error
 log = workers.log
 request_cpus = {{.NCPU}}
 request_memory = {{.Memory}}
-requirements = OpSys == "LINUX" && Arch == "x86_64" && (OpSysAndVer =?= "SL6")
+requirements = OpSys == "LINUX" && Arch == "x86_64" && (OpSysAndVer =?= "SL6") {{.ClassAds}}
 
 queue {{.N}}
 `
@@ -103,11 +105,14 @@ func main() {
 
 	// build condor submit file and condor submit executable script
 	cc := CondorConfig{
-		runfilename,
-		strings.Join(dstfiles, ","),
-		*n,
-		*ncpu,
-		*mem,
+		Executable: runfilename,
+		Infiles:    strings.Join(dstfiles, ","),
+		N:          *n,
+		NCPU:       *ncpu,
+		Memory:     *mem,
+	}
+	if *classad != "" {
+		cc.ClassAds = " && " + *classad
 	}
 
 	var condorbuf, runbuf bytes.Buffer
