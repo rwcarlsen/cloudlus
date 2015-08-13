@@ -70,7 +70,7 @@ func (b Build) Lifetime() int {
 // Alive returns whether or not a facility with the given lifetime and built
 // at the specified time is still operating/active at t.
 func Alive(built, t, life int) bool {
-	return built <= t && (built+life >= t || life <= 0)
+	return built <= t && (built+life > t || life <= 0)
 }
 
 type Scenario struct {

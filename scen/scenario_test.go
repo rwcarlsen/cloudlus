@@ -2,6 +2,31 @@ package scen
 
 import "testing"
 
+type alivetest struct {
+	Built    int
+	Lifetime int
+	Time     int
+	Alive    bool
+}
+
+func TestAlive(t *testing.T) {
+	tests := []alivetest{
+		{Built: 1, Lifetime: 3, Time: 0, Alive: false},
+		{Built: 1, Lifetime: 3, Time: 1, Alive: true},
+		{Built: 1, Lifetime: 3, Time: 2, Alive: true},
+		{Built: 1, Lifetime: 3, Time: 3, Alive: true},
+		{Built: 1, Lifetime: 3, Time: 4, Alive: false},
+	}
+
+	for _, test := range tests {
+		got := Alive(test.Built, test.Time, test.Lifetime)
+		want := test.Alive
+		if want != got {
+			t.Errorf("case Alive(built=%v,life=%v,t=%v)=%v, want %v", test.Built, test.Lifetime, test.Time, got, want)
+		}
+	}
+}
+
 func TestPeriodTimes(t *testing.T) {
 	var tests = []struct {
 		Dur    int
