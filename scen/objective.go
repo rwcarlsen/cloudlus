@@ -14,7 +14,7 @@ var ObjFuncs = map[string]ObjFunc{
 	"ans2014":          ObjANS2014,
 }
 
-// ObjSlowVsFastPowerFueled returns:
+// ObjSlowVsFastPower returns:
 //
 //    (thermal reactor energy) / (total energy)
 //
@@ -32,17 +32,17 @@ func ObjSlowVsFastPower(scen *Scenario, dbfile string, simid []byte) (float64, e
 	q1 := `
     	SELECT SUM(Value) FROM timeseriespower AS p
            JOIN agents AS a ON a.agentid=p.agentid AND a.simid=p.simid
-           WHERE a.Prototype=? AND p.simid=?
+           WHERE a.Prototype IN (?,?) AND p.simid=?
 		`
 
 	slowpower := 0.0
-	err = db.QueryRow(q1, "slow_reactor", simid).Scan(&slowpower)
+	err = db.QueryRow(q1, "slow_reactor", "init_slow_reactor", simid).Scan(&slowpower)
 	if err != nil {
 		return math.Inf(1), err
 	}
 
 	fastpower := 0.0
-	err = db.QueryRow(q1, "fast_reactor", simid).Scan(&fastpower)
+	err = db.QueryRow(q1, "fast_reactor", "fast_reactor", simid).Scan(&fastpower)
 	if err != nil {
 		return math.Inf(1), err
 	}
