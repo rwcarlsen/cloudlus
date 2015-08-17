@@ -306,6 +306,15 @@ const home = `
 			<li>
 				{{.Stats.NPurged}} old jobs purged.
 			</li>
+			<li>
+				{{.Stats.TotJobTime}} cumulative job run time.
+			</li>
+			<li>
+				{{.Stats.AvgJobTime}} average job run time.
+			</li>
+			<li>
+				{{.Stats.ShortestJobTime}} shortest single job run time.
+			</li>
 		</ul>
 	</div>
 

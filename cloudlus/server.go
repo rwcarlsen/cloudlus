@@ -47,14 +47,17 @@ type Server struct {
 }
 
 type Stats struct {
-	Started     time.Time
-	NSubmitted  int
-	NCompleted  int
-	NFailed     int
-	NPurged     int
-	NRequeued   int
-	CurrQueued  int
-	CurrRunning int
+	Started         time.Time
+	NSubmitted      int
+	NCompleted      int
+	NFailed         int
+	NPurged         int
+	NRequeued       int
+	CurrQueued      int
+	CurrRunning     int
+	TotJobTime      time.Duration
+	AvgJobTime      time.Duration
+	ShortestJobTime time.Duration
 }
 
 // TODO: Make worker RPC serving separate from submitter RPC interface serving
@@ -254,6 +257,12 @@ func (s *Server) dispatcher() {
 				s.Stats.NFailed++
 			} else if j.Status == StatusComplete {
 				s.Stats.NCompleted++
+				jobtime := j.Finished.Sub(j.Started)
+				s.Stats.TotJobTime += jobtime
+				s.Stats.AvgJobTime = s.Stats.TotJobTime / time.Duration(s.Stats.NCompleted)
+				if s.Stats.ShortestJobTime == 0 || jobtime < s.Stats.ShortestJobTime {
+					s.Stats.ShortestJobTime = jobtime
+				}
 			}
 
 			s.log.Printf("[PUSH] job %v\n", j.Id)
