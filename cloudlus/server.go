@@ -25,10 +25,19 @@ const beatInterval = 15 * time.Second
 const beatLimit = 2 * beatInterval
 const beatCheckFreq = beatInterval / 3
 
+type queueOp int
+
+const (
+	Reset queueOp = iota
+	queueFront
+	queueBack
+)
+
 type Server struct {
 	log         *log.Logger
 	serv        *http.Server
 	Host        string
+	chanQueue   chan queueOp
 	CollectFreq time.Duration
 	submitjobs  chan jobSubmit
 	submitchans map[[16]byte]chan *Job
@@ -64,6 +73,7 @@ type Stats struct {
 
 func NewServer(httpaddr, rpcaddr string, db *DB) *Server {
 	s := &Server{
+		chanQueue:   make(chan queueOp),
 		submitjobs:  make(chan jobSubmit),
 		submitchans: map[[16]byte]chan *Job{},
 		pushjobs:    make(chan *Job),
@@ -204,6 +214,12 @@ func (s *Server) checkbeat() {
 				s.alljobs.Put(j)
 			}
 		}
+	}
+}
+
+func (s *Server) queueModLoop() {
+	for {
+		<-s.chanQueue
 	}
 }
 
