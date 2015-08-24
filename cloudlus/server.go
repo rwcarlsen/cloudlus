@@ -26,35 +26,34 @@ const beatLimit = 2 * beatInterval
 const beatCheckFreq = beatInterval / 3
 
 type Server struct {
-	log          *log.Logger
-	serv         *http.Server
-	Host         string
-	CollectFreq  time.Duration
-	submitjobs   chan jobSubmit
-	submitchans  map[[16]byte]chan *Job
-	retrievejobs chan jobRequest
-	pushjobs     chan *Job
-	fetchjobs    chan workRequest
-	reset        chan struct{}
-	queue        []JobId
-	alljobs      *DB
-	rpc          *RPC
-	jobinfo      map[JobId]Beat // map[Worker]Job
-	beat         chan Beat
-	rpcaddr      string
-	kill         chan struct{}
-	Stats        *Stats
+	log         *log.Logger
+	serv        *http.Server
+	Host        string
+	CollectFreq time.Duration
+	submitjobs  chan jobSubmit
+	submitchans map[[16]byte]chan *Job
+	pushjobs    chan *Job
+	fetchjobs   chan workRequest
+	reset       chan struct{}
+	queue       []JobId
+	alljobs     *DB
+	rpc         *RPC
+	jobinfo     map[JobId]Beat // map[Worker]Job
+	beat        chan Beat
+	rpcaddr     string
+	kill        chan struct{}
+	Stats       *Stats
 }
 
 type Stats struct {
 	Started         time.Time
+	CurrQueued      int
+	CurrRunning     int
 	NSubmitted      int
 	NCompleted      int
 	NFailed         int
 	NPurged         int
 	NRequeued       int
-	CurrQueued      int
-	CurrRunning     int
 	TotJobTime      time.Duration
 	AvgJobTime      time.Duration
 	ShortestJobTime time.Duration
@@ -65,19 +64,18 @@ type Stats struct {
 
 func NewServer(httpaddr, rpcaddr string, db *DB) *Server {
 	s := &Server{
-		submitjobs:   make(chan jobSubmit),
-		submitchans:  map[[16]byte]chan *Job{},
-		retrievejobs: make(chan jobRequest),
-		pushjobs:     make(chan *Job),
-		fetchjobs:    make(chan workRequest),
-		jobinfo:      map[JobId]Beat{},
-		beat:         make(chan Beat),
-		reset:        make(chan struct{}),
-		rpcaddr:      rpcaddr,
-		log:          log.New(os.Stdout, "", log.LstdFlags),
-		kill:         make(chan struct{}),
-		CollectFreq:  defaultCollectFreq,
-		Stats:        &Stats{},
+		submitjobs:  make(chan jobSubmit),
+		submitchans: map[[16]byte]chan *Job{},
+		pushjobs:    make(chan *Job),
+		fetchjobs:   make(chan workRequest),
+		jobinfo:     map[JobId]Beat{},
+		beat:        make(chan Beat),
+		reset:       make(chan struct{}),
+		rpcaddr:     rpcaddr,
+		log:         log.New(os.Stdout, "", log.LstdFlags),
+		kill:        make(chan struct{}),
+		CollectFreq: defaultCollectFreq,
+		Stats:       &Stats{},
 	}
 
 	var err error
@@ -174,12 +172,12 @@ func (s *Server) Start(j *Job, ch chan *Job) chan *Job {
 }
 
 func (s *Server) Get(jid JobId) (*Job, error) {
-	ch := make(chan *Job)
-	s.retrievejobs <- jobRequest{Id: jid, Resp: ch}
-	j := <-ch
-	if j == nil {
+	j, err := s.alljobs.Get(req.Id)
+	if err != nil {
 		return nil, fmt.Errorf("unknown job id %v", jid)
 	}
+
+	s.log.Printf("[RETRIEVE] job %v\n", j.Id)
 	return j, nil
 }
 
@@ -245,13 +243,6 @@ func (s *Server) dispatcher() {
 			s.queue = append(s.queue, j.Id)
 
 			s.alljobs.Put(j)
-		case req := <-s.retrievejobs:
-			if j, err := s.alljobs.Get(req.Id); err == nil {
-				s.log.Printf("[RETRIEVE] job %v\n", j.Id)
-				req.Resp <- j
-			} else {
-				req.Resp <- nil
-			}
 		case j := <-s.pushjobs:
 			if j.Status == StatusFailed {
 				s.Stats.NFailed++
