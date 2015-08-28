@@ -443,7 +443,7 @@ func (s *Scenario) PowerCap(builds map[string][]Build, t int) float64 {
 	return pow
 }
 
-func (s *Scenario) tmplRelPath() string {
+func (s *Scenario) CyclusTmplPath() string {
 	return filepath.Join(filepath.Dir(s.File), s.CyclusTmpl)
 }
 
@@ -455,7 +455,7 @@ func (s *Scenario) Validate() error {
 
 	var err error
 	if s.tmpl == nil && s.CyclusTmpl != "" {
-		s.tmpl, err = template.ParseFiles(s.tmplRelPath())
+		s.tmpl, err = template.ParseFiles(s.CyclusTmplPath())
 		if err != nil {
 			return err
 		}
@@ -535,7 +535,7 @@ func (s *Scenario) GenCyclusInfile() ([]byte, error) {
 	}
 
 	if s.tmpl == nil {
-		s.tmpl = template.Must(template.ParseFiles(s.tmplRelPath()))
+		s.tmpl = template.Must(template.ParseFiles(s.CyclusTmplPath()))
 	}
 
 	var buf bytes.Buffer
