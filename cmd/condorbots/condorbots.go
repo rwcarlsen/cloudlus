@@ -23,8 +23,8 @@ var (
 	run     = flag.String("run", "", "name of script for condor to run")
 	n       = flag.Int("n", 0, "number of bots to deploy")
 	ncpu    = flag.Int("ncpu", 1, "minimum number of cpus required per worker job")
-	mem     = flag.Int("mem", 512, "minimum `MiB` of memory required per worker job")
-	classad = flag.String("classad", "", "literal classad constraints (e.g. 'Kflops >= 1400000' for faster cpus)")
+	mem     = flag.Int("mem", 1024, "minimum `MiB` of memory required per worker job")
+	classad = flag.String("classad", "", "literal classad constraints (e.g. 'KFlops >= 1500000' for faster cpus)")
 	keyfile = flag.String("keyfile", filepath.Join(os.Getenv("HOME"), ".ssh/id_rsa"), "path to ssh private key file")
 	user    = flag.String("user", "rcarlsen", "condor (and via node) ssh username")
 	dst     = flag.String("dst", "submit-3.chtc.wisc.edu:22", "condor submit node URI")
@@ -45,7 +45,7 @@ type CondorConfig struct {
 
 const condorname = "condor.submit"
 
-// rank = Kflops is to prefer faster FLOPS machines.
+// rank = KFlops is to prefer faster FLOPS machines.
 const condorfile = `
 universe = vanilla
 executable = {{.Executable}}
@@ -55,9 +55,10 @@ when_to_transfer_output = on_exit
 output = worker.$(PROCESS).output
 error = worker.$(PROCESS).error
 log = workers.log
+Disk = 700000000
 request_cpus = {{.NCPU}}
 request_memory = {{.Memory}}
-Rank = Kflops
+Rank = KFlops
 requirements = OpSys == "LINUX" && Arch == "x86_64" && (OpSysAndVer =?= "SL6") {{.ClassAds}}
 
 queue {{.N}}
