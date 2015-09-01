@@ -24,6 +24,7 @@ var (
 	n       = flag.Int("n", 0, "number of bots to deploy")
 	ncpu    = flag.Int("ncpu", 1, "minimum number of cpus required per worker job")
 	mem     = flag.Int("mem", 1024, "minimum `MiB` of memory required per worker job")
+	disk    = flag.Int("disk", 1024, "minimum `MiB` of memory required per worker job")
 	classad = flag.String("classad", "", "literal classad constraints (e.g. 'KFlops >= 1500000' for faster cpus)")
 	keyfile = flag.String("keyfile", filepath.Join(os.Getenv("HOME"), ".ssh/id_rsa"), "path to ssh private key file")
 	user    = flag.String("user", "rcarlsen", "condor (and via node) ssh username")
@@ -41,6 +42,7 @@ type CondorConfig struct {
 	NCPU       int
 	Memory     int
 	ClassAds   string
+	Disk       int
 }
 
 const condorname = "condor.submit"
@@ -55,7 +57,7 @@ when_to_transfer_output = on_exit
 output = worker.$(PROCESS).output
 error = worker.$(PROCESS).error
 log = workers.log
-Disk = 700000000
+Disk = {{.Disk}}
 request_cpus = {{.NCPU}}
 request_memory = {{.Memory}}
 Rank = KFlops
@@ -113,6 +115,7 @@ func main() {
 		N:          *n,
 		NCPU:       *ncpu,
 		Memory:     *mem,
+		Disk:       *disk * 1024,
 	}
 	if *classad != "" {
 		cc.ClassAds = " && " + *classad
