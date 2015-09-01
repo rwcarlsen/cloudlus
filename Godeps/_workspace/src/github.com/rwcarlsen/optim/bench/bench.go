@@ -32,8 +32,8 @@ var Basic = []Func{
 	Rosenbrock{NDim: 10},
 	Griewank{NDim: 2},
 	//Griewank{NDim: 10},
-	Rastrigrin{NDim: 2},
-	Rastrigrin{NDim: 10},
+	Rastrigin{NDim: 2},
+	Rastrigin{NDim: 10},
 }
 
 type Func interface {
@@ -224,15 +224,15 @@ func (fn Styblinski) Optima() []*optim.Point {
 	}
 }
 
-type Rastrigrin struct {
+type Rastrigin struct {
 	NDim int
 }
 
-func (fn Rastrigrin) Name() string { return fmt.Sprintf("Rastrigrin_%vD", fn.NDim) }
+func (fn Rastrigin) Name() string { return fmt.Sprintf("Rastrigrin_%vD", fn.NDim) }
 
-func (fn Rastrigrin) Tol() float64 { return 5.0 / 3.0 * float64(fn.NDim) }
+func (fn Rastrigin) Tol() float64 { return 5.0 / 3.0 * float64(fn.NDim) }
 
-func (fn Rastrigrin) Eval(x []float64) float64 {
+func (fn Rastrigin) Eval(x []float64) float64 {
 	if !InsideBounds(x, fn) {
 		return math.Inf(1)
 	}
@@ -244,7 +244,7 @@ func (fn Rastrigrin) Eval(x []float64) float64 {
 	return tot
 }
 
-func (fn Rastrigrin) Bounds() (low, up []float64) {
+func (fn Rastrigin) Bounds() (low, up []float64) {
 	low = make([]float64, fn.NDim)
 	up = make([]float64, fn.NDim)
 	for i := range low {
@@ -254,7 +254,7 @@ func (fn Rastrigrin) Bounds() (low, up []float64) {
 	return low, up
 }
 
-func (fn Rastrigrin) Optima() []*optim.Point {
+func (fn Rastrigin) Optima() []*optim.Point {
 	return []*optim.Point{
 		&optim.Point{make([]float64, fn.NDim), 0},
 	}
@@ -348,9 +348,9 @@ var BenchSeed int64 = 7
 // Benchmark performs several optimization runs using sfn to generate
 // set up problems for each run.  It uses fn as the objective and performs
 // tests confirming that at least some successfrac of runs achieved better
-// than fn's tolerance for optimum in less than avgiter iterations. Results
+// than fn's tolerance for optimum in less than avgeval evaluations. Results
 // are logged to t.
-func Benchmark(t *testing.T, fn Func, sfn func() *optim.Solver, successfrac, avgiter float64) {
+func Benchmark(t *testing.T, fn Func, sfn func() *optim.Solver, successfrac, avgeval float64) {
 	optim.Rand = rand.New(rand.NewSource(BenchSeed))
 	nrun := 44
 	ndrop := 2
@@ -388,16 +388,16 @@ func Benchmark(t *testing.T, fn Func, sfn func() *optim.Solver, successfrac, avg
 	}
 
 	frac := float64(nsuccess) / float64(nkeep)
-	gotavg := float64(niter) / float64(nkeep)
+	gotavg := float64(neval) / float64(nkeep)
 
-	t.Logf("[%v] %v/%v runs, %v iters, %v evals, want < %.3f, averaged %.3f", fn.Name(), nsuccess, nkeep, gotavg, neval/nkeep, fn.Tol(), sum/float64(nkeep))
+	t.Logf("[%v] %v/%v runs, %v iters, %v evals, want < %.3f, averaged %.3f", fn.Name(), nsuccess, nkeep, niter/nkeep, neval/nkeep, fn.Tol(), sum/float64(nkeep))
 
 	if frac < successfrac {
 		t.Errorf("    FAIL: only %v/%v runs succeeded, want %v/%v", nsuccess, nkeep, math.Ceil(successfrac*float64(nkeep)), nkeep)
 	}
 
-	if gotavg > avgiter {
-		t.Errorf("    FAIL: too many iterations: want %v, averaged %.2f", avgiter, gotavg)
+	if gotavg > avgeval {
+		t.Errorf("    FAIL: too many evaluations: want %v, averaged %.2f", avgeval, gotavg)
 	}
 }
 

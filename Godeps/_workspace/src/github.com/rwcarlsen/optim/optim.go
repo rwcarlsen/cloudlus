@@ -26,6 +26,7 @@ func RandFloat() float64 { return Rand.Float64() }
 type Solver struct {
 	Method       Method
 	Obj          Objectiver
+	StopOnErr    bool
 	Mesh         Mesh
 	MaxIter      int
 	MaxEval      int
@@ -70,7 +71,7 @@ func (s *Solver) Next() (more bool) {
 		s.noimprove++
 	}
 
-	if s.err != nil {
+	if s.err != nil && s.StopOnErr {
 		return false
 	}
 
@@ -185,16 +186,20 @@ type SerialEvaler struct {
 }
 
 func (ev SerialEvaler) Eval(obj Objectiver, points ...*Point) (results []*Point, n int, err error) {
+	var err2 error
 	uniq := uniqof(points)
 	for i, p := range uniq {
 
-		p.Val, err = obj.Objective(p.Pos)
+		p.Val, err2 = obj.Objective(p.Pos)
 		n++
-		if err != nil && !ev.ContinueOnErr {
-			return uniq[:i+1], n, err
+		if err2 != nil {
+			err = err2
+			if !ev.ContinueOnErr {
+				return uniq[:i+1], n, err
+			}
 		}
 	}
-	return uniq, n, nil
+	return uniq, n, err
 }
 
 type errpoint struct {
@@ -217,8 +222,7 @@ func uniqof(ps []*Point) []*Point {
 }
 
 type ParallelEvaler struct {
-	ContinueOnErr bool
-	NConcurrent   int
+	NConcurrent int
 }
 
 func (ev ParallelEvaler) Eval(obj Objectiver, points ...*Point) (results []*Point, n int, err error) {
@@ -260,11 +264,7 @@ func (ev ParallelEvaler) Eval(obj Objectiver, points ...*Point) (results []*Poin
 		}
 	}
 
-	if ev.ContinueOnErr && len(results) > 0 {
-		return results, n, nil
-	} else {
-		return results, n, err
-	}
+	return results, n, err
 }
 
 type Func func([]float64) float64

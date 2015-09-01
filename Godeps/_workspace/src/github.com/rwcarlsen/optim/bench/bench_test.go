@@ -27,28 +27,63 @@ func init() { bench.BenchSeed = seed }
 func TestBenchSwarmRosen(t *testing.T) {
 	ndim := 30
 	npar := 30
-	maxiter := 10000
-	successfrac := 1.00
-	avgiter := 500.0
+	maxeval := 30000
+	avgeval := 14000.0
+	successfrac := 0.95
 
 	fn := bench.Rosenbrock{ndim}
 	sfn := func() *optim.Solver {
 		return &optim.Solver{
 			Method:  swarmsolver(fn, nil, npar),
 			Obj:     optim.Func(fn.Eval),
-			MaxEval: maxiter * npar,
-			MaxIter: maxiter,
+			MaxEval: maxeval,
 		}
 	}
-	bench.Benchmark(t, fn, sfn, successfrac, avgiter)
+	bench.Benchmark(t, fn, sfn, successfrac, avgeval)
+}
+
+func TestBenchSwarmGriewank(t *testing.T) {
+	ndim := 30
+	npar := 30
+	maxeval := 120000
+	avgeval := 80000.0
+	successfrac := 0.80
+
+	fn := bench.Griewank{ndim}
+	sfn := func() *optim.Solver {
+		return &optim.Solver{
+			Method:  swarmsolver(fn, nil, npar),
+			Obj:     optim.Func(fn.Eval),
+			MaxEval: maxeval,
+		}
+	}
+	bench.Benchmark(t, fn, sfn, successfrac, avgeval)
+}
+
+func TestBenchSwarmRastrigin(t *testing.T) {
+	ndim := 20
+	npar := 30
+	maxeval := 30000
+	avgeval := 18000.0
+	successfrac := 0.50
+
+	fn := bench.Rastrigin{ndim}
+	sfn := func() *optim.Solver {
+		return &optim.Solver{
+			Method:  swarmsolver(fn, nil, npar),
+			Obj:     optim.Func(fn.Eval),
+			MaxEval: maxeval,
+		}
+	}
+	bench.Benchmark(t, fn, sfn, successfrac, avgeval)
 }
 
 func TestBenchPSwarmRosen(t *testing.T) {
 	ndim := 30
 	npar := 30
-	maxiter := 10000
+	maxeval := 300000
+	avgeval := 10000.0
 	successfrac := 1.0
-	avgiter := 350.0
 
 	fn := bench.Rosenbrock{ndim}
 	sfn := func() *optim.Solver {
@@ -57,19 +92,18 @@ func TestBenchPSwarmRosen(t *testing.T) {
 			Method:  m,
 			Obj:     optim.Func(fn.Eval),
 			Mesh:    mesh,
-			MaxEval: maxiter * npar,
-			MaxIter: maxiter,
+			MaxEval: maxeval,
 		}
 	}
-	bench.Benchmark(t, fn, sfn, successfrac, avgiter)
+	bench.Benchmark(t, fn, sfn, successfrac, avgeval)
 }
 
 func TestBenchPSwarmGriewank(t *testing.T) {
 	ndim := 30
 	npar := 30
-	maxiter := 10000
+	maxeval := 300000
+	avgeval := 8000.0
 	successfrac := 1.00
-	avgiter := 250.0
 
 	fn := bench.Griewank{ndim}
 	sfn := func() *optim.Solver {
@@ -78,39 +112,36 @@ func TestBenchPSwarmGriewank(t *testing.T) {
 			Method:  m,
 			Obj:     optim.Func(fn.Eval),
 			Mesh:    mesh,
-			MaxEval: maxiter * npar,
-			MaxIter: maxiter,
+			MaxEval: maxeval,
 		}
 	}
-	bench.Benchmark(t, fn, sfn, successfrac, avgiter)
+	bench.Benchmark(t, fn, sfn, successfrac, avgeval)
 }
 
-func TestBenchPSwarmRastrigrin(t *testing.T) {
-	ndim := 12
+func TestBenchPSwarmRastrigin(t *testing.T) {
+	ndim := 20
 	npar := 30
-	maxiter := 10000
-	successfrac := 0.80
-	avgiter := 1250.0
+	maxeval := 40000
+	avgeval := 32000.0
+	successfrac := 0.25
 
-	fn := bench.Rastrigrin{ndim}
+	fn := bench.Rastrigin{ndim}
 	sfn := func() *optim.Solver {
 		m, mesh := pswarmsolver(fn, nil, npar)
 		return &optim.Solver{
 			Method:  m,
 			Obj:     optim.Func(fn.Eval),
 			Mesh:    mesh,
-			MaxEval: maxiter * npar,
-			MaxIter: maxiter,
+			MaxEval: maxeval,
 		}
 	}
-	bench.Benchmark(t, fn, sfn, successfrac, avgiter)
+	bench.Benchmark(t, fn, sfn, successfrac, avgeval)
 }
 
 func TestOverviewPattern(t *testing.T) {
-	maxeval := 50000
-	maxiter := 5000
-	successfrac := 0.25
-	avgiter := 4000.0
+	maxeval := 20000
+	avgeval := 15000.0
+	successfrac := 0.23
 
 	// ONLY test plain pattern search on convex functions
 	for _, fn := range []bench.Func{bench.Rosenbrock{NDim: 2}} {
@@ -120,19 +151,17 @@ func TestOverviewPattern(t *testing.T) {
 				Method:  m,
 				Obj:     optim.Func(fn.Eval),
 				Mesh:    mesh,
-				MaxIter: maxiter,
 				MaxEval: maxeval,
 			}
 		}
-		bench.Benchmark(t, fn, sfn, successfrac, avgiter)
+		bench.Benchmark(t, fn, sfn, successfrac, avgeval)
 	}
 }
 
 func TestOverviewSwarm(t *testing.T) {
 	maxeval := 50000
-	maxiter := 5000
+	avgeval := 7500.00
 	successfrac := 1.00
-	avgiter := 250.0
 
 	for _, fn := range bench.Basic {
 		sfn := func() *optim.Solver {
@@ -140,18 +169,16 @@ func TestOverviewSwarm(t *testing.T) {
 				Method:  swarmsolver(fn, nil, -1),
 				Obj:     optim.Func(fn.Eval),
 				MaxEval: maxeval,
-				MaxIter: maxiter,
 			}
 		}
-		bench.Benchmark(t, fn, sfn, successfrac, avgiter)
+		bench.Benchmark(t, fn, sfn, successfrac, avgeval)
 	}
 }
 
 func TestOverviewPSwarm(t *testing.T) {
 	maxeval := 50000
-	maxiter := 5000
+	avgeval := 7500.00
 	successfrac := .90
-	avgiter := 250.00
 
 	for _, fn := range bench.Basic {
 		sfn := func() *optim.Solver {
@@ -161,10 +188,9 @@ func TestOverviewPSwarm(t *testing.T) {
 				Obj:     optim.Func(fn.Eval),
 				Mesh:    m,
 				MaxEval: maxeval,
-				MaxIter: maxiter,
 			}
 		}
-		bench.Benchmark(t, fn, sfn, successfrac, avgiter)
+		bench.Benchmark(t, fn, sfn, successfrac, avgeval)
 	}
 }
 

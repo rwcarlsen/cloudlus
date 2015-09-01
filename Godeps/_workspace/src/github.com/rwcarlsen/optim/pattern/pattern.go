@@ -154,11 +154,9 @@ func (m *Method) Iterate(o optim.Objectiver, mesh optim.Mesh) (best *optim.Point
 	mesh.SetStep(prevstep)
 
 	n += nevalsearch
-	if err != nil {
-		return best, n, err
-	} else if success {
+	if success {
 		m.Curr = best
-		return best, n, nil
+		return best, n, err
 	}
 
 	// It is important to recenter mesh on new best point before polling.
@@ -168,13 +166,12 @@ func (m *Method) Iterate(o optim.Objectiver, mesh optim.Mesh) (best *optim.Point
 	// operates in continuous space.
 	mesh.SetOrigin(m.Curr.Pos) // TODO: test that this doesn't get set to Zero pos [0 0 0...] on first iteration.
 
-	success, best, nevalpoll, err = m.Poller.Poll(o, m.ev, mesh, m.Curr)
+	var err2 error
+	success, best, nevalpoll, err2 = m.Poller.Poll(o, m.ev, mesh, m.Curr)
 	m.Poller.Spanner.Update(mesh.Step(), success)
 
 	n += nevalpoll
-	if err != nil {
-		return m.Curr, n, err
-	} else if success {
+	if success {
 		m.Curr = best
 		m.nsuccess++
 		if m.nsuccess == m.NsuccessGrow { // == allows -1 to mean never grow
@@ -187,15 +184,29 @@ func (m *Method) Iterate(o optim.Objectiver, mesh optim.Mesh) (best *optim.Point
 		// previous mesh grid.
 		mesh.SetOrigin(best.Pos)
 
-		return best, n, nil
+		return best, n, collect(err, err2)
 	} else {
 		m.nsuccess = 0
-		var err error
 		if nextstep := mesh.Step() * m.StepMult; nextstep > 0 {
 			mesh.SetStep(mesh.Step() * m.StepMult)
 		}
-		return m.Curr, n, err
+		return m.Curr, n, collect(err, err2)
 	}
+}
+
+func collect(err1, err2 error) error {
+	if err1 == nil && err2 == nil {
+		return nil
+	}
+
+	msg := ""
+	if err1 != nil {
+		msg += err1.Error() + ", "
+	}
+	if err2 != nil {
+		msg += err2.Error()
+	}
+	return errors.New(msg)
 }
 
 func (m *Method) initdb() {
@@ -360,9 +371,8 @@ func (cp *Poller) Poll(obj optim.Objectiver, ev optim.Evaler, m optim.Mesh, from
 
 	objstop := &objStopper{Objectiver: obj, Best: from.Val}
 	results, n, err := ev.Eval(objstop, cp.points...)
-	if err != nil && err != FoundBetterErr {
-		cp.nConsecFail++
-		return false, best, n, err
+	if err == FoundBetterErr {
+		err = nil
 	}
 
 	// this is separate from best to allow all points better than from to be
@@ -392,11 +402,10 @@ func (cp *Poller) Poll(obj optim.Objectiver, ev optim.Evaler, m optim.Mesh, from
 
 	if best.Val < from.Val {
 		cp.nConsecFail = 0
-		return true, best, n, nil
 	} else {
 		cp.nConsecFail++
-		return false, from, n, nil
 	}
+	return best.Val < from.Val, best, n, err
 }
 
 type Searcher interface {
@@ -421,15 +430,13 @@ func (s *WrapSearcher) Search(o optim.Objectiver, m optim.Mesh, curr *optim.Poin
 		s.Method.AddPoint(curr)
 	}
 	best, n, err = s.Method.Iterate(o, m)
-	if err != nil {
-		return false, &optim.Point{Val: math.Inf(1)}, n, err
-	}
 	if best.Val < curr.Val {
-		return true, best, n, nil
+		return true, best, n, err
+	} else {
+		// TODO: write test that checks we return curr instead of best for search
+		// fail.
+		return false, curr, n, err
 	}
-	// TODO: write test that checks we return curr instead of best for search
-	// fail.
-	return false, curr, n, nil
 }
 
 // objStopper is wraps an Objectiver and returns the objective value along

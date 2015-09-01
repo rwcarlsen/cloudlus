@@ -139,7 +139,7 @@ type Population []*Particle
 
 // NewPopulation initializes a population of particles using the given points
 // and generates velocities for each dimension i initialized to uniform random
-// values between minv[i]/4 and maxv[i]/4.  github.com/rwcarlsen/optim.Rand is
+// values between minv[i] and maxv[i].  github.com/rwcarlsen/optim.Rand is
 // used for random numbers.
 func NewPopulation(points []*optim.Point, vmax []float64) Population {
 	pop := make(Population, len(points))
@@ -151,7 +151,7 @@ func NewPopulation(points []*optim.Point, vmax []float64) Population {
 			Vel:   make([]float64, len(vmax)),
 		}
 		for j, v := range vmax {
-			pop[i].Vel[j] = v * (1 - 2*optim.RandFloat()) / 4
+			pop[i].Vel[j] = v * (1 - 2*optim.RandFloat())
 		}
 	}
 	return pop
@@ -323,9 +323,6 @@ func (m *Method) Iterate(obj optim.Objectiver, mesh optim.Mesh) (best *optim.Poi
 
 	// evaluate current positions
 	results, n, err := m.Evaler.Eval(obj, points...)
-	if err != nil {
-		return &optim.Point{Val: math.Inf(1)}, n, err
-	}
 	for _, p := range results {
 		pmap[p].Update(p)
 	}
@@ -351,7 +348,7 @@ func (m *Method) Iterate(obj optim.Objectiver, mesh optim.Mesh) (best *optim.Poi
 		}
 	}
 
-	return m.best, n, nil
+	return m.best, n, err
 }
 
 func (m *Method) AddPoint(p *optim.Point) {
