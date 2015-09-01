@@ -140,10 +140,13 @@ func main() {
 
 	// solve and print results
 	for solv.Next() {
+		if solv.Err() != nil {
+			log.Print("solver error:", err)
+		}
 		fmt.Printf("Iter %v (%v evals):  %v\n", solv.Niter(), solv.Neval(), solv.Best())
 	}
 	if solv.Err() != nil {
-		log.Print(err)
+		log.Print("solver error:", err)
 	}
 
 	final(solv, start)
