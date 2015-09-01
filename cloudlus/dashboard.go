@@ -318,6 +318,18 @@ const home = `
 			<li>
 				{{.Stats.MaxJobTime}} longest single job run time.
 			</li>
+			<li>
+				{{.Stats.TotCmdTime}} cumulative command run time.
+			</li>
+			<li>
+				{{.Stats.AvgCmdTime}} average command run time.
+			</li>
+			<li>
+				{{.Stats.MinCmdTime}} shortest single command run time.
+			</li>
+			<li>
+				{{.Stats.MaxCmdTime}} longest single command run time.
+			</li>
 		</ul>
 	</div>
 

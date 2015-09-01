@@ -38,6 +38,7 @@ type Job struct {
 	Submitted time.Time
 	Fetched   time.Time
 	Started   time.Time
+	CmdDur    time.Duration
 	Finished  time.Time
 	WorkerId  WorkerId
 	Note      string
@@ -171,13 +172,14 @@ func (j *Job) Execute(kill chan bool, outbuf io.Writer) {
 	cmd.Stdout = multiout
 
 	// launch job process
-	done := make(chan bool)
+	done := make(chan string)
+	cmdstart := time.Now()
 	go func() {
 		if err := cmd.Run(); err != nil {
-			j.Status = StatusFailed
 			fmt.Fprint(multierr, err)
+			done <- StatusFailed
 		} else {
-			j.Status = StatusComplete
+			done <- StatusComplete
 		}
 		close(done)
 	}()
@@ -187,17 +189,18 @@ func (j *Job) Execute(kill chan bool, outbuf io.Writer) {
 	case <-time.After(j.Timeout):
 		fmt.Fprintf(multierr, "\nKilling job...")
 		killall(multierr, cmd)
-		j.Status = StatusFailed
 		fmt.Fprintf(multierr, "\nJob timed out after %v\n", time.Now().Sub(j.Started))
-		<-done
-		return
+		j.Status = <-done
 	case <-kill:
 		killall(multierr, cmd)
-		j.Status = StatusFailed
 		fmt.Fprintf(multierr, "\nJob was terminated by server\n")
-		<-done
+		j.Status = <-done
+	case j.Status = <-done:
+	}
+
+	j.CmdDur = time.Now().Sub(cmdstart)
+	if j.Status == StatusFailed {
 		return
-	case <-done:
 	}
 
 	// collect output data

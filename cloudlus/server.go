@@ -59,6 +59,10 @@ type Stats struct {
 	AvgJobTime  time.Duration
 	MinJobTime  time.Duration
 	MaxJobTime  time.Duration
+	TotCmdTime  time.Duration
+	AvgCmdTime  time.Duration
+	MinCmdTime  time.Duration
+	MaxCmdTime  time.Duration
 }
 
 // TODO: Make worker RPC serving separate from submitter RPC interface serving
@@ -327,6 +331,7 @@ func (s *Server) finnishJob(j *Job) {
 		s.Stats.NFailed++
 	} else if j.Status == StatusComplete {
 		s.Stats.NCompleted++
+
 		jobtime := j.Finished.Sub(j.Started)
 		s.Stats.TotJobTime += jobtime
 		s.Stats.AvgJobTime = s.Stats.TotJobTime / time.Duration(s.Stats.NCompleted)
@@ -335,6 +340,15 @@ func (s *Server) finnishJob(j *Job) {
 		}
 		if s.Stats.MaxJobTime == 0 || jobtime > s.Stats.MaxJobTime {
 			s.Stats.MaxJobTime = jobtime
+		}
+
+		s.Stats.TotCmdTime += j.CmdDur
+		s.Stats.AvgCmdTime = s.Stats.TotCmdTime / time.Duration(s.Stats.NCompleted)
+		if s.Stats.MinCmdTime == 0 || j.CmdDur < s.Stats.MinCmdTime {
+			s.Stats.MinCmdTime = j.CmdDur
+		}
+		if s.Stats.MaxCmdTime == 0 || j.CmdDur > s.Stats.MaxCmdTime {
+			s.Stats.MaxCmdTime = j.CmdDur
 		}
 	}
 
