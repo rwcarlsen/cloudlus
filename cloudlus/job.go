@@ -334,6 +334,13 @@ func killall(multierr io.Writer, cmd *exec.Cmd) {
 	cmd.Start()
 
 	pgid, err := syscall.Getpgid(cmd.Process.Pid)
+
+	// don't kill myself if cmd is running in same process group
+	if pgid == os.Getpid() || pgid == os.Getgid() {
+		cmd.Process.Kill()
+		return
+	}
+
 	if err == nil {
 		syscall.Kill(-pgid, 15) // note the minus sign
 		cmd.Wait()
