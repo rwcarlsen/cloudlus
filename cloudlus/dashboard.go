@@ -313,7 +313,10 @@ const home = `
 				{{.Stats.AvgJobTime}} average job run time.
 			</li>
 			<li>
-				{{.Stats.ShortestJobTime}} shortest single job run time.
+				{{.Stats.MinJobTime}} shortest single job run time.
+			</li>
+			<li>
+				{{.Stats.MaxJobTime}} longest single job run time.
 			</li>
 		</ul>
 	</div>

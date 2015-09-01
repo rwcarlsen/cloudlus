@@ -47,17 +47,18 @@ type Server struct {
 }
 
 type Stats struct {
-	Started         time.Time
-	NSubmitted      int
-	NCompleted      int
-	NFailed         int
-	NPurged         int
-	NRequeued       int
-	CurrQueued      int
-	CurrRunning     int
-	TotJobTime      time.Duration
-	AvgJobTime      time.Duration
-	ShortestJobTime time.Duration
+	Started     time.Time
+	NSubmitted  int
+	NCompleted  int
+	NFailed     int
+	NPurged     int
+	NRequeued   int
+	CurrQueued  int
+	CurrRunning int
+	TotJobTime  time.Duration
+	AvgJobTime  time.Duration
+	MinJobTime  time.Duration
+	MaxJobTime  time.Duration
 }
 
 // TODO: Make worker RPC serving separate from submitter RPC interface serving
@@ -198,13 +199,13 @@ func (s *Server) checkbeat() {
 			delete(s.jobinfo, jid)
 			if err != nil {
 				log.Printf("cannot find job %v for reassignment", jid)
-			} else {
-				s.Stats.NRequeued++
-				s.log.Printf("[REQUEUE] job %v\n", jid)
-				j.Status = StatusQueued
-				s.queue = append([]JobId{j.Id}, s.queue...)
-				s.alljobs.Put(j)
 			}
+
+			s.log.Printf("[REQUEUE] job %v\n", jid)
+			s.Stats.NRequeued++
+			j.Status = StatusQueued
+			s.queue = append([]JobId{j.Id}, s.queue...)
+			s.alljobs.Put(j)
 		}
 	}
 }
@@ -221,15 +222,15 @@ func (s *Server) dispatcher() {
 		case <-beatcheck.C:
 			s.checkbeat()
 		case <-s.reset:
+			s.log.Printf("[RESET] removed %v queued jobs\n", len(s.queue))
 			for _, jid := range s.queue {
 				j, err := s.alljobs.Get(jid)
 				if err == nil {
 					j.Status = StatusFailed
 					j.Stderr += "\nkilled by server reset\n"
 				}
-				s.alljobs.Put(j)
+				s.finnishJob(j)
 			}
-			s.Stats.NFailed += len(s.queue)
 			s.queue = s.queue[:0]
 		case <-s.kill:
 			return
@@ -253,18 +254,6 @@ func (s *Server) dispatcher() {
 				req.Resp <- nil
 			}
 		case j := <-s.pushjobs:
-			if j.Status == StatusFailed {
-				s.Stats.NFailed++
-			} else if j.Status == StatusComplete {
-				s.Stats.NCompleted++
-				jobtime := j.Finished.Sub(j.Started)
-				s.Stats.TotJobTime += jobtime
-				s.Stats.AvgJobTime = s.Stats.TotJobTime / time.Duration(s.Stats.NCompleted)
-				if s.Stats.ShortestJobTime == 0 || jobtime < s.Stats.ShortestJobTime {
-					s.Stats.ShortestJobTime = jobtime
-				}
-			}
-
 			s.log.Printf("[PUSH] job %v\n", j.Id)
 			if jj, err := s.alljobs.Get(j.Id); err == nil {
 				// workers nilify the Infiles to reduce network traffic
@@ -272,14 +261,7 @@ func (s *Server) dispatcher() {
 				// job data complete.
 				j.Infiles = jj.Infiles
 			}
-
-			if ch, ok := s.submitchans[j.Id]; ok {
-				ch <- j
-				close(ch)
-				delete(s.submitchans, j.Id)
-			}
-			delete(s.jobinfo, j.Id)
-			s.alljobs.Put(j)
+			s.finnishJob(j)
 		case req := <-s.fetchjobs:
 			var j *Job
 			var err error
@@ -333,20 +315,37 @@ func (s *Server) dispatcher() {
 
 			if kill && j != nil {
 				j.Status = StatusFailed
-				s.Stats.NFailed++
-
-				if ch, ok := s.submitchans[j.Id]; ok {
-					ch <- j
-					close(ch)
-					delete(s.submitchans, j.Id)
-				}
-
-				delete(s.jobinfo, j.Id)
-				s.alljobs.Put(j)
+				s.finnishJob(j)
 			}
 			b.kill <- kill
 		}
 	}
+}
+
+func (s *Server) finnishJob(j *Job) {
+	if j.Status == StatusFailed {
+		s.Stats.NFailed++
+	} else if j.Status == StatusComplete {
+		s.Stats.NCompleted++
+		jobtime := j.Finished.Sub(j.Started)
+		s.Stats.TotJobTime += jobtime
+		s.Stats.AvgJobTime = s.Stats.TotJobTime / time.Duration(s.Stats.NCompleted)
+		if s.Stats.MinJobTime == 0 || jobtime < s.Stats.MinJobTime {
+			s.Stats.MinJobTime = jobtime
+		}
+		if s.Stats.MaxJobTime == 0 || jobtime > s.Stats.MaxJobTime {
+			s.Stats.MaxJobTime = jobtime
+		}
+	}
+
+	if ch, ok := s.submitchans[j.Id]; ok {
+		ch <- j
+		close(ch)
+		delete(s.submitchans, j.Id)
+	}
+
+	delete(s.jobinfo, j.Id)
+	s.alljobs.Put(j)
 }
 
 type jobRequest struct {

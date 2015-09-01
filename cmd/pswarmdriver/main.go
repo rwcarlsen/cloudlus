@@ -37,6 +37,7 @@ var (
 	maxiter      = flag.Int("maxiter", 500, "max number of optimizer iterations")
 	maxnoimprove = flag.Int("maxnoimprove", 100, "max iterations with no objective improvement(zero -> infinite)")
 	timeout      = flag.Duration("timeout", 120*time.Minute, "max time before remote function eval times out")
+	itertimeout  = flag.Duration("itertimeout", 120*time.Minute, "max time before an iteration times out")
 	objlog       = flag.String("objlog", "obj.log", "file to log unpenalized objective values")
 	runlog       = flag.String("runlog", "run.log", "file to log local cyclus run output")
 	dbname       = flag.String("db", "pswarm.sqlite", "name for database containing optimizer work")
@@ -336,9 +337,20 @@ func buildjob(scen *scen.Scenario) *cloudlus.Job {
 
 func submitjob(scen *scen.Scenario, j *cloudlus.Job) (float64, error) {
 	var err error
-	j, err = client.Run(j)
-	if err != nil {
-		return math.Inf(1), err
+
+	done := make(chan struct{})
+	go func() {
+		j, err = client.Run(j)
+		close(done)
+	}()
+
+	select {
+	case <-time.After(*itertimeout):
+		return math.Inf(1), fmt.Errorf("exceeded iteration timeout %v", *itertimeout)
+	case <-done:
+		if err != nil {
+			return math.Inf(1), err
+		}
 	}
 
 	data, err := client.RetrieveOutfileData(j, outfile)
