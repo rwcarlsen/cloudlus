@@ -141,7 +141,7 @@ func main() {
 	// solve and print results
 	for solv.Next() {
 		if solv.Err() != nil {
-			log.Print("solver error:", err)
+			log.Print("solver error: ", solv.Err())
 		}
 		fmt.Printf("Iter %v (%v evals):  %v\n", solv.Niter(), solv.Neval(), solv.Best())
 	}
