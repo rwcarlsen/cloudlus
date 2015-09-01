@@ -53,9 +53,7 @@ func main() {
 
 	if len(params) > 0 {
 		_, err = scen.TransformVars(params)
-		if err != nil {
-			log.Fatal(err)
-		}
+		check(err)
 	}
 
 	// perform action
@@ -112,7 +110,9 @@ func submitjob(scen *scen.Scenario, j *cloudlus.Job) {
 func runjob(scen *scen.Scenario) {
 	dbfile, simid, err := scen.Run(nil, nil)
 	defer os.Remove(dbfile)
+	check(err)
 	val, err := scen.CalcObjective(dbfile, simid)
+	check(err)
 	err = ioutil.WriteFile(*out, []byte(fmt.Sprint(val)), 0644)
 	check(err)
 }
