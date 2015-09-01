@@ -182,7 +182,7 @@ func buildIter(lb, ub []float64) optim.Method {
 
 	fmt.Printf("swarming with %v particles\n", n)
 
-	ev := optim.ParallelEvaler{ContinueOnErr: true}
+	ev := optim.ParallelEvaler{}
 	if *addr == "" {
 		ev.NConcurrent = 8
 	}
@@ -273,7 +273,7 @@ func loadIter(lb, ub []float64, iter int) (md optim.Method, initstep float64) {
 
 	fmt.Printf("swarming with %v particles\n", len(pop))
 
-	ev := optim.ParallelEvaler{ContinueOnErr: true}
+	ev := optim.ParallelEvaler{}
 	if *addr == "" {
 		ev.NConcurrent = runtime.NumCPU()
 	}
