@@ -142,6 +142,13 @@ func main() {
 	for solv.Next() {
 		if solv.Err() != nil {
 			log.Print("solver error: ", solv.Err())
+
+			// just in case reconnect to server
+			if *addr != "" {
+				client.Close()
+				client, err = cloudlus.Dial(*addr)
+				check(err)
+			}
 		}
 		fmt.Printf("Iter %v (%v evals):  %v\n", solv.Niter(), solv.Neval(), solv.Best())
 	}
