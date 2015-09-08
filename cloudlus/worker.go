@@ -1,6 +1,7 @@
 package cloudlus
 
 import (
+	"fmt"
 	"io"
 	"log"
 	"os"
@@ -70,20 +71,24 @@ func (w *Worker) Run() error {
 }
 
 func (w *Worker) dojob() (wait bool, err error) {
-	client, err := Dial(w.ServerAddr)
-	if err != nil {
-		return true, err
+	client, err2 := Dial(w.ServerAddr)
+	if err2 != nil {
+		return true, err2
 	}
 	defer client.Close()
 
-	j, err := client.Fetch(w)
-	if err == nojoberr {
+	j, err2 := client.Fetch(w)
+	if err2 == nojoberr {
 		return false, nil
-	} else if err != nil {
-		return true, err
+	} else if err2 != nil {
+		return true, err2
 	}
 
 	defer func() {
+		if err != nil {
+			j.Status = StatusFailed
+			j.Stderr += fmt.Sprintf("\n%v\n", err)
+		}
 		err2 := client.Push(w, j)
 		w.lastjob = time.Now()
 		if err == nil && err2 != nil {
