@@ -53,7 +53,7 @@ universe = vanilla
 executable = {{.Executable}}
 transfer_input_files = {{.Infiles}}
 should_transfer_files = yes
-when_to_transfer_output = on_exit
+when_to_transfer_output = ON_EXIT_OR_EVICT
 output = worker.$(PROCESS).output
 error = worker.$(PROCESS).error
 log = workers.log
@@ -61,7 +61,7 @@ Disk = {{.Disk}}
 request_cpus = {{.NCPU}}
 request_memory = {{.Memory}}
 Rank = KFlops
-requirements = OpSys == "LINUX" && Arch == "x86_64" && (OpSysAndVer =?= "SL6") {{.ClassAds}}
+requirements = OpSys == "LINUX" && Arch == "x86_64" && (OpSysAndVer =?= "SL6") && (IsDedicated == true) {{.ClassAds}}
 
 queue {{.N}}
 `
