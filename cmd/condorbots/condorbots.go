@@ -61,6 +61,7 @@ Disk = {{.Disk}}
 request_cpus = {{.NCPU}}
 request_memory = {{.Memory}}
 Rank = KFlops
++is_resumable = true
 requirements = OpSys == "LINUX" && Arch == "x86_64" && (OpSysAndVer =?= "SL6") && (IsDedicated == true) {{.ClassAds}}
 
 queue {{.N}}
