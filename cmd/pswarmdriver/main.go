@@ -348,18 +348,21 @@ func buildjob(scen *scen.Scenario) *cloudlus.Job {
 func submitjob(scen *scen.Scenario, j *cloudlus.Job) (float64, error) {
 	var err error
 
-	done := make(chan struct{})
-	go func() {
-		j, err = client.Run(j)
-		close(done)
-	}()
+	for {
+		done := make(chan struct{})
+		go func() {
+			j, err = client.Run(j)
+			close(done)
+		}()
 
-	select {
-	case <-time.After(*itertimeout):
-		return math.Inf(1), fmt.Errorf("exceeded iteration timeout %v", *itertimeout)
-	case <-done:
-		if err != nil {
-			return math.Inf(1), err
+		select {
+		case <-time.After(*itertimeout):
+			log.Print("exceeded iteration timeout %v, retrying...", *itertimeout)
+			continue
+		case <-done:
+			if err != nil {
+				return math.Inf(1), err
+			}
 		}
 	}
 
