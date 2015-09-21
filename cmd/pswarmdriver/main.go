@@ -329,13 +329,13 @@ func buildjob(scen *scen.Scenario) *cloudlus.Job {
 	scendata, err := json.Marshal(scen)
 	check(err)
 
-	tmpldata, err := ioutil.ReadFile(scen.CyclusTmplPath())
+	tmpldata, err := ioutil.ReadFile(scen.CyclusTmpl)
 	check(err)
 
-	j := cloudlus.NewJobCmd("cycdriver", "-obj", "-out", outfile, "-scen", *scenfile)
-	j.Timeout = *timeout
-	j.AddInfile(scen.CyclusTmplPath(), tmpldata)
-	j.AddInfile(*scenfile, scendata)
+	j := cloudlus.NewJobCmd("cycobj", "-obj", outfile, "-scen", scen.File)
+	j.Timeout = 2 * time.Hour
+	j.AddInfile(scen.CyclusTmpl, tmpldata)
+	j.AddInfile(scen.File, scendata)
 	j.AddOutfile(outfile)
 
 	if flag.NArg() > 0 {

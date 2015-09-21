@@ -52,12 +52,9 @@ func main() {
 
 	var buf bytes.Buffer
 
-	args := []string{"-scen", *scenfile, "-addr", *addr, "-out", objfile}
-	if *addr == "" {
-		args = append(args, "-obj")
-	}
+	args := []string{"-scen", *scenfile, "-addr", *addr}
 	args = append(args, params...)
-	cmd := exec.Command("cycdriver", args...)
+	cmd := exec.Command("cycobj", args...)
 
 	cmd.Stderr = os.Stderr
 	cmd.Stdout = &buf

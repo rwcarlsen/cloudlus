@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -11,19 +12,26 @@ import (
 	"strconv"
 	"strings"
 	"text/tabwriter"
+	"time"
 
 	"github.com/rwcarlsen/cloudlus/Godeps/_workspace/src/github.com/rwcarlsen/cyan/post"
 	_ "github.com/rwcarlsen/cloudlus/Godeps/_workspace/src/github.com/rwcarlsen/go-sqlite/sqlite3"
+	"github.com/rwcarlsen/cloudlus/cloudlus"
 	"github.com/rwcarlsen/cloudlus/scen"
 )
 
 var (
 	transform = flag.Bool("transform", false, "print the deployment schedule form of the passed variables")
-	stats     = flag.Bool("stats", false, "print basic stats about deploy sched")
 	sched     = flag.Bool("sched", false, "parse build schedule from stdin instead of var vals")
 	scenfile  = flag.String("scen", "scenario.json", "file containing problem scenification")
+	addr      = flag.String("addr", "", "address to submit jobs to (otherwise, run locally)")
 	db        = flag.String("db", "", "database file to calculate objective for")
+	stats     = flag.Bool("stats", false, "print basic stats about deploy sched")
+	gen       = flag.Bool("gen", false, "true to just print out job file without submitting")
+	obj       = flag.String("obj", "", "(internal) if non-empty, run scenario and store objective in `FILE`")
 )
+
+var objfile = "cloudlus-cycobj.dat"
 
 // with no flags specified, compute and run simulation
 func main() {
@@ -50,6 +58,11 @@ func main() {
 		for _, val := range vars {
 			fmt.Printf("%v\n", val)
 		}
+	} else if *gen {
+		j := buildjob(scn, objfile)
+		data, err := json.Marshal(j)
+		check(err)
+		fmt.Printf("%s\n", data)
 	} else if *db != "" {
 		dbh, err := sql.Open("sqlite3", *db)
 		check(err)
@@ -59,10 +72,13 @@ func main() {
 		check(err)
 		fmt.Println(val)
 	} else {
-		dbfile, simid, err := scn.Run(nil, nil)
-		val, err := scn.CalcObjective(dbfile, simid)
-		check(err)
-		fmt.Println(val)
+		val := runjob(scn, *addr)
+		if *obj != "" {
+			err := ioutil.WriteFile(*obj, []byte(fmt.Sprint(val)), 0644)
+			check(err)
+		} else {
+			fmt.Println(val)
+		}
 	}
 }
 
@@ -137,4 +153,48 @@ func parseSchedVars(scn *scen.Scenario) {
 	}
 	err = scn.Validate()
 	check(err)
+}
+
+func buildjob(scen *scen.Scenario, objfile string) *cloudlus.Job {
+	scendata, err := json.Marshal(scen)
+	check(err)
+
+	tmpldata, err := ioutil.ReadFile(scen.CyclusTmpl)
+	check(err)
+
+	j := cloudlus.NewJobCmd("cycobj", "-obj", objfile, "-scen", scen.File)
+	j.Timeout = 2 * time.Hour
+	j.AddInfile(scen.CyclusTmpl, tmpldata)
+	j.AddInfile(scen.File, scendata)
+	j.AddOutfile(objfile)
+
+	if flag.NArg() > 0 {
+		j.Note = strings.Join(flag.Args(), " ")
+	}
+
+	return j
+}
+
+func runjob(scen *scen.Scenario, addr string) float64 {
+	if addr == "" {
+		dbfile, simid, err := scen.Run(nil, nil)
+		defer os.Remove(dbfile)
+		check(err)
+		val, err := scen.CalcObjective(dbfile, simid)
+		check(err)
+		return val
+	} else {
+		client, err := cloudlus.Dial(addr)
+		check(err)
+		defer client.Close()
+
+		j := buildjob(scen, objfile)
+		j, err = client.Run(j)
+		check(err)
+		data, err := client.RetrieveOutfileData(j, objfile)
+		check(err)
+		val, err := strconv.ParseFloat(strings.TrimSpace(string(data)), 64)
+		check(err)
+		return val
+	}
 }
