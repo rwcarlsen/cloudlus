@@ -40,7 +40,12 @@ func main() {
 	scn := &scen.Scenario{}
 	err := scn.Load(*scenfile)
 	check(err)
-	parseSchedVars(scn)
+
+	if len(scn.Builds) == 0 {
+		parseSchedVars(scn)
+	} else {
+		log.Print("because of pre-existing builds, ignoring any deploy variables/schedule")
+	}
 
 	if *stats {
 		scn.PrintStats()
