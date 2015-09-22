@@ -161,9 +161,8 @@ func parseSchedVars(scn *scen.Scenario) {
 
 func runjob(scen *scen.Scenario, addr string) float64 {
 	if addr == "" {
-		val, _, dbfile, err := runscen.Local(scen, nil, nil)
+		val, _, _, err := runscen.Local(scen, nil, nil)
 		check(err)
-		os.Remove(dbfile)
 		return val
 	} else {
 		val, err := runscen.Remote(scen, nil, nil, addr)
