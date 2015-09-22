@@ -14,6 +14,7 @@ import (
 	"text/tabwriter"
 
 	"github.com/rwcarlsen/cloudlus/Godeps/_workspace/src/github.com/rwcarlsen/cyan/post"
+	_ "github.com/rwcarlsen/cloudlus/Godeps/_workspace/src/github.com/rwcarlsen/go-sqlite/sqlite3"
 	"github.com/rwcarlsen/cloudlus/runscen"
 	"github.com/rwcarlsen/cloudlus/scen"
 )
