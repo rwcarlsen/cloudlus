@@ -168,7 +168,7 @@ func runjob(scen *scen.Scenario, addr string) float64 {
 	}
 
 	if addr == "" {
-		val, _, _, err := runscen.Local(scen, stdout, stderr)
+		val, err := runscen.Local(scen, stdout, stderr)
 		check(err)
 		return val
 	} else {

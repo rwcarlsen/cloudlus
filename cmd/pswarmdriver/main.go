@@ -309,8 +309,7 @@ func (o *obj) Objective(v []float64) (float64, error) {
 	scencopy.TransformVars(v)
 
 	if *addr == "" {
-		val, _, dbfile, err := runscen.Local(scencopy, o.runlog, o.runlog)
-		os.Remove(dbfile)
+		val, err := runscen.Local(scencopy, o.runlog, o.runlog)
 		return val, err
 	} else {
 		return runscen.Remote(scencopy, o.runlog, o.runlog, *addr)
