@@ -108,14 +108,14 @@ func ParseParams(fname string) ([]string, error) {
 }
 
 func genDakotaFile(tmplName string, addr string) {
-	scen := &scen.Scenario{}
-	err := scen.Load(*scenfile)
+	scn := &scen.Scenario{}
+	err := scn.Load(*scenfile)
 	check(err)
 
 	tmpl, err := template.ParseFiles(tmplName)
 	check(err)
 
-	n := 100 + 1*len(scen.LowerBounds())
+	n := 100 + 1*len(scn.LowerBounds())
 	if *npop != 0 {
 		n = *npop
 	} else if n < 100 {
@@ -123,7 +123,7 @@ func genDakotaFile(tmplName string, addr string) {
 	}
 
 	rand.Seed(int64(*seed))
-	p := make([]float64, scen.NVars())
+	p := make([]float64, scn.NVars())
 	for i := range p {
 		p[i] = rand.Float64()
 	}
@@ -136,8 +136,9 @@ func genDakotaFile(tmplName string, addr string) {
 		MaxConcurr int
 		Seed       int
 		InitPoint  []float64
+		Addr       string
 	}{
-		Scenario:   scen,
+		Scenario:   scn,
 		Addr:       addr,
 		MaxIter:    *maxiter,
 		MaxEval:    *maxeval,
