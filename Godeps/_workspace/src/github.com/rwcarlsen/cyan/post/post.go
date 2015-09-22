@@ -7,7 +7,6 @@ import (
 	"math"
 
 	"github.com/rwcarlsen/cloudlus/Godeps/_workspace/src/github.com/rwcarlsen/cyan/query"
-	_ "github.com/rwcarlsen/cloudlus/Godeps/_workspace/src/github.com/rwcarlsen/go-sqlite/sqlite3"
 )
 
 // The number of sql commands to buffer before dumping to the output database.
@@ -15,6 +14,7 @@ const DumpFreq = 100000
 
 var (
 	preExecStmts = []string{
+		"CREATE TABLE IF NOT EXISTS TimeSeriesPower (SimId BLOB,AgentId INTEGER,Time INTEGER, Value REAL);",
 		"CREATE TABLE IF NOT EXISTS AgentExit (SimId BLOB,AgentId INTEGER,ExitTime INTEGER);",
 		"CREATE TABLE IF NOT EXISTS Compositions (SimId BLOB,QualId INTEGER,NucId INTEGER, MassFrac REAL);",
 		"CREATE TABLE IF NOT EXISTS Products (SimId BLOB,QualId INTEGER,Quality TEXT);",
