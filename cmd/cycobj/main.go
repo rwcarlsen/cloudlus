@@ -27,6 +27,7 @@ var (
 	db        = flag.String("db", "", "database file to calculate objective for")
 	stats     = flag.Bool("stats", false, "print basic stats about deploy sched")
 	gen       = flag.Bool("gen", false, "true to just print out job file without submitting")
+	quiet     = flag.Bool("q", false, "don't print job stdout+stderr")
 	obj       = flag.String("obj", "", "(internal) if non-empty, run scenario and store objective in `FILE`")
 )
 
@@ -161,12 +162,17 @@ func parseSchedVars(scn *scen.Scenario) {
 }
 
 func runjob(scen *scen.Scenario, addr string) float64 {
+	var stdout, stderr io.Writer
+	if !*quiet {
+		stdout, stderr = os.Stdout, os.Stderr
+	}
+
 	if addr == "" {
-		val, _, _, err := runscen.Local(scen, nil, nil)
+		val, _, _, err := runscen.Local(scen, stdout, stderr)
 		check(err)
 		return val
 	} else {
-		val, err := runscen.Remote(scen, nil, nil, addr)
+		val, err := runscen.Remote(scen, stdout, stderr, addr)
 		check(err)
 		return val
 	}
