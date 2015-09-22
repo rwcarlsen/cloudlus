@@ -66,18 +66,12 @@ func (s *ANSScenario) Load(fname string) error {
 	return nil
 }
 
-func ObjANS2014(scen *Scenario, dbfile string, simid []byte) (float64, error) {
+func ObjANS2014(scen *Scenario, db *sql.DB, simid []byte) (float64, error) {
 	s := &ANSScenario{}
 	err := s.Load(scen.File)
 	if err != nil {
 		return math.Inf(1), err
 	}
-
-	db, err := sql.Open("sqlite3", dbfile)
-	if err != nil {
-		return 0, err
-	}
-	defer db.Close()
 
 	// add up overnight and operating costs converted to PV(t=0)
 	q1 := `

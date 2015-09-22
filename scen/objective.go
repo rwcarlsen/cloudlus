@@ -5,7 +5,7 @@ import (
 	"math"
 )
 
-type ObjFunc func(scen *Scenario, dbfile string, simid []byte) (float64, error)
+type ObjFunc func(scen *Scenario, db *sql.DB, simid []byte) (float64, error)
 
 var ObjFuncs = map[string]ObjFunc{
 	"":                 ObjSlowVsFastPower,
@@ -21,13 +21,7 @@ var ObjFuncs = map[string]ObjFunc{
 // where 'slow_reactor' and 'fast_reactor' must be the names of the thermal
 // and fast reactor prototypes respectively.  It is assumed that there are no
 // other reactor prototypes deployed in the simulation.
-func ObjSlowVsFastPower(scen *Scenario, dbfile string, simid []byte) (float64, error) {
-	db, err := sql.Open("sqlite3", dbfile)
-	if err != nil {
-		return 0, err
-	}
-	defer db.Close()
-
+func ObjSlowVsFastPower(scen *Scenario, db *sql.DB, simid []byte) (float64, error) {
 	// add up overnight and operating costs converted to PV(t=0)
 	q1 := `
     	SELECT SUM(Value) FROM timeseriespower AS p
@@ -36,7 +30,7 @@ func ObjSlowVsFastPower(scen *Scenario, dbfile string, simid []byte) (float64, e
 		`
 
 	slowpower := 0.0
-	err = db.QueryRow(q1, "slow_reactor", "init_slow_reactor", simid).Scan(&slowpower)
+	err := db.QueryRow(q1, "slow_reactor", "init_slow_reactor", simid).Scan(&slowpower)
 	if err != nil {
 		return math.Inf(1), err
 	}
@@ -57,13 +51,7 @@ func ObjSlowVsFastPower(scen *Scenario, dbfile string, simid []byte) (float64, e
 // where 'slow_reactor' and 'fast_reactor' must be the names of the thermal
 // and fast reactor prototypes respectively.  It is assumed that there are no
 // other reactor prototypes deployed in the simulation.
-func ObjSlowVsFastPowerFueled(scen *Scenario, dbfile string, simid []byte) (float64, error) {
-	db, err := sql.Open("sqlite3", dbfile)
-	if err != nil {
-		return 0, err
-	}
-	defer db.Close()
-
+func ObjSlowVsFastPowerFueled(scen *Scenario, db *sql.DB, simid []byte) (float64, error) {
 	// add up overnight and operating costs converted to PV(t=0)
 	q1 := `
     	SELECT TOTAL(Value) FROM timeseriespower AS p
@@ -72,7 +60,7 @@ func ObjSlowVsFastPowerFueled(scen *Scenario, dbfile string, simid []byte) (floa
 		`
 
 	slowpower := 0.0
-	err = db.QueryRow(q1, "slow_reactor", simid).Scan(&slowpower)
+	err := db.QueryRow(q1, "slow_reactor", simid).Scan(&slowpower)
 	if err != nil {
 		return math.Inf(1), err
 	}

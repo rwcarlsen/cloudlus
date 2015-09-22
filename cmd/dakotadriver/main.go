@@ -107,21 +107,10 @@ func ParseParams(fname string) ([]string, error) {
 	return vals, nil
 }
 
-type Config struct {
-	*scen.Scenario
-	MaxIter    int
-	MaxEval    int
-	PopSize    int
-	MaxConcurr int
-	Seed       int
-	InitPoint  []float64
-}
-
 func genDakotaFile(tmplName string, addr string) {
 	scen := &scen.Scenario{}
 	err := scen.Load(*scenfile)
 	check(err)
-	scen.Addr = addr
 
 	tmpl, err := template.ParseFiles(tmplName)
 	check(err)
@@ -139,8 +128,17 @@ func genDakotaFile(tmplName string, addr string) {
 		p[i] = rand.Float64()
 	}
 
-	config := &Config{
+	var config = struct {
+		*scen.Scenario
+		MaxIter    int
+		MaxEval    int
+		PopSize    int
+		MaxConcurr int
+		Seed       int
+		InitPoint  []float64
+	}{
 		Scenario:   scen,
+		Addr:       addr,
 		MaxIter:    *maxiter,
 		MaxEval:    *maxeval,
 		PopSize:    n,

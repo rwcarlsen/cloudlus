@@ -12,11 +12,9 @@ import (
 	"strconv"
 	"strings"
 	"text/tabwriter"
-	"time"
 
 	"github.com/rwcarlsen/cloudlus/Godeps/_workspace/src/github.com/rwcarlsen/cyan/post"
-	_ "github.com/rwcarlsen/cloudlus/Godeps/_workspace/src/github.com/rwcarlsen/go-sqlite/sqlite3"
-	"github.com/rwcarlsen/cloudlus/cloudlus"
+	"github.com/rwcarlsen/cloudlus/runscen"
 	"github.com/rwcarlsen/cloudlus/scen"
 )
 
@@ -64,7 +62,8 @@ func main() {
 			fmt.Printf("%v\n", val)
 		}
 	} else if *gen {
-		j := buildjob(scn, objfile)
+		j, err := runscen.BuildRemoteJob(scn, objfile)
+		check(err)
 		data, err := json.Marshal(j)
 		check(err)
 		fmt.Printf("%s\n", data)
@@ -160,45 +159,14 @@ func parseSchedVars(scn *scen.Scenario) {
 	check(err)
 }
 
-func buildjob(scen *scen.Scenario, objfile string) *cloudlus.Job {
-	scendata, err := json.Marshal(scen)
-	check(err)
-
-	tmpldata, err := ioutil.ReadFile(scen.CyclusTmpl)
-	check(err)
-
-	j := cloudlus.NewJobCmd("cycobj", "-obj", objfile, "-scen", scen.File)
-	j.Timeout = 2 * time.Hour
-	j.AddInfile(scen.CyclusTmpl, tmpldata)
-	j.AddInfile(scen.File, scendata)
-	j.AddOutfile(objfile)
-
-	if flag.NArg() > 0 {
-		j.Note = strings.Join(flag.Args(), " ")
-	}
-
-	return j
-}
-
 func runjob(scen *scen.Scenario, addr string) float64 {
 	if addr == "" {
-		dbfile, simid, err := scen.Run(nil, nil)
-		defer os.Remove(dbfile)
+		val, _, dbfile, err := runscen.Local(scen, nil, nil)
 		check(err)
-		val, err := scen.CalcObjective(dbfile, simid)
-		check(err)
+		os.Remove(dbfile)
 		return val
 	} else {
-		client, err := cloudlus.Dial(addr)
-		check(err)
-		defer client.Close()
-
-		j := buildjob(scen, objfile)
-		j, err = client.Run(j)
-		check(err)
-		data, err := client.RetrieveOutfileData(j, objfile)
-		check(err)
-		val, err := strconv.ParseFloat(strings.TrimSpace(string(data)), 64)
+		val, err := runscen.Remote(scen, nil, nil, addr)
 		check(err)
 		return val
 	}

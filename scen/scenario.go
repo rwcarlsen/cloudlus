@@ -5,18 +5,11 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"log"
 	"math"
-	"os"
-	"os/exec"
 	"path/filepath"
 	"text/template"
-
-	"github.com/rwcarlsen/cloudlus/Godeps/_workspace/src/code.google.com/p/go-uuid/uuid"
-	"github.com/rwcarlsen/cloudlus/Godeps/_workspace/src/github.com/rwcarlsen/cyan/post"
-	_ "github.com/rwcarlsen/cloudlus/Godeps/_workspace/src/github.com/rwcarlsen/go-sqlite/sqlite3"
 )
 
 // Facility represents a cyclus agent prototype that could be built by the
@@ -114,9 +107,6 @@ type Scenario struct {
 	// Builds holds all scenario deployments (including startbuilds).  This is
 	// only non-nil after TransformVars has been called.
 	Builds []Build
-	// Addr is the location of the cyclus simulation execution server.  An
-	// empty string "" indicates that simulations will run locally.
-	Addr string
 	// File is the name of the scenario file. This is for internal use and
 	// does not need to be filled out by the user.
 	File string
@@ -523,7 +513,13 @@ func (s *Scenario) Load(fname string) error {
 
 func (s *Scenario) CalcObjective(dbfile string, simid []byte) (float64, error) {
 	if fn, ok := ObjFuncs[s.ObjFunc]; ok {
-		return fn(s, dbfile, simid)
+		db, err := sql.Open("sqlite3", dbfile)
+		if err != nil {
+			return math.Inf(1), err
+		}
+		defer db.Close()
+
+		return fn(s, db, simid)
 	} else {
 		return math.Inf(1), fmt.Errorf("invalid objective name '%v'", s.ObjFunc)
 	}
@@ -544,50 +540,6 @@ func (s *Scenario) GenCyclusInfile() ([]byte, error) {
 		return nil, err
 	}
 	return buf.Bytes(), nil
-}
-
-func (s *Scenario) Run(stdout, stderr io.Writer) (dbfile string, simid []byte, err error) {
-	// generate cyclus input file and run cyclus
-	ui := uuid.NewRandom()
-	cycin := ui.String() + ".cyclus.xml"
-	cycout := ui.String() + ".sqlite"
-
-	data, err := s.GenCyclusInfile()
-	if err != nil {
-		return "", nil, err
-	}
-	err = ioutil.WriteFile(cycin, data, 0644)
-	if err != nil {
-		return "", nil, err
-	}
-
-	cmd := exec.Command("cyclus", cycin, "-o", cycout)
-	cmd.Stderr = os.Stderr
-	cmd.Stdout = os.Stdout
-	if stdout != nil {
-		cmd.Stdout = stdout
-	}
-	if stderr != nil {
-		cmd.Stderr = stderr
-	}
-
-	if err := cmd.Run(); err != nil {
-		return "", nil, err
-	}
-
-	// post process cyclus output db
-	db, err := sql.Open("sqlite3", cycout)
-	if err != nil {
-		return "", nil, err
-	}
-	defer db.Close()
-
-	simids, err := post.Process(db)
-	if err != nil {
-		return "", nil, err
-	}
-
-	return cycout, simids[0], nil
 }
 
 func (s *Scenario) VarNames() []string {
