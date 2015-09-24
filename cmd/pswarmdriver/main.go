@@ -2,20 +2,15 @@ package main
 
 import (
 	"database/sql"
-	"encoding/json"
-	"errors"
 	"flag"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
-	"math"
 	"math/rand"
 	"os"
 	"os/signal"
 	"runtime"
 	"strconv"
-	"strings"
 	"syscall"
 	"time"
 
@@ -24,6 +19,7 @@ import (
 	"github.com/rwcarlsen/cloudlus/Godeps/_workspace/src/github.com/rwcarlsen/optim/pattern"
 	"github.com/rwcarlsen/cloudlus/Godeps/_workspace/src/github.com/rwcarlsen/optim/swarm"
 	"github.com/rwcarlsen/cloudlus/cloudlus"
+	"github.com/rwcarlsen/cloudlus/runscen"
 	"github.com/rwcarlsen/cloudlus/scen"
 )
 
@@ -311,76 +307,13 @@ func (o *obj) Objective(v []float64) (float64, error) {
 	scencopyval := *o.s
 	scencopy := &scencopyval
 	scencopy.TransformVars(v)
+
 	if *addr == "" {
-		dbfile, simid, err := scencopy.Run(o.runlog, o.runlog)
-		if err != nil {
-			return math.Inf(1), err
-		}
-		defer os.Remove(dbfile)
-
-		return scencopy.CalcObjective(dbfile, simid)
+		val, err := runscen.Local(scencopy, o.runlog, o.runlog)
+		return val, err
 	} else {
-		j := buildjob(scencopy)
-		return submitjob(scencopy, j)
+		return runscen.Remote(scencopy, o.runlog, o.runlog, *addr)
 	}
-}
-
-func buildjob(scen *scen.Scenario) *cloudlus.Job {
-	scendata, err := json.Marshal(scen)
-	check(err)
-
-	tmpldata, err := ioutil.ReadFile(scen.CyclusTmplPath())
-	check(err)
-
-	j := cloudlus.NewJobCmd("cycdriver", "-obj", "-out", outfile, "-scen", *scenfile)
-	j.Timeout = *timeout
-	j.AddInfile(scen.CyclusTmplPath(), tmpldata)
-	j.AddInfile(*scenfile, scendata)
-	j.AddOutfile(outfile)
-
-	if flag.NArg() > 0 {
-		j.Note = strings.Join(flag.Args(), " ")
-	}
-
-	return j
-}
-
-func submitjob(scen *scen.Scenario, j *cloudlus.Job) (float64, error) {
-	var err error
-
-	for {
-		done := make(chan struct{})
-		go func() {
-			j, err = client.Run(j)
-			close(done)
-		}()
-
-		select {
-		case <-time.After(*itertimeout):
-			log.Print("exceeded iteration timeout %v, retrying...", *itertimeout)
-			continue
-		case <-done:
-			if err != nil {
-				return math.Inf(1), err
-			}
-		}
-	}
-
-	data, err := client.RetrieveOutfileData(j, outfile)
-	if err != nil {
-		return math.Inf(1), err
-	}
-
-	s := fmt.Sprintf("%s", data)
-	val, err := strconv.ParseFloat(s, 64)
-	if err != nil {
-		log.Printf("job returned invalid objective string '%v'", s)
-		return math.Inf(1), nil
-	} else {
-		return val, nil
-	}
-
-	return math.Inf(1), errors.New("job didn't return proper output file")
 }
 
 func check(err error) {

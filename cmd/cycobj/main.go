@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -14,16 +15,23 @@ import (
 
 	"github.com/rwcarlsen/cloudlus/Godeps/_workspace/src/github.com/rwcarlsen/cyan/post"
 	_ "github.com/rwcarlsen/cloudlus/Godeps/_workspace/src/github.com/rwcarlsen/go-sqlite/sqlite3"
+	"github.com/rwcarlsen/cloudlus/runscen"
 	"github.com/rwcarlsen/cloudlus/scen"
 )
 
 var (
 	transform = flag.Bool("transform", false, "print the deployment schedule form of the passed variables")
-	stats     = flag.Bool("stats", false, "print basic stats about deploy sched")
 	sched     = flag.Bool("sched", false, "parse build schedule from stdin instead of var vals")
 	scenfile  = flag.String("scen", "scenario.json", "file containing problem scenification")
+	addr      = flag.String("addr", "", "address to submit jobs to (otherwise, run locally)")
 	db        = flag.String("db", "", "database file to calculate objective for")
+	stats     = flag.Bool("stats", false, "print basic stats about deploy sched")
+	gen       = flag.Bool("gen", false, "true to just print out job file without submitting")
+	quiet     = flag.Bool("q", false, "don't print job stdout+stderr")
+	obj       = flag.String("obj", "", "(internal) if non-empty, run scenario and store objective in `FILE`")
 )
+
+var objfile = "cloudlus-cycobj.dat"
 
 // with no flags specified, compute and run simulation
 func main() {
@@ -32,7 +40,12 @@ func main() {
 	scn := &scen.Scenario{}
 	err := scn.Load(*scenfile)
 	check(err)
-	parseSchedVars(scn)
+
+	if len(scn.Builds) == 0 {
+		parseSchedVars(scn)
+	} else {
+		log.Print("because of pre-existing builds, ignoring any deploy variables/schedule")
+	}
 
 	if *stats {
 		scn.PrintStats()
@@ -50,6 +63,12 @@ func main() {
 		for _, val := range vars {
 			fmt.Printf("%v\n", val)
 		}
+	} else if *gen {
+		j, err := runscen.BuildRemoteJob(scn, objfile)
+		check(err)
+		data, err := json.Marshal(j)
+		check(err)
+		fmt.Printf("%s\n", data)
 	} else if *db != "" {
 		dbh, err := sql.Open("sqlite3", *db)
 		check(err)
@@ -59,10 +78,13 @@ func main() {
 		check(err)
 		fmt.Println(val)
 	} else {
-		dbfile, simid, err := scn.Run(nil, nil)
-		val, err := scn.CalcObjective(dbfile, simid)
-		check(err)
-		fmt.Println(val)
+		val := runjob(scn, *addr)
+		if *obj != "" {
+			err := ioutil.WriteFile(*obj, []byte(fmt.Sprint(val)), 0644)
+			check(err)
+		} else {
+			fmt.Println(val)
+		}
 	}
 }
 
@@ -137,4 +159,21 @@ func parseSchedVars(scn *scen.Scenario) {
 	}
 	err = scn.Validate()
 	check(err)
+}
+
+func runjob(scen *scen.Scenario, addr string) float64 {
+	var stdout, stderr io.Writer
+	if !*quiet {
+		stdout, stderr = os.Stdout, os.Stderr
+	}
+
+	if addr == "" {
+		val, err := runscen.Local(scen, stdout, stderr)
+		check(err)
+		return val
+	} else {
+		val, err := runscen.Remote(scen, stdout, stderr, addr)
+		check(err)
+		return val
+	}
 }

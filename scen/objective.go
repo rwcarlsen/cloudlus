@@ -5,8 +5,46 @@ import (
 	"math"
 )
 
-type ObjFunc func(scen *Scenario, dbfile string, simid []byte) (float64, error)
+// ObjExecFunc is a function that, when called, runs a the single simulation
+// described and computes the single objective specified in s, returning the
+// objective value and any error.  Implementations of this function will
+// likely make calls to github.com/rwcarlsen/cloudlus/runsim.[Local/Remote].
+// in order to accomplish this.
+type ObjExecFunc func(s *Scenario) (float64, error)
 
+// ModeFunc is a function that performs the full, overall objective function
+// computation for a scenario, including running the actual simulations.  The
+// full objective function may involve multiple; obj will be called once for
+// each simulation to compute the sub-objectives.  The final, aggregate
+// objective is computed and returned along with any error.
+type ModeFunc func(s *Scenario, obj ObjExecFunc) (float64, error)
+
+func SingleMode(s *Scenario, obj ObjExecFunc) (float64, error) { return obj(s) }
+
+// doubleMode is just for testing to see that the mode handling for scenarios
+// works.
+func doubleMode(s *Scenario, obj ObjExecFunc) (float64, error) {
+	ch := make(chan float64)
+	go func() { val, _ := obj(s); ch <- val }()
+	go func() { val, _ := obj(s); ch <- val }()
+	val1 := <-ch
+	val2 := <-ch
+	return val1 + val2, nil
+}
+
+var Modes = map[string]ModeFunc{
+	"":       SingleMode,
+	"single": SingleMode,
+	"double": doubleMode, // for testing
+}
+
+// ObjFunc computes objective function values for scen using already-generated
+// simulation data for the given simulation id available in db.
+type ObjFunc func(scen *Scenario, db *sql.DB, simid []byte) (float64, error)
+
+// ObjFuncs is a master list of string keyed functions that are
+// referenced/used for computing objective values for scen.Scenarios.  New
+// alternative objective functions should be added to this list.
 var ObjFuncs = map[string]ObjFunc{
 	"":                 ObjSlowVsFastPower,
 	"slowvfast":        ObjSlowVsFastPower,
@@ -21,13 +59,7 @@ var ObjFuncs = map[string]ObjFunc{
 // where 'slow_reactor' and 'fast_reactor' must be the names of the thermal
 // and fast reactor prototypes respectively.  It is assumed that there are no
 // other reactor prototypes deployed in the simulation.
-func ObjSlowVsFastPower(scen *Scenario, dbfile string, simid []byte) (float64, error) {
-	db, err := sql.Open("sqlite3", dbfile)
-	if err != nil {
-		return 0, err
-	}
-	defer db.Close()
-
+func ObjSlowVsFastPower(scen *Scenario, db *sql.DB, simid []byte) (float64, error) {
 	// add up overnight and operating costs converted to PV(t=0)
 	q1 := `
     	SELECT SUM(Value) FROM timeseriespower AS p
@@ -36,7 +68,7 @@ func ObjSlowVsFastPower(scen *Scenario, dbfile string, simid []byte) (float64, e
 		`
 
 	slowpower := 0.0
-	err = db.QueryRow(q1, "slow_reactor", "init_slow_reactor", simid).Scan(&slowpower)
+	err := db.QueryRow(q1, "slow_reactor", "init_slow_reactor", simid).Scan(&slowpower)
 	if err != nil {
 		return math.Inf(1), err
 	}
@@ -57,13 +89,7 @@ func ObjSlowVsFastPower(scen *Scenario, dbfile string, simid []byte) (float64, e
 // where 'slow_reactor' and 'fast_reactor' must be the names of the thermal
 // and fast reactor prototypes respectively.  It is assumed that there are no
 // other reactor prototypes deployed in the simulation.
-func ObjSlowVsFastPowerFueled(scen *Scenario, dbfile string, simid []byte) (float64, error) {
-	db, err := sql.Open("sqlite3", dbfile)
-	if err != nil {
-		return 0, err
-	}
-	defer db.Close()
-
+func ObjSlowVsFastPowerFueled(scen *Scenario, db *sql.DB, simid []byte) (float64, error) {
 	// add up overnight and operating costs converted to PV(t=0)
 	q1 := `
     	SELECT TOTAL(Value) FROM timeseriespower AS p
@@ -72,7 +98,7 @@ func ObjSlowVsFastPowerFueled(scen *Scenario, dbfile string, simid []byte) (floa
 		`
 
 	slowpower := 0.0
-	err = db.QueryRow(q1, "slow_reactor", simid).Scan(&slowpower)
+	err := db.QueryRow(q1, "slow_reactor", simid).Scan(&slowpower)
 	if err != nil {
 		return math.Inf(1), err
 	}

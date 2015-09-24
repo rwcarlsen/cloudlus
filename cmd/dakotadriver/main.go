@@ -52,12 +52,9 @@ func main() {
 
 	var buf bytes.Buffer
 
-	args := []string{"-scen", *scenfile, "-addr", *addr, "-out", objfile}
-	if *addr == "" {
-		args = append(args, "-obj")
-	}
+	args := []string{"-scen", *scenfile, "-addr", *addr}
 	args = append(args, params...)
-	cmd := exec.Command("cycdriver", args...)
+	cmd := exec.Command("cycobj", args...)
 
 	cmd.Stderr = os.Stderr
 	cmd.Stdout = &buf
@@ -110,26 +107,15 @@ func ParseParams(fname string) ([]string, error) {
 	return vals, nil
 }
 
-type Config struct {
-	*scen.Scenario
-	MaxIter    int
-	MaxEval    int
-	PopSize    int
-	MaxConcurr int
-	Seed       int
-	InitPoint  []float64
-}
-
 func genDakotaFile(tmplName string, addr string) {
-	scen := &scen.Scenario{}
-	err := scen.Load(*scenfile)
+	scn := &scen.Scenario{}
+	err := scn.Load(*scenfile)
 	check(err)
-	scen.Addr = addr
 
 	tmpl, err := template.ParseFiles(tmplName)
 	check(err)
 
-	n := 100 + 1*len(scen.LowerBounds())
+	n := 100 + 1*len(scn.LowerBounds())
 	if *npop != 0 {
 		n = *npop
 	} else if n < 100 {
@@ -137,13 +123,23 @@ func genDakotaFile(tmplName string, addr string) {
 	}
 
 	rand.Seed(int64(*seed))
-	p := make([]float64, scen.NVars())
+	p := make([]float64, scn.NVars())
 	for i := range p {
 		p[i] = rand.Float64()
 	}
 
-	config := &Config{
-		Scenario:   scen,
+	var config = struct {
+		*scen.Scenario
+		MaxIter    int
+		MaxEval    int
+		PopSize    int
+		MaxConcurr int
+		Seed       int
+		InitPoint  []float64
+		Addr       string
+	}{
+		Scenario:   scn,
+		Addr:       addr,
 		MaxIter:    *maxiter,
 		MaxEval:    *maxeval,
 		PopSize:    n,

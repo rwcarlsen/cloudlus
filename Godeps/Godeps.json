@@ -28,18 +28,18 @@
 		},
 		{
 			"ImportPath": "github.com/rwcarlsen/cyan/nuc",
-			"Comment": "v0.4-7-gaae74e1",
-			"Rev": "aae74e132e7c6ab3702b84eaf957499b516f12f8"
+			"Comment": "v0.4-12-gc33420c",
+			"Rev": "c33420c162b1e30706db1ded0d7dc2087580ab06"
 		},
 		{
 			"ImportPath": "github.com/rwcarlsen/cyan/post",
-			"Comment": "v0.4-7-gaae74e1",
-			"Rev": "aae74e132e7c6ab3702b84eaf957499b516f12f8"
+			"Comment": "v0.4-12-gc33420c",
+			"Rev": "c33420c162b1e30706db1ded0d7dc2087580ab06"
 		},
 		{
 			"ImportPath": "github.com/rwcarlsen/cyan/query",
-			"Comment": "v0.4-7-gaae74e1",
-			"Rev": "aae74e132e7c6ab3702b84eaf957499b516f12f8"
+			"Comment": "v0.4-12-gc33420c",
+			"Rev": "c33420c162b1e30706db1ded0d7dc2087580ab06"
 		},
 		{
 			"ImportPath": "github.com/rwcarlsen/go-sqlite/sqlite3",

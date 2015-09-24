@@ -18,7 +18,7 @@ echo "generating job files"
 while read line; do
     job=sweepjob-$n.json
     jobs="$jobs $job"
-    cycdriver -gen $line > $job
+    cycobj -gen $line > $job
     ((n++))
 done <sweep.txt
 ```

@@ -5,18 +5,11 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"log"
 	"math"
-	"os"
-	"os/exec"
 	"path/filepath"
 	"text/template"
-
-	"github.com/rwcarlsen/cloudlus/Godeps/_workspace/src/code.google.com/p/go-uuid/uuid"
-	"github.com/rwcarlsen/cloudlus/Godeps/_workspace/src/github.com/rwcarlsen/cyan/post"
-	_ "github.com/rwcarlsen/cloudlus/Godeps/_workspace/src/github.com/rwcarlsen/go-sqlite/sqlite3"
 )
 
 // Facility represents a cyclus agent prototype that could be built by the
@@ -93,9 +86,24 @@ type Scenario struct {
 	// each nuclide in the entire simulation (repository's exempt).
 	NuclideCost map[string]float64
 	// ObjFunc is the name of the objective function in the
-	// github.com/rwcarlsen/cloudlus/objective.ObjFuncs map to be used for
+	// github.com/rwcarlsen/cloudlus/scen.ObjFuncs map to be used for
 	// objective value calculations.
 	ObjFunc string
+	// ObjMode identifies the way the overall objective value is computed for
+	// this scenario.  It must be one of the names in the
+	// github.com/rwcarlsen/cloudlus/scen.Modes map.  The default (empty
+	// string) is to just run a single simulation and use the returned value
+	// of the chosen ObjFunc as the objective value.  Other modes allow things
+	// like a scenario involving many sub-simulations whose objectives
+	// are combined to a single value.
+	ObjMode string
+	// SingleCalc is for internal usage (not users) and is marked true for
+	// multi-sim scenarios where the current simulation being run is a
+	// sub-[scenario/simulation] and CalcObjective should be called instead of
+	// CalcTotalObjective.  Running a simulation remotely would fire off one
+	// job for each sub-simulation, and then each remote worker would also
+	// fire off one simulation for each sub-simulation - causing problems.
+	SingleCalc bool
 	// Discount represents the nominal annual discount rate (including
 	// inflation) for the simulation.
 	Discount float64
@@ -114,16 +122,12 @@ type Scenario struct {
 	// Builds holds all scenario deployments (including startbuilds).  This is
 	// only non-nil after TransformVars has been called.
 	Builds []Build
-	// Addr is the location of the cyclus simulation execution server.  An
-	// empty string "" indicates that simulations will run locally.
-	Addr string
 	// File is the name of the scenario file. This is for internal use and
 	// does not need to be filled out by the user.
 	File string
 	// Handle is used internally and does not need to be specified by the
 	// user.
 	Handle string
-
 	// tmpl is a cach for the templated cyclus input file
 	tmpl *template.Template
 }
@@ -521,9 +525,32 @@ func (s *Scenario) Load(fname string) error {
 	return s.Validate()
 }
 
+func (s *Scenario) CalcTotalObjective(execfn ObjExecFunc) (float64, error) {
+	if s.SingleCalc {
+		return execfn(s)
+	}
+
+	s.SingleCalc = true
+	defer func() { s.SingleCalc = false }()
+
+	modefn, ok := Modes[s.ObjMode]
+	if !ok {
+		return math.Inf(1), fmt.Errorf("invalid mode name '%v'", s.ObjMode)
+	}
+	return modefn(s, execfn)
+}
+
+// CalcObjective computes the single-simulation objective value for data
+// stored in dbfile under the given simulation id.
 func (s *Scenario) CalcObjective(dbfile string, simid []byte) (float64, error) {
 	if fn, ok := ObjFuncs[s.ObjFunc]; ok {
-		return fn(s, dbfile, simid)
+		db, err := sql.Open("sqlite3", dbfile)
+		if err != nil {
+			return math.Inf(1), err
+		}
+		defer db.Close()
+
+		return fn(s, db, simid)
 	} else {
 		return math.Inf(1), fmt.Errorf("invalid objective name '%v'", s.ObjFunc)
 	}
@@ -544,50 +571,6 @@ func (s *Scenario) GenCyclusInfile() ([]byte, error) {
 		return nil, err
 	}
 	return buf.Bytes(), nil
-}
-
-func (s *Scenario) Run(stdout, stderr io.Writer) (dbfile string, simid []byte, err error) {
-	// generate cyclus input file and run cyclus
-	ui := uuid.NewRandom()
-	cycin := ui.String() + ".cyclus.xml"
-	cycout := ui.String() + ".sqlite"
-
-	data, err := s.GenCyclusInfile()
-	if err != nil {
-		return "", nil, err
-	}
-	err = ioutil.WriteFile(cycin, data, 0644)
-	if err != nil {
-		return "", nil, err
-	}
-
-	cmd := exec.Command("cyclus", cycin, "-o", cycout)
-	cmd.Stderr = os.Stderr
-	cmd.Stdout = os.Stdout
-	if stdout != nil {
-		cmd.Stdout = stdout
-	}
-	if stderr != nil {
-		cmd.Stderr = stderr
-	}
-
-	if err := cmd.Run(); err != nil {
-		return "", nil, err
-	}
-
-	// post process cyclus output db
-	db, err := sql.Open("sqlite3", cycout)
-	if err != nil {
-		return "", nil, err
-	}
-	defer db.Close()
-
-	simids, err := post.Process(db)
-	if err != nil {
-		return "", nil, err
-	}
-
-	return cycout, simids[0], nil
 }
 
 func (s *Scenario) VarNames() []string {
