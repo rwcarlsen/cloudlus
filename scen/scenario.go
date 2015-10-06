@@ -319,23 +319,24 @@ func (s *Scenario) CapBuilt(builds []Build, t int) float64 {
 }
 
 func (s *Scenario) splice(origvars []float64) []float64 {
-	if len(s.SpliceVars) == 0 {
-		return origvars
-	}
-
 	vars := make([]float64, len(origvars))
 	copy(vars, origvars)
+	if len(s.SpliceVars) == 0 {
+		return vars
+	}
+
 outer:
 	for i, t := range s.periodTimes() {
-		if t >= s.SpliceTime {
-			break
-		}
 		for j := 0; j < s.NVarsPerPeriod(); j++ {
 			index := i*s.NVarsPerPeriod() + j
 			if index >= len(s.SpliceVars) {
 				break outer
 			}
-			vars[index] = s.SpliceVars[index]
+			if t < s.SpliceTime {
+				vars[index] = s.SpliceVars[index]
+			} else {
+				vars[index] = origvars[index]
+			}
 		}
 	}
 	return vars
