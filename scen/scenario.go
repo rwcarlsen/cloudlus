@@ -90,12 +90,11 @@ type Scenario struct {
 	// objective value calculations.
 	ObjFunc string
 	// ObjMode identifies the way the overall objective value is computed for
-	// this scenario.  It must be one of the names in the
-	// github.com/rwcarlsen/cloudlus/scen.Modes map.  The default (empty
-	// string) is to just run a single simulation and use the returned value
-	// of the chosen ObjFunc as the objective value.  Other modes allow things
-	// like a scenario involving many sub-simulations whose objectives
-	// are combined to a single value.
+	// this scenario.  It must be one of the names in the Modes map.  The
+	// default (empty string) is to just run a single simulation and use the
+	// returned value of the chosen ObjFunc as the objective value.  Other
+	// modes allow things like a scenario involving many sub-simulations whose
+	// objectives are combined to a single value.
 	ObjMode string
 	// SingleCalc is for internal usage (not users) and is marked true for
 	// multi-sim scenarios where the current simulation being run is a
@@ -107,6 +106,11 @@ type Scenario struct {
 	// Discount represents the nominal annual discount rate (including
 	// inflation) for the simulation.
 	Discount float64
+	// CustomConfig is for internal use for sub-scenario-specific
+	// configuration used in things like disruption scenarios where each run
+	// or objective evaluation consists of multiple simulations with various
+	// perturbations.
+	CustomConfig map[string]interface{}
 	// Facs is a list of facilities that could be built and associated
 	// parameters relevant to the optimization objective.
 	Facs []Facility

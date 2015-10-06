@@ -33,9 +33,11 @@ func doubleMode(s *Scenario, obj ObjExecFunc) (float64, error) {
 }
 
 var Modes = map[string]ModeFunc{
-	"":       SingleMode,
-	"single": SingleMode,
-	"double": doubleMode, // for testing
+	"":              SingleMode,
+	"single":        SingleMode,
+	"disrup-multi":  disrupMode,
+	"disrup-single": disrupSingleMode,
+	"double":        doubleMode, // for testing
 }
 
 // ObjFunc computes objective function values for scen using already-generated
