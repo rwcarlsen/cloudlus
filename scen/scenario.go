@@ -99,7 +99,7 @@ type Scenario struct {
 	// SingleCalc is for internal usage (not users) and is marked true for
 	// multi-sim scenarios where the current simulation being run is a
 	// sub-[scenario/simulation] and CalcObjective should be called instead of
-	// CalcTotalObjective.  Running a simulation remotely would fire off one
+	// CalcTotalObjective.  Without this, running a simulation remotely would fire off one
 	// job for each sub-simulation, and then each remote worker would also
 	// fire off one simulation for each sub-simulation - causing problems.
 	SingleCalc bool
