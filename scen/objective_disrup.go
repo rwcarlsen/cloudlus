@@ -80,7 +80,6 @@ func disrupMode(s *Scenario, obj ObjExecFunc) (float64, error) {
 			for i, b := range clone.Builds {
 				if b.Proto == d.KillProto {
 					clone.Builds[i].Life = d.Time - b.Time
-					fmt.Println(clone.Builds[i].Life, s.Builds[i].Life)
 				}
 			}
 		}
@@ -100,7 +99,6 @@ func disrupMode(s *Scenario, obj ObjExecFunc) (float64, error) {
 	if errinner != nil {
 		return math.Inf(1), fmt.Errorf("remote sub-simulation execution failed: %v", errinner)
 	}
-	fmt.Printf("%+v\n", subobjs)
 
 	// compute aggregate objective
 	objval := 0.0

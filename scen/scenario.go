@@ -96,6 +96,14 @@ type Scenario struct {
 	// modes allow things like a scenario involving many sub-simulations whose
 	// objectives are combined to a single value.
 	ObjMode string
+	// SpliceVars holds an optional complete set of variable values that can
+	// be spliced with the actual scenario variable values.  Times before the
+	// splice time use the SpliceVars values, and times after the splice time
+	// use the actual variable values passed to TransformVars.
+	SpliceVars []float64
+	// SpliceTime is the time before which SpliceVars (if defined) are used
+	// instead of the actual passed variables for TransformVars.
+	SpliceTime int
 	// SingleCalc is for internal usage (not users) and is marked true for
 	// multi-sim scenarios where the current simulation being run is a
 	// sub-[scenario/simulation] and CalcObjective should be called instead of
@@ -309,6 +317,29 @@ func (s *Scenario) CapBuilt(builds []Build, t int) float64 {
 	return tot
 }
 
+func (s *Scenario) splice(origvars []float64) []float64 {
+	if len(s.SpliceVars) == 0 {
+		return origvars
+	}
+
+	vars := make([]float64, len(origvars))
+	copy(vars, origvars)
+outer:
+	for i, t := range s.periodTimes() {
+		if t >= s.SpliceTime {
+			break
+		}
+		for j := 0; j < s.NVarsPerPeriod(); j++ {
+			index := i*s.NVarsPerPeriod() + j
+			if index >= len(s.SpliceVars) {
+				break outer
+			}
+			vars[index] = s.SpliceVars[index]
+		}
+	}
+	return vars
+}
+
 // TransformVars takes a sequence of input variables for the scenario and
 // transforms them into a set of prototype/facility deployments. The sequence
 // of the vars follows this pattern: fac1_t1, fac1_t2, ..., fac1_tn, fac2_t1,
@@ -329,6 +360,8 @@ func (s *Scenario) TransformVars(vars []float64) (map[string][]Build, error) {
 	} else if len(vars) != s.NVars() {
 		return nil, fmt.Errorf("wrong number of vars: want %v, got %v", s.NVars(), len(vars))
 	}
+
+	vars = s.splice(vars)
 
 	up := s.UpperBounds()
 	low := s.LowerBounds()
