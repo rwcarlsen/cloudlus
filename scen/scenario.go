@@ -148,6 +148,7 @@ func (s *Scenario) Clone() *Scenario {
 	data, _ := json.Marshal(s)
 	clone := &Scenario{}
 	json.Unmarshal(data, &clone)
+	clone.Validate()
 	return clone
 }
 
