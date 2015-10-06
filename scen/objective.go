@@ -19,7 +19,7 @@ type ObjExecFunc func(s *Scenario) (float64, error)
 // objective is computed and returned along with any error.
 type ModeFunc func(s *Scenario, obj ObjExecFunc) (float64, error)
 
-func SingleMode(s *Scenario, obj ObjExecFunc) (float64, error) { return obj(s) }
+func singleMode(s *Scenario, obj ObjExecFunc) (float64, error) { return obj(s) }
 
 // doubleMode is just for testing to see that the mode handling for scenarios
 // works.
@@ -49,8 +49,8 @@ func doubleMode(s *Scenario, obj ObjExecFunc) (float64, error) {
 // using the Scenario.CustomConfig["disrup-multi"]=[]Disruption{...}
 // with corresponding disruption times, prototype to disrupt, etc.
 var Modes = map[string]ModeFunc{
-	"":              SingleMode,
-	"single":        SingleMode,
+	"":              singleMode,
+	"single":        singleMode,
 	"disrup-multi":  disrupMode,
 	"disrup-single": disrupSingleMode,
 	"double":        doubleMode, // for testing
