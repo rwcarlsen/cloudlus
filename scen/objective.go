@@ -32,22 +32,22 @@ func doubleMode(s *Scenario, obj ObjExecFunc) (float64, error) {
 	return val1 + val2, nil
 }
 
-// Modes hold all possible Scenario.ObjMode values for a scenario:
+// Modes holds all possible Scenario.ObjMode values for a scenario:
 //
-// * single: Used for calculating a single-simulation, simple objective
-// function for a scenario.
+//   * single: Used for calculating a single-simulation, simple objective
+//   function for a scenario.
 //
-// * disrup-multi: Used to compute a multi-simulation weighted average
-// objective function for the scenario (i.e. runs several single mode
-// sub-scenario objective calcs using the
-// Scenario.CustomConfig["disrup-multi"]=[]Disruption{...} with corresponding
-// disruption points, probabilities, etc.  The probabilities must sum up to
-// 1.0.
+//   * disrup-multi: Used to compute a multi-simulation weighted average
+//   objective function for the scenario (i.e. runs several single mode
+//   sub-scenario objective calcs using the
+//   Scenario.CustomConfig["disrup-multi"]=[]Disruption{...} with
+//   corresponding disruption points, probabilities, etc.  The probabilities
+//   must sum up to 1.0.
 //
-// * disrup-single: Used to compute a single-simulation objective function
-// for the scenario but also inserting a disruption at the specified point
-// using the Scenario.CustomConfig["disrup-multi"]=[]Disruption{...}
-// with corresponding disruption times, prototype to disrupt, etc.
+//   * disrup-single: Used to compute a single-simulation objective function
+//   for the scenario but also inserting a disruption at the specified point
+//   using the Scenario.CustomConfig["disrup-multi"]=[]Disruption{...} with
+//   corresponding disruption times, prototype to disrupt, etc.
 var Modes = map[string]ModeFunc{
 	"":              singleMode,
 	"single":        singleMode,
