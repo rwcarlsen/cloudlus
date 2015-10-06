@@ -136,6 +136,13 @@ type Scenario struct {
 	tmpl *template.Template
 }
 
+func (s *Scenario) Clone() *Scenario {
+	data, _ := json.Marshal(s)
+	clone := &Scenario{}
+	json.Unmarshal(data, &clone)
+	return clone
+}
+
 func (s *Scenario) reactors() []Facility {
 	rs := []Facility{}
 	for _, fac := range s.Facs {

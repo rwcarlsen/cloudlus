@@ -3,6 +3,7 @@ package scen
 import (
 	"fmt"
 	"math"
+	"sync"
 )
 
 type Disruption struct {
@@ -33,8 +34,7 @@ func disrupSingleMode(s *Scenario, obj ObjExecFunc) (float64, error) {
 	}
 
 	// set separations plant to die disruption time.
-	cloneval := *s
-	clone := &cloneval
+	clone := s.Clone()
 	if disrup.Time >= 0 {
 		for i, b := range clone.Builds {
 			if b.Proto == disrup.KillProto {
@@ -68,52 +68,44 @@ func disrupMode(s *Scenario, obj ObjExecFunc) (float64, error) {
 		disrup[i] = d
 	}
 
-	times := []int{1000, -1}
-	probs := []float64{0.3, 0.7}
-
-	type result struct {
-		val float64
-		err error
-	}
-
-	// make channel buffered so if we bail early on an error, we don't leak
-	// goroutines waiting to send.
-	ch := make(chan result, len(disrup))
-	defer close(ch)
-
 	// fire off concurrent sub-simulation objective evaluations
-	for _, d := range disrup {
+	var wg sync.WaitGroup
+	wg.Add(len(disrup))
+	subobjs := make([]float64, len(disrup))
+	var errinner error
+	for i, d := range disrup {
 		// set separations plant to die disruption time.
-		cloneval := *s
-		clone := &cloneval
+		clone := s.Clone()
 		if d.Time >= 0 {
 			for i, b := range clone.Builds {
 				if b.Proto == d.KillProto {
 					clone.Builds[i].Life = d.Time - b.Time
+					fmt.Println(clone.Builds[i].Life, s.Builds[i].Life)
 				}
 			}
 		}
 
-		go func() {
-			val, err := obj(clone)
-			ch <- result{val, err}
-		}()
+		go func(i int, s *Scenario) {
+			defer wg.Done()
+			val, err := obj(s)
+			if err != nil {
+				errinner = err
+				val = math.Inf(1)
+			}
+			subobjs[i] = val
+		}(i, clone)
 	}
 
-	// collect all results
-	subobjs := make([]float64, len(times))
-	for i := range times {
-		r := <-ch
-		if r.err != nil {
-			return math.Inf(1), fmt.Errorf("remote sub-simulation execution failed: %v", r.err)
-		}
-		subobjs[i] = r.val
+	wg.Wait()
+	if errinner != nil {
+		return math.Inf(1), fmt.Errorf("remote sub-simulation execution failed: %v", errinner)
 	}
+	fmt.Printf("%+v\n", subobjs)
 
 	// compute aggregate objective
 	objval := 0.0
 	for i := range subobjs {
-		objval += probs[i] * subobjs[i]
+		objval += disrup[i].Prob * subobjs[i]
 	}
 	return objval, nil
 }
