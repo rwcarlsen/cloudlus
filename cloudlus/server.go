@@ -203,6 +203,7 @@ func (s *Server) checkbeat() {
 			delete(s.jobinfo, jid)
 			if err != nil {
 				log.Printf("cannot find job %v for reassignment", jid)
+				continue
 			}
 
 			s.log.Printf("[REQUEUE] job %v\n", jid)
