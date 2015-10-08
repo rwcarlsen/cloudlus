@@ -21,9 +21,11 @@ import (
 
 var objfile = "runsim-obj.dat"
 
-// Remote runs scenario s on a remote cloudlus server at addr writing the remote job's
-// standard out and error to stdout and stderr respectively.
-func Remote(s *scen.Scenario, stdout, stderr io.Writer, addr string) (float64, error) {
+const DefaultTimeout = 2 * time.Hour
+
+// RemoteTimeout is the same as Remote, but with a custom timeout rather than
+// the default.
+func RemoteTimeout(s *scen.Scenario, stdout, stderr io.Writer, addr string, timeout time.Duration) (float64, error) {
 	client, err := cloudlus.Dial(addr)
 	if err != nil {
 		return math.Inf(1), err
@@ -35,6 +37,7 @@ func Remote(s *scen.Scenario, stdout, stderr io.Writer, addr string) (float64, e
 		if err != nil {
 			return math.Inf(1), fmt.Errorf("failed to build remote job: %v", err)
 		}
+		j.Timeout = timeout
 
 		done := make(chan bool, 1)
 		defer close(done)
@@ -69,6 +72,12 @@ func Remote(s *scen.Scenario, stdout, stderr io.Writer, addr string) (float64, e
 	}
 
 	return s.CalcTotalObjective(execfn)
+}
+
+// Remote runs scenario s on a remote cloudlus server at addr writing the remote job's
+// standard out and error to stdout and stderr respectively.
+func Remote(s *scen.Scenario, stdout, stderr io.Writer, addr string) (float64, error) {
+	return RemoteTimeout(s, stdout, stderr, addr, DefaultTimeout)
 }
 
 // Local runs scenario scn on the local machine connecting the simulation's

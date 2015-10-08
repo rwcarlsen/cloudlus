@@ -8,7 +8,7 @@ type RPC struct {
 
 func (r *RPC) Heartbeat(b Beat, kill *bool) error {
 	b.Time = time.Now()
-	b.kill = make(chan bool)
+	b.kill = make(chan bool, 1)
 	r.s.beat <- b
 	*kill = <-b.kill
 	return nil

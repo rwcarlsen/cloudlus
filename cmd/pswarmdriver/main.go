@@ -33,7 +33,6 @@ var (
 	maxiter      = flag.Int("maxiter", 500, "max number of optimizer iterations")
 	maxnoimprove = flag.Int("maxnoimprove", 100, "max iterations with no objective improvement(zero -> infinite)")
 	timeout      = flag.Duration("timeout", 120*time.Minute, "max time before remote function eval times out")
-	itertimeout  = flag.Duration("itertimeout", 120*time.Minute, "max time before an iteration times out")
 	objlog       = flag.String("objlog", "obj.log", "file to log unpenalized objective values")
 	runlog       = flag.String("runlog", "run.log", "file to log local cyclus run output")
 	dbname       = flag.String("db", "pswarm.sqlite", "name for database containing optimizer work")
@@ -312,7 +311,7 @@ func (o *obj) Objective(v []float64) (float64, error) {
 		val, err := runscen.Local(scencopy, o.runlog, o.runlog)
 		return val, err
 	} else {
-		return runscen.Remote(scencopy, o.runlog, o.runlog, *addr)
+		return runscen.RemoteTimeout(scencopy, o.runlog, o.runlog, *addr, *timeout)
 	}
 }
 

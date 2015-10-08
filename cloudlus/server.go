@@ -313,7 +313,7 @@ func (s *Server) dispatcher() {
 				continue
 			}
 
-			s.log.Printf("[BEAT] job %v (worker %v), %v remaining\n", b.JobId, b.WorkerId, time.Now().Sub(j.Fetched))
+			s.log.Printf("[BEAT] job %v (worker %v), %v left of %v\n", b.JobId, b.WorkerId, j.Timeout-time.Now().Sub(j.Fetched), j.Timeout)
 			s.jobinfo[b.JobId] = b
 
 			if time.Now().Sub(j.Fetched) > j.Timeout {
