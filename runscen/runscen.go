@@ -36,9 +36,20 @@ func Remote(s *scen.Scenario, stdout, stderr io.Writer, addr string) (float64, e
 			return math.Inf(1), fmt.Errorf("failed to build remote job: %v", err)
 		}
 
-		j, err = client.Run(j)
-		if err != nil {
-			return math.Inf(1), fmt.Errorf("job execution failed: %v", err)
+		done := make(chan bool, 1)
+		defer close(done)
+		go func() {
+			j, err = client.Run(j)
+			done <- true
+		}()
+
+		select {
+		case <-done:
+			if err != nil {
+				return math.Inf(1), fmt.Errorf("job execution failed: %v", err)
+			}
+		case <-time.After(j.Timeout + 1*time.Hour):
+			return math.Inf(1), fmt.Errorf("job rpc timeout limit reached")
 		}
 
 		if err := writeLogs(j, stdout, stderr); err != nil {

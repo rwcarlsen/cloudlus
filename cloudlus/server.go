@@ -294,35 +294,35 @@ func (s *Server) dispatcher() {
 			req.Ch <- j
 		case b := <-s.beat:
 			var err error
-			oldb, ok := s.jobinfo[b.JobId]
-			kill := false
 			var j *Job
-			if ok {
-				j, err = s.alljobs.Get(b.JobId)
-				if err != nil {
-					s.log.Printf("[BEAT] error - job %v not found in db\n", b.JobId)
-					continue
-				}
-				kill = time.Now().Sub(j.Fetched) > j.Timeout
-			} else {
+			oldb, ok := s.jobinfo[b.JobId]
+			if !ok {
 				// job was completed by another worker already
-				kill = true
+				b.kill <- true
+				continue
+			} else if oldb.WorkerId != b.WorkerId {
+				// job has been reassigned to another worker
+				b.kill <- true
+				continue
 			}
 
-			// make sure that this job hasn't been reassigned to another worker
-			if oldb.WorkerId == b.WorkerId {
-				s.log.Printf("[BEAT] job %v (worker %v)\n", b.JobId, b.WorkerId)
-				s.jobinfo[b.JobId] = b
-			} else {
-				// job has been reassigned
-				kill = true
+			j, err = s.alljobs.Get(b.JobId)
+			if err != nil {
+				b.kill <- true
+				s.log.Printf("[BEAT] error - job %v not found in db\n", b.JobId)
+				continue
 			}
 
-			if kill && j != nil {
+			s.log.Printf("[BEAT] job %v (worker %v), %v remaining\n", b.JobId, b.WorkerId, time.Now().Sub(j.Fetched))
+			s.jobinfo[b.JobId] = b
+
+			if time.Now().Sub(j.Fetched) > j.Timeout {
 				j.Status = StatusFailed
 				s.finnishJob(j)
+				s.log.Printf("[BEAT] sending kill signal: job %v (worker %v)\n", b.JobId, b.WorkerId)
+				b.kill <- true
 			}
-			b.kill <- kill
+			b.kill <- false
 		}
 	}
 }
