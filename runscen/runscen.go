@@ -39,8 +39,9 @@ func RemoteTimeout(s *scen.Scenario, stdout, stderr io.Writer, addr string, time
 		}
 		j.Timeout = timeout
 
+		// closing this channel might cause a send on a closed channel if the
+		// timeout in the select below fires before the goroutine completes.
 		done := make(chan bool, 1)
-		defer close(done)
 		go func() {
 			j, err = client.Run(j)
 			done <- true

@@ -64,10 +64,11 @@ type ObjFunc func(scen *Scenario, db *sql.DB, simid []byte) (float64, error)
 // referenced/used for computing objective values for scen.Scenarios.  New
 // alternative objective functions should be added to this list.
 var ObjFuncs = map[string]ObjFunc{
-	"":                 ObjSlowVsFastPower,
-	"slowvfast":        ObjSlowVsFastPower,
-	"slowvfast-fueled": ObjSlowVsFastPowerFueled,
-	"ans2014":          ObjANS2014,
+	"":                  ObjSlowVsFastPower,
+	"slowvfast":         ObjSlowVsFastPower,
+	"slowvfast-penalty": ObjSlowVsFastPowerPenalty,
+	"slowvfast-fueled":  ObjSlowVsFastPowerFueled,
+	"ans2014":           ObjANS2014,
 }
 
 // ObjSlowVsFastPower returns:
@@ -100,6 +101,40 @@ func ObjSlowVsFastPower(scen *Scenario, db *sql.DB, simid []byte) (float64, erro
 	return slowpower / (slowpower + fastpower), nil
 }
 
+// ObjSlowVsFastPowerPenalty is the same as ObjSlowVsFastPower except there is
+// an extra factor max[1, (minimum wanted energy) / (tot energy)]
+// multiplied onto the objective that penalizes producing less integrated
+// energy then the minimum bound curve defines.
+func ObjSlowVsFastPowerPenalty(scen *Scenario, db *sql.DB, simid []byte) (float64, error) {
+	// add up overnight and operating costs converted to PV(t=0)
+	q1 := `
+    	SELECT SUM(Value) FROM timeseriespower AS p
+           JOIN agents AS a ON a.agentid=p.agentid AND a.simid=p.simid
+           WHERE a.Prototype IN (?,?) AND p.simid=?
+		`
+
+	slowE := 0.0
+	err := db.QueryRow(q1, "slow_reactor", "init_slow_reactor", simid).Scan(&slowE)
+	if err != nil {
+		return math.Inf(1), err
+	}
+
+	fastE := 0.0
+	err = db.QueryRow(q1, "fast_reactor", "fast_reactor", simid).Scan(&fastE)
+	if err != nil {
+		return math.Inf(1), err
+	}
+
+	minE := 0.0
+	for _, p := range scen.MinPower {
+		minE += p * float64(scen.BuildPeriod)
+	}
+
+	totE := slowE + fastE
+
+	return slowE / totE * math.Max(1, minE/totE), nil
+}
+
 // ObjSlowVsFastPowerFueled returns:
 //
 //     [(thermal reactor energy) + (total reactor capacity)] / (total energy)
@@ -108,7 +143,6 @@ func ObjSlowVsFastPower(scen *Scenario, db *sql.DB, simid []byte) (float64, erro
 // and fast reactor prototypes respectively.  It is assumed that there are no
 // other reactor prototypes deployed in the simulation.
 func ObjSlowVsFastPowerFueled(scen *Scenario, db *sql.DB, simid []byte) (float64, error) {
-	// add up overnight and operating costs converted to PV(t=0)
 	q1 := `
     	SELECT TOTAL(Value) FROM timeseriespower AS p
            JOIN agents AS a ON a.agentid=p.agentid AND a.simid=p.simid

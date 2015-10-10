@@ -16,7 +16,8 @@ import (
 // optimizer.
 type Facility struct {
 	Proto string
-	// Cap is the total Power output capacity of the facility.
+	// Cap is the net/effective power generation capacity of the facility
+	// which must include any non-unity capacity factor.
 	Cap float64
 	// The lifetime of the facility (in timesteps). The lifetime must also
 	// be specified manually (consistent with this value) in the prototype
