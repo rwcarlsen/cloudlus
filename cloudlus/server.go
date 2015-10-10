@@ -213,6 +213,30 @@ func (s *Server) checkbeat() {
 			s.alljobs.Put(j)
 		}
 	}
+
+	// also check to see if any submitchans are waiting on jobs to finnish
+	// that we don't have record of them running in jobinfo
+	for jid, ch := range s.submitchans {
+		_, ok := s.jobinfo[jid]
+		if !ok {
+			// job is not currently running
+			inqueue := false
+			for _, qjid := range s.queue {
+				if jid == qjid {
+					inqueue = true
+					break
+				}
+			}
+
+			if !inqueue {
+				// job is also not queued
+				j, _ := s.alljobs.Get(jid)
+				ch <- j
+				close(ch)
+				delete(s.submitchans, jid)
+			}
+		}
+	}
 }
 
 func (s *Server) dispatcher() {
@@ -256,6 +280,7 @@ func (s *Server) dispatcher() {
 				s.log.Printf("[RETRIEVE] job %v\n", j.Id)
 				req.Resp <- j
 			} else {
+				s.log.Printf("[RETRIEVE] error: job %v not found\n", j.Id)
 				req.Resp <- nil
 			}
 		case j := <-s.pushjobs:

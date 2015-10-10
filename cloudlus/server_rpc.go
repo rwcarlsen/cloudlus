@@ -1,6 +1,9 @@
 package cloudlus
 
-import "time"
+import (
+	"fmt"
+	"time"
+)
 
 type RPC struct {
 	s *Server
@@ -16,7 +19,11 @@ func (r *RPC) Heartbeat(b Beat, kill *bool) error {
 
 // Submit j via rpc and block until complete returning the result job.
 func (r *RPC) Submit(j *Job, result **Job) error {
-	*result = r.s.Run(j)
+	gotj := r.s.Run(j)
+	*result = gotj
+	if gotj == nil {
+		return fmt.Errorf("server: unknown job id %v", j.Id)
+	}
 	return nil
 }
 
