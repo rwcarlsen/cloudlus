@@ -25,6 +25,19 @@ const beatInterval = 15 * time.Second
 const beatLimit = 2 * beatInterval
 const beatCheckFreq = beatInterval / 3
 
+type myRPCServer struct {
+	*rpc.Server
+}
+
+func (r *myRPCServer) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	log.Println("requesting ip address: ", req.RemoteAddr)
+	r.Server.ServeHTTP(w, req)
+}
+
+func (r *myRPCServer) HandleHTTP(rpcPath, debugPath string) {
+	http.Handle(rpcPath, r)
+}
+
 type Server struct {
 	log          *log.Logger
 	serv         *http.Server
@@ -117,11 +130,14 @@ func NewServer(httpaddr, rpcaddr string, db *DB) *Server {
 	mux.HandleFunc("/dashboard/output/", s.dashboardOutput)
 	mux.HandleFunc("/dashboard/default-infile", s.dashboardDefaultInfile)
 
+	srv := &myRPCServer{rpc.NewServer()}
+	srv.HandleHTTP(rpc.DefaultRPCPath, rpc.DefaultDebugPath)
+
 	s.rpc = &RPC{s}
-	rpc.Register(s.rpc)
+	srv.Register(s.rpc)
 
 	if httpaddr == rpcaddr {
-		mux.Handle(rpc.DefaultRPCPath, rpc.DefaultServer)
+		mux.Handle(rpc.DefaultRPCPath, srv)
 	} else {
 		rpc.HandleHTTP()
 	}
