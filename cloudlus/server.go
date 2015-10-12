@@ -44,6 +44,7 @@ type Server struct {
 	rpcaddr      string
 	kill         chan struct{}
 	Stats        *Stats
+	rpcserv      *rpc.Server
 }
 
 type Stats struct {
@@ -118,12 +119,13 @@ func NewServer(httpaddr, rpcaddr string, db *DB) *Server {
 	mux.HandleFunc("/dashboard/default-infile", s.dashboardDefaultInfile)
 
 	s.rpc = &RPC{s}
-	rpc.Register(s.rpc)
+	s.rpcserv = rpc.NewServer()
+	s.rpcserv.Register(s.rpc)
 
 	if httpaddr == rpcaddr {
-		mux.Handle(rpc.DefaultRPCPath, rpc.DefaultServer)
+		mux.Handle(rpc.DefaultRPCPath, s.rpcserv)
 	} else {
-		rpc.HandleHTTP()
+		s.rpcserv.HandleHTTP(rpc.DefaultRPCPath, rpc.DefaultDebugPath)
 	}
 
 	s.serv = &http.Server{Addr: httpaddr, Handler: mux}

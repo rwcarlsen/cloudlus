@@ -9,17 +9,16 @@ import (
 	"github.com/rwcarlsen/cloudlus/Godeps/_workspace/src/code.google.com/p/go-uuid/uuid"
 )
 
-const testaddr = "127.0.0.1:45687"
-
 const workerpoll = 1 * time.Second
 
 // TestRemoteKill checks that the server will force-terminate jobs that exceed
 // their job timeout - guarding against workers that aren't killing the jobs
 // themselves past the job timeout.
 func TestRemoteKill(t *testing.T) {
-	kill1 := make(chan struct{})
-	w1 := &foreverWorker{ServerAddr: testaddr}
-	go w1.Run(kill1)
+	testaddr := "127.0.0.1:45687"
+	beatInterval = 2 * time.Second
+	beatLimit = 2 * beatInterval
+	beatCheckFreq = beatInterval / 2
 
 	// empty path for in-memory db
 	db, _ := NewDB("", dblimit)
@@ -31,6 +30,11 @@ func TestRemoteKill(t *testing.T) {
 	j := NewJobCmd("sleep", "100")
 	j.Timeout = 3 * time.Second
 	s.Start(j, nil)
+
+	kill1 := make(chan struct{})
+	w1 := &foreverWorker{ServerAddr: testaddr}
+	go w1.Run(kill1)
+	defer close(kill1)
 
 	// wait for it to be running
 	<-time.After(2 * workerpoll)
@@ -49,27 +53,31 @@ func TestRemoteKill(t *testing.T) {
 // TestRequeue checks that jobs are successfully requeued and completed
 // after the job's original worker stops beating.
 func TestRequeue(t *testing.T) {
+	testaddr := "127.0.0.1:45689"
 	beatInterval = 2 * time.Second
 	beatLimit = 2 * beatInterval
-	beatCheckFreq = beatInterval / 3
-
-	kill1 := make(chan struct{})
-	kill2 := make(chan struct{})
-	w1 := &badWorker{ServerAddr: testaddr, MaxFetch: 1}
-	go w1.Run(kill1)
+	beatCheckFreq = beatInterval / 2
 
 	// empty path for in-memory db
 	db, err := NewDB("", dblimit)
 	s := NewServer(testaddr, testaddr, db)
-	go s.ListenAndServe()
+	go func() {
+		t.Fatal(s.ListenAndServe())
+	}()
 	defer s.Close()
 
 	// submit job
 	j := NewJobCmd("date")
 	s.Start(j, nil)
 
-	// wait for it to be running
-	<-time.After(2 * workerpoll)
+	time.Sleep(1 * time.Second)
+
+	kill1 := make(chan struct{})
+	w1 := &badWorker{ServerAddr: testaddr, MaxFetch: 1}
+	go w1.Run(kill1)
+
+	// wait for worker to be running job
+	time.Sleep(3 * workerpoll)
 
 	js, err := s.Get(j.Id)
 	if err != nil {
@@ -90,6 +98,7 @@ func TestRequeue(t *testing.T) {
 
 	// start good worker and wait for job to complete
 	w2 := &goodWorker{ServerAddr: testaddr}
+	kill2 := make(chan struct{})
 	go w2.Run(kill2)
 	<-time.After(workerpoll + 2*time.Second)
 
@@ -164,7 +173,7 @@ func (w *badWorker) Run(kill chan struct{}) error {
 	uid := uuid.NewRandom()
 	copy(w.Id[:], uid)
 
-	for w.nfetched < w.MaxFetch && w.MaxFetch > 0 {
+	for w.nfetched < w.MaxFetch || w.MaxFetch == 0 {
 		select {
 		case <-kill:
 			return nil

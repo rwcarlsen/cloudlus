@@ -6,6 +6,7 @@ import (
 )
 
 func TestServerJobGC(t *testing.T) {
+	const testaddr = "127.0.0.1:45687"
 	dblimit := 10000
 	j := NewJobCmd("echo", "1")
 	jsize := int(j.Size())

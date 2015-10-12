@@ -1,7 +1,9 @@
 package cloudlus
 
 import (
+	"fmt"
 	"io/ioutil"
+	"os"
 	"testing"
 	"time"
 )
@@ -23,4 +25,5 @@ func TestJobTimeout(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Errorf("job failed to time out")
 	}
+	fmt.Fprintf(os.Stderr, "\n")
 }

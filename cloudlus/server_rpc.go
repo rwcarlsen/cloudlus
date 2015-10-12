@@ -43,7 +43,7 @@ func (r *RPC) Retrieve(j JobId, result **Job) error {
 }
 
 func (r *RPC) Fetch(wid WorkerId, j **Job) error {
-	req := workRequest{wid, make(chan *Job)}
+	req := workRequest{wid, make(chan *Job, 1)}
 	r.s.fetchjobs <- req
 	*j = <-req.Ch
 	if *j == nil {
