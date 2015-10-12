@@ -21,9 +21,9 @@ const defaultdbpath = "./jobdb"
 // defaultCollectFreq if the duration between old job purging from db.
 var defaultCollectFreq = 2 * time.Minute
 
-const beatInterval = 15 * time.Second
-const beatLimit = 2 * beatInterval
-const beatCheckFreq = beatInterval / 3
+var beatInterval = 15 * time.Second
+var beatLimit = 2 * beatInterval
+var beatCheckFreq = beatInterval / 3
 
 type Server struct {
 	log          *log.Logger
@@ -179,7 +179,7 @@ func (s *Server) Start(j *Job, ch chan *Job) chan *Job {
 }
 
 func (s *Server) Get(jid JobId) (*Job, error) {
-	ch := make(chan *Job)
+	ch := make(chan *Job, 1)
 	s.retrievejobs <- jobRequest{Id: jid, Resp: ch}
 	j := <-ch
 	if j == nil {
@@ -202,7 +202,7 @@ func (s *Server) checkbeat() {
 			j, err := s.alljobs.Get(jid)
 			delete(s.jobinfo, jid)
 			if err != nil {
-				log.Printf("cannot find job %v for reassignment", jid)
+				s.log.Printf("[ERROR] cannot find job %v for requeueing", jid)
 				continue
 			}
 

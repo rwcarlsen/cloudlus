@@ -13,6 +13,9 @@ const testaddr = "127.0.0.1:45687"
 
 const workerpoll = 1 * time.Second
 
+// TestRemoteKill checks that the server will force-terminate jobs that exceed
+// their job timeout - guarding against workers that aren't killing the jobs
+// themselves past the job timeout.
 func TestRemoteKill(t *testing.T) {
 	kill1 := make(chan struct{})
 	w1 := &foreverWorker{ServerAddr: testaddr}
@@ -39,14 +42,20 @@ func TestRemoteKill(t *testing.T) {
 	<-time.After(beatLimit + 2*time.Second)
 
 	if w1.running {
-		t.Errorf("worker is still running, but should have been killed by the server")
+		t.Errorf("worker is still running a job that should have been killed by the server")
 	}
 }
 
-func TestWorkerFailure(t *testing.T) {
+// TestRequeue checks that jobs are successfully requeued and completed
+// after the job's original worker stops beating.
+func TestRequeue(t *testing.T) {
+	beatInterval = 2 * time.Second
+	beatLimit = 2 * beatInterval
+	beatCheckFreq = beatInterval / 3
+
 	kill1 := make(chan struct{})
 	kill2 := make(chan struct{})
-	w1 := &badWorker{ServerAddr: testaddr}
+	w1 := &badWorker{ServerAddr: testaddr, MaxFetch: 1}
 	go w1.Run(kill1)
 
 	// empty path for in-memory db
@@ -70,15 +79,21 @@ func TestWorkerFailure(t *testing.T) {
 		t.Errorf("wrong job status: got '%v', expected '%v'", js.Status, StatusRunning)
 	}
 
+	// kill bad worker and wait for job to be requeued
 	close(kill1)
+	<-time.After(beatLimit + beatCheckFreq)
+
+	js, _ = s.Get(j.Id)
+	if js.Status != StatusQueued {
+		t.Errorf("wrong job status: got '%v', expected '%v'", js.Status, StatusQueued)
+	}
+
+	// start good worker and wait for job to complete
 	w2 := &goodWorker{ServerAddr: testaddr}
 	go w2.Run(kill2)
-	<-time.After((beatLimit + beatCheckFreq + workerpoll) * 2)
+	<-time.After(workerpoll + 2*time.Second)
 
-	js, err = s.Get(j.Id)
-	if err != nil {
-		t.Errorf("unexpected error retrieving job: %v", err)
-	}
+	js, _ = s.Get(j.Id)
 	if js.Status != StatusComplete {
 		t.Errorf("wrong job status: got '%v', expected '%v'", js.Status, StatusComplete)
 	}
@@ -137,16 +152,19 @@ func (w *goodWorker) dojob() error {
 	return client.Push(tmp, j)
 }
 
+// badWorker never sends back the results of the jobs it runs.
 type badWorker struct {
 	Id         WorkerId
 	ServerAddr string
+	MaxFetch   int
+	nfetched   int
 }
 
 func (w *badWorker) Run(kill chan struct{}) error {
 	uid := uuid.NewRandom()
 	copy(w.Id[:], uid)
 
-	for {
+	for w.nfetched < w.MaxFetch && w.MaxFetch > 0 {
 		select {
 		case <-kill:
 			return nil
@@ -158,6 +176,7 @@ func (w *badWorker) Run(kill chan struct{}) error {
 			<-time.After(workerpoll)
 		}
 	}
+	return nil
 }
 
 func (w *badWorker) dojob() error {
@@ -175,10 +194,13 @@ func (w *badWorker) dojob() error {
 	} else if err != nil {
 		return err
 	}
+	w.nfetched++
 
 	return nil
 }
 
+// foreverWorker fails to terminate jobs when they exceed their specified job
+// timeout and just keeps running them.
 type foreverWorker struct {
 	Id         WorkerId
 	ServerAddr string

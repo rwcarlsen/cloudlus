@@ -44,7 +44,3 @@ func TestServerJobGC(t *testing.T) {
 		t.Errorf("server failed to run job GC")
 	}
 }
-
-func TestJobRequeue(t *testing.T) {
-	t.Fatal("not implemented")
-}
