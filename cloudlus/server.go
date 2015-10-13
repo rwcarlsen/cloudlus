@@ -282,7 +282,7 @@ func (s *Server) dispatcher() {
 				s.log.Printf("[RETRIEVE] job %v\n", j.Id)
 				req.Resp <- j
 			} else {
-				s.log.Printf("[RETRIEVE] error: job %v not found\n", j.Id)
+				s.log.Printf("[RETRIEVE] error: job %v not found\n", req.Id)
 				req.Resp <- nil
 			}
 		case j := <-s.pushjobs:
