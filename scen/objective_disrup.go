@@ -1,6 +1,7 @@
 package scen
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"sync"
@@ -13,8 +14,13 @@ type Disruption struct {
 	// by the given time.
 	KillProto string
 	// Prob holds the probability that the disruption will happen at a
-	// particular time.  This is ignored in single-disrup mode.
+	// particular time.  This is ignored in disrup-single mode.
 	Prob float64
+	// KnownBest holds the objective value for the best known deployment
+	// schedule for the scenario for with a priori knowledge of this
+	// particular disruption always occuring.  This is only used in
+	// disrup-multi-lin mode.
+	KnownBest float64
 }
 
 func disrupSingleMode(s *Scenario, obj ObjExecFunc) (float64, error) {
@@ -44,6 +50,80 @@ func disrupSingleMode(s *Scenario, obj ObjExecFunc) (float64, error) {
 	}
 
 	return obj(clone)
+}
+
+// disrupModeLin is the same as disrupMode except it performs the weighted
+// linear combination of each sub objective with the know best for that
+// disruption time to compute the final sub objectives that are then combined.
+func disrupModeLin(s *Scenario, obj ObjExecFunc) (float64, error) {
+	idisrup := s.CustomConfig["disrup-multi"].([]interface{})
+	disrup := make([]Disruption, len(idisrup))
+	for i, td := range idisrup {
+		m := td.(map[string]interface{})
+		d := Disruption{}
+
+		if t, ok := m["Time"]; ok {
+			d.Time = int(t.(float64))
+		}
+
+		if proto, ok := m["KillProto"]; ok {
+			d.KillProto = proto.(string)
+		}
+
+		if prob, ok := m["Prob"]; ok {
+			d.Prob = prob.(float64)
+		}
+
+		if v, ok := m["KnownBest"]; ok {
+			d.KnownBest = v.(float64)
+		} else {
+			return math.Inf(1), errors.New("disrup-multi-lin needs KnownBest parameters set in custom disruption config")
+		}
+
+		disrup[i] = d
+	}
+
+	// fire off concurrent sub-simulation objective evaluations
+	var wg sync.WaitGroup
+	wg.Add(len(disrup))
+	subobjs := make([]float64, len(disrup))
+	var errinner error
+	for i, d := range disrup {
+		// set separations plant to die disruption time.
+		clone := s.Clone()
+		if d.Time >= 0 {
+			for i, b := range clone.Builds {
+				if b.Proto == d.KillProto {
+					clone.Builds[i].Life = d.Time - b.Time
+				}
+			}
+		}
+
+		go func(i int, s *Scenario) {
+			defer wg.Done()
+			val, err := obj(s)
+			if err != nil {
+				errinner = err
+				val = math.Inf(1)
+			}
+			subobjs[i] = val
+		}(i, clone)
+	}
+
+	wg.Wait()
+	if errinner != nil {
+		return math.Inf(1), fmt.Errorf("remote sub-simulation execution failed: %v", errinner)
+	}
+
+	// compute aggregate objective
+	objval := 0.0
+	for i := range subobjs {
+		wPre := float64(disrup[i].Time) / float64(s.SimDur)
+		wPost := 1 - wPre
+		subobj := wPre*subobjs[i] + wPost*disrup[i].KnownBest
+		objval += disrup[i].Prob * subobj
+	}
+	return objval, nil
 }
 
 func disrupMode(s *Scenario, obj ObjExecFunc) (float64, error) {
