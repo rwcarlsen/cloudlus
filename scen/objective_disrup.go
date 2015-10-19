@@ -39,7 +39,7 @@ func disrupSingleMode(s *Scenario, obj ObjExecFunc) (float64, error) {
 	}
 
 	if proto, ok := idisrup["BuildProto"]; ok {
-		disrup.KillProto = proto.(string)
+		disrup.BuildProto = proto.(string)
 	}
 
 	if prob, ok := idisrup["Prob"]; ok {
@@ -59,7 +59,7 @@ func disrupSingleMode(s *Scenario, obj ObjExecFunc) (float64, error) {
 }
 
 func buildsForDisrup(s *Scenario, disrup Disruption) []Build {
-	if disrup.Time < 0 {
+	if disrup.Time < 0 || disrup.BuildProto == "" {
 		return []Build{}
 	}
 
@@ -68,6 +68,7 @@ func buildsForDisrup(s *Scenario, disrup Disruption) []Build {
 		N:     1,
 		Proto: disrup.BuildProto,
 	}
+
 	for _, fac := range s.Facs {
 		if fac.Proto == b.Proto {
 			b.fac = fac

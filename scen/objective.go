@@ -110,11 +110,11 @@ func ObjSlowVsFastPower(scen *Scenario, db *sql.DB, simid []byte) (float64, erro
 }
 
 // ObjSlowVsFastPowerPenalty is the same as ObjSlowVsFastPower except there is
-// an extra factor max[1, (minimum wanted energy) / (tot energy)]
-// multiplied onto the objective that penalizes producing less integrated
-// energy then the minimum bound curve defines.
+// an extra factor [(total installed capacity years) / (tot energy)]
+// multiplied onto the objective that penalizes offline capacity due to e.g.
+// fuel shortages.
 func ObjSlowVsFastPowerPenalty(scen *Scenario, db *sql.DB, simid []byte) (float64, error) {
-	// add up overnight and operating costs converted to PV(t=0)
+	// calculate actual generated power
 	q1 := `
     	SELECT SUM(Value) FROM timeseriespower AS p
            JOIN agents AS a ON a.agentid=p.agentid AND a.simid=p.simid
@@ -133,14 +133,19 @@ func ObjSlowVsFastPowerPenalty(scen *Scenario, db *sql.DB, simid []byte) (float6
 		return math.Inf(1), err
 	}
 
-	minE := 0.0
-	for _, p := range scen.MinPower {
-		minE += p * float64(scen.BuildPeriod)
-	}
-
 	totE := slowE + fastE
 
-	return slowE / totE * math.Max(1, minE/totE), nil
+	// calculate integrated capacity
+	builds := map[string][]Build{}
+	for _, b := range scen.Builds {
+		builds[b.Proto] = append(builds[b.Proto], b)
+	}
+	totcap := 0.0
+	for t := 0; t < scen.SimDur; t++ {
+		totcap += scen.PowerCap(builds, t)
+	}
+
+	return slowE / totE * totcap / totE, nil
 }
 
 // ObjSlowVsFastPowerFueled returns:
