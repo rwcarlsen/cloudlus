@@ -13,6 +13,9 @@ type Disruption struct {
 	// KillProto is the prototype for which all facilities will be shut down
 	// by the given time.
 	KillProto string
+	// BuildProto is the prototype of which to build a single new instance at
+	// the given time.
+	BuildProto string
 	// Prob holds the probability that the disruption will happen at a
 	// particular time.  This is ignored in disrup-single mode.
 	Prob float64
@@ -35,21 +38,54 @@ func disrupSingleMode(s *Scenario, obj ObjExecFunc) (float64, error) {
 		disrup.KillProto = proto.(string)
 	}
 
+	if proto, ok := idisrup["BuildProto"]; ok {
+		disrup.KillProto = proto.(string)
+	}
+
 	if prob, ok := idisrup["Prob"]; ok {
 		disrup.Prob = prob.(float64)
 	}
 
 	// set separations plant to die disruption time.
 	clone := s.Clone()
+	clone.Builds = append(clone.Builds, buildsForDisrup(clone, disrup)...)
 	if disrup.Time >= 0 {
 		for i, b := range clone.Builds {
-			if b.Proto == disrup.KillProto {
-				clone.Builds[i].Life = disrup.Time - b.Time
-			}
+			clone.Builds[i] = modForDisrup(clone, disrup, b)
 		}
 	}
 
 	return obj(clone)
+}
+
+func buildsForDisrup(s *Scenario, disrup Disruption) []Build {
+	if disrup.Time < 0 {
+		return []Build{}
+	}
+
+	b := Build{
+		Time:  disrup.Time,
+		N:     1,
+		Proto: disrup.BuildProto,
+	}
+	for _, fac := range s.Facs {
+		if fac.Proto == b.Proto {
+			b.fac = fac
+			return []Build{b}
+		}
+	}
+	panic("prototype " + b.Proto + " not found")
+}
+
+func modForDisrup(s *Scenario, disrup Disruption, b Build) Build {
+	if disrup.Time < 0 {
+		return b
+	} else if b.Proto != disrup.KillProto {
+		return b
+	}
+
+	b.Life = disrup.Time - b.Time
+	return b
 }
 
 // disrupModeLin is the same as disrupMode except it performs the weighted
@@ -91,11 +127,10 @@ func disrupModeLin(s *Scenario, obj ObjExecFunc) (float64, error) {
 	for i, d := range disrup {
 		// set separations plant to die disruption time.
 		clone := s.Clone()
+		clone.Builds = append(clone.Builds, buildsForDisrup(clone, d)...)
 		if d.Time >= 0 {
 			for i, b := range clone.Builds {
-				if b.Proto == d.KillProto {
-					clone.Builds[i].Life = d.Time - b.Time
-				}
+				clone.Builds[i] = modForDisrup(clone, d, b)
 			}
 		}
 
@@ -156,11 +191,10 @@ func disrupMode(s *Scenario, obj ObjExecFunc) (float64, error) {
 	for i, d := range disrup {
 		// set separations plant to die disruption time.
 		clone := s.Clone()
+		clone.Builds = append(clone.Builds, buildsForDisrup(clone, d)...)
 		if d.Time >= 0 {
 			for i, b := range clone.Builds {
-				if b.Proto == d.KillProto {
-					clone.Builds[i].Life = d.Time - b.Time
-				}
+				clone.Builds[i] = modForDisrup(clone, d, b)
 			}
 		}
 
