@@ -97,7 +97,7 @@ var ObjFuncs = map[string]ObjFunc{
 func ObjSlowVsFastPower(scen *Scenario, db *sql.DB, simid []byte) (float64, error) {
 	// add up overnight and operating costs converted to PV(t=0)
 	q1 := `
-    	SELECT SUM(Value) FROM timeseriespower AS p
+        SELECT TOTAL(Value) FROM timeseriespower AS p
            JOIN agents AS a ON a.agentid=p.agentid AND a.simid=p.simid
            WHERE a.Prototype IN (?,?) AND p.simid=?
 		`
@@ -118,13 +118,13 @@ func ObjSlowVsFastPower(scen *Scenario, db *sql.DB, simid []byte) (float64, erro
 }
 
 // ObjSlowVsFastPowerPenalty is the same as ObjSlowVsFastPower except there is
-// an extra factor [(total installed capacity years) / (tot energy)]
+// an extra factor [(total installed MWe years) / (tot energy produced)]
 // multiplied onto the objective that penalizes offline capacity due to e.g.
 // fuel shortages.
 func ObjSlowVsFastPowerPenalty(scen *Scenario, db *sql.DB, simid []byte) (float64, error) {
 	// calculate actual generated power
 	q1 := `
-    	SELECT SUM(Value) FROM timeseriespower AS p
+        SELECT TOTAL(Value) FROM timeseriespower AS p
            JOIN agents AS a ON a.agentid=p.agentid AND a.simid=p.simid
            WHERE a.Prototype IN (?,?) AND p.simid=?
 		`
