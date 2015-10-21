@@ -51,17 +51,25 @@ func doubleMode(s *Scenario, obj ObjExecFunc) (float64, error) {
 //   disruption.  This uses the same CustomConfig key and value as
 //   disrup-multi, except KnownBest values must be set for each disruption.
 //
+//   * disrup-single-lin: Is the same as disrup-single except objective is
+//   computed by using a linear combination of the normal calculated
+//   objective with the disruption-time-specific optimized objective value.
+//   Weights are proportional to the fraction the simulation that was pre/post
+//   disruption.  This uses the same CustomConfig key and value as
+//   disrup-multi, except KnownBest value must be set for the disruption.
+//
 //   * disrup-single: Used to compute a single-simulation objective function
 //   for the scenario but also inserting a disruption at the specified point
 //   using the Scenario.CustomConfig["disrup-multi"]=[]Disruption{...} with
 //   corresponding disruption times, prototype to disrupt, etc.
 var Modes = map[string]ModeFunc{
-	"":                 singleMode,
-	"single":           singleMode,
-	"disrup-multi":     disrupMode,
-	"disrup-multi-lin": disrupModeLin,
-	"disrup-single":    disrupSingleMode,
-	"double":           doubleMode, // for testing
+	"":                  singleMode,
+	"single":            singleMode,
+	"disrup-multi":      disrupMode,
+	"disrup-multi-lin":  disrupModeLin,
+	"disrup-single":     disrupSingleMode,
+	"disrup-single-lin": disrupSingleModeLin,
+	"double":            doubleMode, // for testing
 }
 
 // ObjFunc computes objective function values for scen using already-generated

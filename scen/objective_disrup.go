@@ -26,6 +26,51 @@ type Disruption struct {
 	KnownBest float64
 }
 
+func disrupSingleModeLin(s *Scenario, obj ObjExecFunc) (float64, error) {
+	idisrup := s.CustomConfig["disrup-single"].(map[string]interface{})
+	disrup := Disruption{}
+
+	if t, ok := idisrup["Time"]; ok {
+		disrup.Time = int(t.(float64))
+	}
+
+	if proto, ok := idisrup["KillProto"]; ok {
+		disrup.KillProto = proto.(string)
+	}
+
+	if proto, ok := idisrup["BuildProto"]; ok {
+		disrup.BuildProto = proto.(string)
+	}
+
+	if prob, ok := idisrup["Prob"]; ok {
+		disrup.Prob = prob.(float64)
+	}
+
+	if v, ok := idisrup["KnownBest"]; ok {
+		disrup.KnownBest = v.(float64)
+	} else {
+		return math.Inf(1), errors.New("disrup-single-lin needs KnownBest parameters set in custom disruption config")
+	}
+
+	// set separations plant to die disruption time.
+	clone := s.Clone()
+	clone.Builds = append(clone.Builds, buildsForDisrup(clone, disrup)...)
+	if disrup.Time >= 0 {
+		for i, b := range clone.Builds {
+			clone.Builds[i] = modForDisrup(clone, disrup, b)
+		}
+	}
+
+	subobj, err := obj(clone)
+	if err != nil {
+		return math.Inf(1), err
+	}
+
+	wPre := float64(disrup.Time) / float64(s.SimDur)
+	wPost := 1 - wPre
+	return wPre*subobj + wPost*disrup.KnownBest, nil
+}
+
 func disrupSingleMode(s *Scenario, obj ObjExecFunc) (float64, error) {
 	idisrup := s.CustomConfig["disrup-single"].(map[string]interface{})
 	disrup := Disruption{}
@@ -107,6 +152,10 @@ func disrupModeLin(s *Scenario, obj ObjExecFunc) (float64, error) {
 			d.KillProto = proto.(string)
 		}
 
+		if proto, ok := m["BuildProto"]; ok {
+			d.BuildProto = proto.(string)
+		}
+
 		if prob, ok := m["Prob"]; ok {
 			d.Prob = prob.(float64)
 		}
@@ -135,9 +184,9 @@ func disrupModeLin(s *Scenario, obj ObjExecFunc) (float64, error) {
 			}
 		}
 
-		go func(i int, s *Scenario) {
+		go func(i int, scn *Scenario) {
 			defer wg.Done()
-			val, err := obj(s)
+			val, err := obj(scn)
 			if err != nil {
 				errinner = err
 				val = math.Inf(1)
@@ -155,6 +204,9 @@ func disrupModeLin(s *Scenario, obj ObjExecFunc) (float64, error) {
 	objval := 0.0
 	for i := range subobjs {
 		wPre := float64(disrup[i].Time) / float64(s.SimDur)
+		if wPre < 0 {
+			wPre = 1
+		}
 		wPost := 1 - wPre
 		subobj := wPre*subobjs[i] + wPost*disrup[i].KnownBest
 		objval += disrup[i].Prob * subobj
