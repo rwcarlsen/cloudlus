@@ -120,7 +120,9 @@ func ObjSlowVsFastPower(scen *Scenario, db *sql.DB, simid []byte) (float64, erro
 // ObjSlowVsFastPowerPenalty is the same as ObjSlowVsFastPower except there is
 // an extra factor [(total installed MWe years) / (tot energy produced)]
 // multiplied onto the objective that penalizes offline capacity due to e.g.
-// fuel shortages.
+// fuel shortages.  This objective doesn't work with the db flag because
+// cloudlus commands/pkgs are not smart enough to parse out a build schedule
+// from a cyclus database (yet).
 func ObjSlowVsFastPowerPenalty(scen *Scenario, db *sql.DB, simid []byte) (float64, error) {
 	// calculate actual generated power
 	q1 := `

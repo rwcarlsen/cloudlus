@@ -41,7 +41,7 @@ func main() {
 	err := scn.Load(*scenfile)
 	check(err)
 
-	if len(scn.Builds) == 0 {
+	if len(scn.Builds) == 0 && *db == "" {
 		parseSchedVars(scn)
 	} else {
 		log.Print("because of pre-existing builds, ignoring any deploy variables/schedule")
