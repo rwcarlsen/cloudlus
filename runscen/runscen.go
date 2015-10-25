@@ -3,6 +3,7 @@ package runscen
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -151,6 +152,9 @@ func BuildRemoteJob(s *scen.Scenario, objfile string) (*cloudlus.Job, error) {
 }
 
 func writeLogs(j *cloudlus.Job, stdout, stderr io.Writer) error {
+	if j == nil {
+		return errors.New("cannot log nil job")
+	}
 	if stdout != nil {
 		_, err := stdout.Write([]byte(j.Stdout))
 		if err != nil {
