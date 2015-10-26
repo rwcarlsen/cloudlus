@@ -343,7 +343,7 @@ func (s *Server) dispatcher() {
 			s.log.Printf("[BEAT] job %v (worker %v), %v left of %v\n", b.JobId, b.WorkerId, j.Timeout-time.Now().Sub(j.Fetched), j.Timeout)
 			s.jobinfo[b.JobId] = b
 
-			if time.Now().Sub(j.Fetched) > j.Timeout {
+			if time.Now().Sub(j.Fetched) > j.Timeout && j.Timeout > 0 && !j.Fetched.IsZero() {
 				j.Status = StatusFailed
 				s.finnishJob(j)
 				s.log.Printf("[BEAT] sending kill signal: job %v (worker %v)\n", b.JobId, b.WorkerId)
