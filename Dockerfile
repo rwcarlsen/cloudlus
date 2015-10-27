@@ -7,6 +7,7 @@ RUN echo "1"
 RUN mv /etc/pacman.conf /etc/pacman.conf.back
 RUN sed 's/^SigLevel *= .*/SigLevel = TrustAll/' /etc/pacman.conf.back > /etc/pacman.conf
 
+RUN pacman-key --refresh-keys
 RUN pacman -Syu --noconfirm
 RUN pacman-db-upgrade
 

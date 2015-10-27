@@ -232,6 +232,8 @@ func (s *Server) checkbeat() {
 
 			if !inqueue {
 				// job is also not queued
+				s.log.Printf("[GC] removed conn waiting for dropped job %v\n", jid)
+				s.Stats.NFailed++
 				j, _ := s.alljobs.Get(jid)
 				ch <- j
 				close(ch)
