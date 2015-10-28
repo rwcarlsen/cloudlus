@@ -333,7 +333,7 @@ outer:
 			if index >= len(s.SpliceVars) {
 				break outer
 			}
-			if t < s.SpliceTime {
+			if t < s.SpliceTime || s.SpliceTime < 0 {
 				vars[index] = s.SpliceVars[index]
 			} else {
 				vars[index] = origvars[index]
