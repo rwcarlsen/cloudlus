@@ -88,39 +88,39 @@ func ObjANS2014(scen *Scenario, db *sql.DB, simid []byte) (float64, error) {
 		// calc total operating cost
 		rows, err := db.Query(q1, simid, fac.Proto)
 		if err != nil {
-			return 0, err
+			return math.Inf(1), err
 		}
 		for rows.Next() {
 			var t int
 			if err := rows.Scan(&t); err != nil {
-				return 0, err
+				return math.Inf(1), err
 			}
 			totcost += PV(fac.OpCost, t, s.Discount)
 		}
 		if err := rows.Err(); err != nil {
-			return 0, err
+			return math.Inf(1), err
 		}
 
 		// calc overnight capital cost
 		rows, err = db.Query(q2, simid, fac.Proto)
 		if err != nil {
-			return 0, err
+			return math.Inf(1), err
 		}
 		for rows.Next() {
 			var t int
 			if err := rows.Scan(&t); err != nil {
-				return 0, err
+				return math.Inf(1), err
 			}
 			totcost += PV(fac.CapitalCost, t, s.Discount)
 		}
 		if err := rows.Err(); err != nil {
-			return 0, err
+			return math.Inf(1), err
 		}
 
 		// add in waste penalty
 		ags, err := query.AllAgents(db, simid, fac.Proto)
 		if err != nil {
-			return 0, err
+			return math.Inf(1), err
 		}
 
 		// InvAt uses all agents if no ids are passed - so we need to skip
@@ -137,7 +137,7 @@ func ObjANS2014(scen *Scenario, db *sql.DB, simid []byte) (float64, error) {
 		for t := 0; t < s.SimDur; t++ {
 			mat, err := query.InvAt(db, simid, t, ids...)
 			if err != nil {
-				return 0, err
+				return math.Inf(1), err
 			}
 			for nuc, qty := range mat {
 				nucstr := fmt.Sprint(nuc)
@@ -149,7 +149,7 @@ func ObjANS2014(scen *Scenario, db *sql.DB, simid []byte) (float64, error) {
 	// normalize to energy produced
 	joules, err := query.EnergyProduced(db, simid, 0, s.SimDur)
 	if err != nil {
-		return 0, err
+		return math.Inf(1), err
 	}
 	mwh := joules / nuc.MWh
 	mult := 1e6 // to get the objective around 0.1 same magnitude as constraint penalties
