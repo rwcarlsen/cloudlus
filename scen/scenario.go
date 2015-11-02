@@ -87,7 +87,7 @@ type Scenario struct {
 	// each nuclide in the entire simulation (repository's exempt).
 	NuclideCost map[string]float64
 	// ObjFunc is the name of the objective function in the
-	// github.com/rwcarlsen/cloudlus/scen.ObjFuncs map to be used for
+	// ObjFuncs map variable to be used for
 	// objective value calculations.
 	ObjFunc string
 	// ObjMode identifies the way the overall objective value is computed for
