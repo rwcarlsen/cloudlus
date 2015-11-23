@@ -17,39 +17,35 @@ type Disruption struct {
 	// the given time.
 	BuildProto string
 	// Prob holds the probability that the disruption will happen at a
-	// particular time.  This is ignored in disrup-single mode.
+	// particular time.  This is ignored in disrup-single mode.  An
+	// unspecified probability for a disruption is assumed to be zero.
 	Prob float64
+	// Sample is true if this disruption time should be sampled for generation
+	// of the Obj vs Disrup approximation.  KnownBests should generally be placed on
+	// Sample=true disruption points only.
+	Sample bool
 	// KnownBest holds the objective value for the best known deployment
 	// schedule for the scenario for with a priori knowledge of this
 	// particular disruption always occuring.  This is only used in
-	// disrup-multi-lin mode.
+	// disrup-multi-lin mode.  Linear interpolation is performed between the
+	// KnownBests of disruptoin points with Sample=true.
 	KnownBest float64
 }
+
+type disrupOpt int
+
+const (
+	optNone disrupOpt = 1 << iota
+	optProb
+	optKnownBest
+)
 
 func disrupSingleModeLin(s *Scenario, obj ObjExecFunc) (float64, error) {
 	idisrup := s.CustomConfig["disrup-single"].(map[string]interface{})
 	disrup := Disruption{}
-
-	if t, ok := idisrup["Time"]; ok {
-		disrup.Time = int(t.(float64))
-	}
-
-	if proto, ok := idisrup["KillProto"]; ok {
-		disrup.KillProto = proto.(string)
-	}
-
-	if proto, ok := idisrup["BuildProto"]; ok {
-		disrup.BuildProto = proto.(string)
-	}
-
-	if prob, ok := idisrup["Prob"]; ok {
-		disrup.Prob = prob.(float64)
-	}
-
-	if v, ok := idisrup["KnownBest"]; ok {
-		disrup.KnownBest = v.(float64)
-	} else {
-		return math.Inf(1), errors.New("disrup-single-lin needs KnownBest parameters set in custom disruption config")
+	disrup, err := parseDisrup(idisrup, optKnownBest)
+	if err != nil {
+		return math.Inf(1), fmt.Errorf("disrup-single-lin: %v", err)
 	}
 
 	// set separations plant to die disruption time.
@@ -73,22 +69,9 @@ func disrupSingleModeLin(s *Scenario, obj ObjExecFunc) (float64, error) {
 
 func disrupSingleMode(s *Scenario, obj ObjExecFunc) (float64, error) {
 	idisrup := s.CustomConfig["disrup-single"].(map[string]interface{})
-	disrup := Disruption{}
-
-	if t, ok := idisrup["Time"]; ok {
-		disrup.Time = int(t.(float64))
-	}
-
-	if proto, ok := idisrup["KillProto"]; ok {
-		disrup.KillProto = proto.(string)
-	}
-
-	if proto, ok := idisrup["BuildProto"]; ok {
-		disrup.BuildProto = proto.(string)
-	}
-
-	if prob, ok := idisrup["Prob"]; ok {
-		disrup.Prob = prob.(float64)
+	disrup, err := parseDisrup(idisrup, optNone)
+	if err != nil {
+		return math.Inf(1), fmt.Errorf("disrup-single: %v", err)
 	}
 
 	// set separations plant to die disruption time.
@@ -142,28 +125,9 @@ func disrupModeLin(s *Scenario, obj ObjExecFunc) (float64, error) {
 	disrup := make([]Disruption, len(idisrup))
 	for i, td := range idisrup {
 		m := td.(map[string]interface{})
-		d := Disruption{}
-
-		if t, ok := m["Time"]; ok {
-			d.Time = int(t.(float64))
-		}
-
-		if proto, ok := m["KillProto"]; ok {
-			d.KillProto = proto.(string)
-		}
-
-		if proto, ok := m["BuildProto"]; ok {
-			d.BuildProto = proto.(string)
-		}
-
-		if prob, ok := m["Prob"]; ok {
-			d.Prob = prob.(float64)
-		}
-
-		if v, ok := m["KnownBest"]; ok {
-			d.KnownBest = v.(float64)
-		} else {
-			return math.Inf(1), errors.New("disrup-multi-lin needs KnownBest parameters set in custom disruption config")
+		d, err := parseDisrup(m, optProb|optKnownBest)
+		if err != nil {
+			return math.Inf(1), fmt.Errorf("disrup-multi-lin: %v", err)
 		}
 
 		disrup[i] = d
@@ -219,18 +183,9 @@ func disrupMode(s *Scenario, obj ObjExecFunc) (float64, error) {
 	disrup := make([]Disruption, len(idisrup))
 	for i, td := range idisrup {
 		m := td.(map[string]interface{})
-		d := Disruption{}
-
-		if t, ok := m["Time"]; ok {
-			d.Time = int(t.(float64))
-		}
-
-		if proto, ok := m["KillProto"]; ok {
-			d.KillProto = proto.(string)
-		}
-
-		if prob, ok := m["Prob"]; ok {
-			d.Prob = prob.(float64)
+		d, err := parseDisrup(m, optProb)
+		if err != nil {
+			return math.Inf(1), fmt.Errorf("disrup-multi: %v", err)
 		}
 
 		disrup[i] = d
@@ -273,4 +228,42 @@ func disrupMode(s *Scenario, obj ObjExecFunc) (float64, error) {
 		objval += disrup[i].Prob * subobjs[i]
 	}
 	return objval, nil
+}
+
+func parseDisrup(disrup map[string]interface{}, opts disrupOpt) (Disruption, error) {
+	d := Disruption{}
+	if t, ok := disrup["Time"]; ok {
+		d.Time = int(t.(float64))
+	} else {
+		return Disruption{}, errors.New("disruption config missing 'Time' param")
+	}
+
+	if proto, ok := disrup["KillProto"]; ok {
+		d.KillProto = proto.(string)
+	}
+
+	if proto, ok := disrup["BuildProto"]; ok {
+		d.BuildProto = proto.(string)
+	}
+
+	if (d.KillProto == "" && d.BuildProto == "") || (d.KillProto != "" && d.BuildProto != "") {
+		return Disruption{}, errors.New("disruption config must have exactly one of 'BuildProto' or 'KillProto' params set")
+	}
+
+	if s, ok := disrup["Sample"]; ok {
+		d.Time = int(s.(float64))
+	}
+
+	if prob, ok := disrup["Prob"]; ok {
+		d.Prob = prob.(float64)
+	} else if opts&optProb > 0 {
+		return Disruption{}, errors.New("disruption config missing 'Prob' param")
+	}
+
+	if v, ok := disrup["KnownBest"]; ok {
+		d.KnownBest = v.(float64)
+	} else if opts&optKnownBest > 0 {
+		return Disruption{}, errors.New("disruption config missing 'KnownBest' param")
+	}
+	return d, nil
 }
