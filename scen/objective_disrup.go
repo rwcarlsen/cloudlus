@@ -18,7 +18,13 @@ type Disruption struct {
 	BuildProto string
 	// Prob holds the probability that the disruption will happen at a
 	// particular time.  This is ignored in disrup-single mode.  An
-	// unspecified probability for a disruption is assumed to be zero.
+	// unspecified probability for a disruption is assumed to be zero.  Note
+	// that the integral of linear interpolation between probabilities over
+	// the entire simulation duration must be less than or equal to 1; it must
+	// be equal to the probability that the disruption happens over the entire
+	// simulation.  So for four samples and a 2400 time step simulation, each
+	// disruption should NOT have a 0.25 probability - they should have 1/2400
+	// probability.
 	Prob float64
 	// Sample is true if this disruption time should be sampled for generation
 	// of the Obj vs Disrup approximation.  KnownBests should generally be placed on
@@ -193,7 +199,11 @@ func disrupModeLin(s *Scenario, obj ObjExecFunc) (float64, error) {
 
 	t0 := 0.0
 	tend := float64(s.SimDur)
-	objval := integrateMidpoint(productOf(objVsTime, probVsTime), t0, tend, 10000)
+	objval := integrateMid(productOf(objVsTime, probVsTime), t0, tend, 10000)
+	// calculate probability of no disruption and assume objective for that
+	// case is same as disruption occuring at t_end
+	nodisruptail := (1 - integrateMid(probVsTime, t0, tend, 10000)) * objVsTime(tend)
+	objval += nodisruptail
 
 	return objval, nil
 }
@@ -226,7 +236,11 @@ func disrupMode(s *Scenario, obj ObjExecFunc) (float64, error) {
 
 	t0 := 0.0
 	tend := float64(s.SimDur)
-	objval := integrateMidpoint(productOf(objVsTime, probVsTime), t0, tend, 10000)
+	objval := integrateMid(productOf(objVsTime, probVsTime), t0, tend, 10000)
+	// calculate probability of no disruption and assume objective for that
+	// case is same as disruption occuring at t_end
+	nodisruptail := (1 - integrateMid(probVsTime, t0, tend, 10000)) * objVsTime(tend)
+	objval += nodisruptail
 
 	return objval, nil
 }

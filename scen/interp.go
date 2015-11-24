@@ -29,7 +29,15 @@ func interpolate(samples []sample) smoothFn {
 				return lefty + (x-left)/(right-left)*(righty-lefty)
 			}
 		}
-		panic("interpolate function's x value out of bounds")
+
+		// if x is beyond last sample x-val, just extrapolate slope between
+		// last two samples' x-vals.
+		end := len(ss) - 1
+		left := ss[end-1].X
+		right := ss[end].X
+		lefty := ss[end-1].Y
+		righty := ss[end].Y
+		return lefty + (x-left)/(right-left)*(righty-lefty)
 	}
 }
 
@@ -39,7 +47,7 @@ func productOf(fn1, fn2 smoothFn) smoothFn {
 	}
 }
 
-func integrateMidpoint(fn smoothFn, x1, x2 float64, ninterval int) float64 {
+func integrateMid(fn smoothFn, x1, x2 float64, ninterval int) float64 {
 	dx := (x2 - x1) / float64(ninterval)
 	tot := 0.0
 	for i := 0; i < ninterval; i++ {
