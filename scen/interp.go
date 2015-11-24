@@ -33,12 +33,31 @@ func interpolate(samples []sample) smoothFn {
 	}
 }
 
-func extractKnownBests(disrups []Disruption) []sample {
-	samples := []sample{}
-	for _, d := range disrups {
-		if d.Sample {
-			samples = append(samples, sample{float64(d.Time), d.KnownBest})
-		}
+func productOf(fn1, fn2 smoothFn) smoothFn {
+	return func(x float64) (y float64) {
+		return fn1(x) * fn2(x)
+	}
+}
+
+func integrateMidpoint(fn smoothFn, x1, x2 float64, ninterval int) float64 {
+	dx := (x2 - x1) / float64(ninterval)
+	tot := 0.0
+	for i := 0; i < ninterval; i++ {
+		x := (float64(i) + 0.5) * dx
+		dA := fn(x) * dx
+		tot += dA
+	}
+	return tot
+}
+
+func zip(disrups []Disruption, objs []float64) []sample {
+	if len(disrups) != len(objs) {
+		panic("cannot zip slices of unequal length")
+	}
+
+	samples := make([]sample, len(disrups))
+	for i := range disrups {
+		samples = append(samples, sample{float64(disrups[i].Time), objs[i]})
 	}
 	return samples
 }
