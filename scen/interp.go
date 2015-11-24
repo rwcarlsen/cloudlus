@@ -15,6 +15,11 @@ func (s sampleSet) Len() int           { return len(s) }
 func (s sampleSet) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
 func (s sampleSet) Less(i, j int) bool { return s[i].X < s[j].X }
 
+// interpolate generates a function that interpolates linearly between the X,Y
+// points in samples.  It extrapolates linearly outside of the start and end
+// bounds of the samples using the nearest (linear) slope.  The samples do not
+// need to be in any particular order.  Multiple samples at the same X point
+// are not allowed.
 func interpolate(samples []sample) smoothFn {
 	ss := make([]sample, len(samples))
 	copy(ss, samples)

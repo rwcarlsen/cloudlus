@@ -126,61 +126,22 @@ func modForDisrup(s *Scenario, disrup Disruption, b Build) Build {
 	return b
 }
 
-func runDisrupSims(s *Scenario, obj ObjExecFunc, disrups []Disruption) (objs []float64, err error) {
-	// fire off concurrent sub-simulation objective evaluations
-	var wg sync.WaitGroup
-	wg.Add(len(disrups))
-	objs = make([]float64, len(disrups))
-	var errinner error
-	for i, d := range disrups {
-		// set separations plant to die disruption time.
-		clone := s.Clone()
-		clone.Builds = append(clone.Builds, buildsForDisrup(clone, d)...)
-		if d.Time >= 0 {
-			for i, b := range clone.Builds {
-				clone.Builds[i] = modForDisrup(clone, d, b)
-			}
-		}
-
-		go func(i int, scn *Scenario) {
-			defer wg.Done()
-			val, err := obj(scn)
-			if err != nil {
-				errinner = err
-				val = math.Inf(1)
-			}
-			objs[i] = val
-		}(i, clone)
-	}
-
-	wg.Wait()
-	if errinner != nil {
-		return nil, fmt.Errorf("remote sub-simulation execution failed: %v", errinner)
-	}
-	return objs, nil
-}
-
 // disrupModeLin is the same as disrupMode except it performs the weighted
 // linear combination of each sub objective with the know best for that
 // disruption time to compute the final sub objectives that are then combined.
 func disrupModeLin(s *Scenario, obj ObjExecFunc) (float64, error) {
 	idisrup := s.CustomConfig["disrup-multi"].([]interface{})
-	disrup := make([]Disruption, len(idisrup))
-	sampledisrups := []Disruption{}
+	disrups := make([]Disruption, len(idisrup))
 	for i, td := range idisrup {
 		m := td.(map[string]interface{})
 		d, err := parseDisrup(m, optProb|optKnownBest)
 		if err != nil {
 			return math.Inf(1), fmt.Errorf("disrup-multi-lin: %v", err)
 		}
-
-		disrup[i] = d
-		if d.Sample {
-			sampledisrups = append(sampledisrups, d)
-		}
+		disrups[i] = d
 	}
 
-	subobjs, err := runDisrupSims(s, obj, sampledisrups)
+	subobjs, err := runDisrupSims(s, obj, disrups)
 	if err != nil {
 		return math.Inf(1), err
 	}
@@ -188,33 +149,21 @@ func disrupModeLin(s *Scenario, obj ObjExecFunc) (float64, error) {
 	// compute aggregate objective using disruption times and corresponding
 	// knownbests
 	for i := range subobjs {
-		wPre := float64(disrup[i].Time) / float64(s.SimDur)
+		wPre := float64(disrups[i].Time) / float64(s.SimDur)
 		if wPre < 0 {
 			wPre = 1
 		}
 		wPost := 1 - wPre
-		subobjs[i] = wPre*subobjs[i] + wPost*disrup[i].KnownBest
+		subobjs[i] = wPre*subobjs[i] + wPost*disrups[i].KnownBest
 	}
 
-	// generate interpolation functions and integrate S^*(t) X p(t) dt
-	objVsTime := interpolate(zip(sampledisrups, subobjs))
-	probVsTime := interpolate(extractProbs(sampledisrups))
-
-	t0 := 0.0
-	tend := float64(s.SimDur)
-	objval := integrateMid(productOf(objVsTime, probVsTime), t0, tend, 10000)
-	// calculate probability of no disruption and assume objective for that
-	// case is same as disruption occuring at t_end
-	nodisruptail := (1 - integrateMid(probVsTime, t0, tend, 10000)) * objVsTime(tend)
-	objval += nodisruptail
-
+	objval := aggregateObj(s.SimDur, disrups, subobjs)
 	return objval, nil
 }
 
 func disrupMode(s *Scenario, obj ObjExecFunc) (float64, error) {
 	idisrup := s.CustomConfig["disrup-multi"].([]interface{})
-	disrup := make([]Disruption, len(idisrup))
-	sampledisrups := []Disruption{}
+	disrups := make([]Disruption, len(idisrup))
 	for i, td := range idisrup {
 		m := td.(map[string]interface{})
 		d, err := parseDisrup(m, optProb)
@@ -222,30 +171,43 @@ func disrupMode(s *Scenario, obj ObjExecFunc) (float64, error) {
 			return math.Inf(1), fmt.Errorf("disrup-multi: %v", err)
 		}
 
-		disrup[i] = d
-		if d.Sample {
-			sampledisrups = append(sampledisrups, d)
-		}
+		disrups[i] = d
 	}
 
-	subobjs, err := runDisrupSims(s, obj, sampledisrups)
+	subobjs, err := runDisrupSims(s, obj, disrups)
 	if err != nil {
 		return math.Inf(1), err
 	}
 
-	// generate interpolation functions and integrate S^*(t) X p(t) dt
-	objVsTime := interpolate(zip(sampledisrups, subobjs))
-	probVsTime := interpolate(extractProbs(sampledisrups))
+	objval := aggregateObj(s.SimDur, disrups, subobjs)
+	return objval, nil
+}
+
+// aggregateObj takes all disruption points (including unsampled) and their respective
+// sub-objective values and generates interpolating functions for both the
+// disruption probabilities vs time and sub-objectives vs time and integrates
+// over their product and returns the mean outcome given the disruption
+// probability distribution.
+func aggregateObj(simdur int, disrups []Disruption, subobjs []float64) float64 {
+	sampled := []Disruption{}
+	for _, d := range disrups {
+		if d.Sample {
+			sampled = append(sampled, d)
+		}
+	}
+
+	objVsTime := interpolate(zip(sampled, subobjs))
+	probVsTime := interpolate(extractProbs(disrups))
 
 	t0 := 0.0
-	tend := float64(s.SimDur)
+	tend := float64(simdur)
 	objval := integrateMid(productOf(objVsTime, probVsTime), t0, tend, 10000)
 	// calculate probability of no disruption and assume objective for that
 	// case is same as disruption occuring at t_end
 	nodisruptail := (1 - integrateMid(probVsTime, t0, tend, 10000)) * objVsTime(tend)
 	objval += nodisruptail
 
-	return objval, nil
+	return objval
 }
 
 func parseDisrup(disrup map[string]interface{}, opts disrupOpt) (Disruption, error) {
@@ -284,4 +246,48 @@ func parseDisrup(disrup map[string]interface{}, opts disrupOpt) (Disruption, err
 		return Disruption{}, errors.New("disruption config missing 'KnownBest' param")
 	}
 	return d, nil
+}
+
+// runDisrupSims takes all disruptions and only runs simulations for the
+// sampled disruption points and returns their corresponding objective values
+// (in order).
+func runDisrupSims(s *Scenario, obj ObjExecFunc, disrups []Disruption) (objs []float64, err error) {
+	sampled := []Disruption{}
+	for _, d := range disrups {
+		if d.Sample {
+			sampled = append(sampled, d)
+		}
+	}
+
+	// fire off concurrent sub-simulation objective evaluations
+	var wg sync.WaitGroup
+	wg.Add(len(sampled))
+	objs = make([]float64, len(sampled))
+	var errinner error
+	for i, d := range sampled {
+		// set separations plant to die disruption time.
+		clone := s.Clone()
+		clone.Builds = append(clone.Builds, buildsForDisrup(clone, d)...)
+		if d.Time >= 0 {
+			for i, b := range clone.Builds {
+				clone.Builds[i] = modForDisrup(clone, d, b)
+			}
+		}
+
+		go func(i int, scn *Scenario) {
+			defer wg.Done()
+			val, err := obj(scn)
+			if err != nil {
+				errinner = err
+				val = math.Inf(1)
+			}
+			objs[i] = val
+		}(i, clone)
+	}
+
+	wg.Wait()
+	if errinner != nil {
+		return nil, fmt.Errorf("remote sub-simulation execution failed: %v", errinner)
+	}
+	return objs, nil
 }
