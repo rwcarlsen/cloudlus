@@ -51,7 +51,7 @@ func integrateMid(fn smoothFn, x1, x2 float64, ninterval int) float64 {
 	dx := (x2 - x1) / float64(ninterval)
 	tot := 0.0
 	for i := 0; i < ninterval; i++ {
-		x := (float64(i) + 0.5) * dx
+		x := x1 + (float64(i)+0.5)*dx
 		dA := fn(x) * dx
 		tot += dA
 	}
