@@ -69,6 +69,9 @@ func disrupSingleModeLin(s *Scenario, obj ObjExecFunc) (float64, error) {
 	}
 
 	wPre := float64(disrup.Time) / float64(s.SimDur)
+	if disrup.Time < 0 {
+		wPre = 1.0
+	}
 	wPost := 1 - wPre
 	return wPre*subobj + wPost*disrup.KnownBest, nil
 }
