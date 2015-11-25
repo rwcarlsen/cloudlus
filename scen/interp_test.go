@@ -79,6 +79,11 @@ func TestIntegrateMid(t *testing.T) {
 		{func(x float64) float64 { return 1 / math.Sqrt(2*math.Pi) * math.Exp(-(x*x)/2) }, -100, 0, 0.5},
 		// normal distribution segment
 		{func(x float64) float64 { return 1 / math.Sqrt(2*math.Pi) * math.Exp(-(x*x)/2) }, -2, -1, .1359051219835},
+		// scaled gamma distribution (similar to my dissertation experiment 3)
+		{func(x float64) float64 {
+			k, theta, a := 1.5, 2.0, 1.0/600
+			return a / (math.Gamma(k) * math.Pow(theta, k)) * math.Sqrt(x*a) * math.Exp(-x*a/2)
+		}, 0, 2400, 0.73853606463},
 	}
 
 	for i, test := range tests {
