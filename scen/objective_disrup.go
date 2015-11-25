@@ -212,6 +212,11 @@ func aggregateObj(simdur int, disrups []Disruption, subobjs []float64) float64 {
 
 func parseDisrup(disrup map[string]interface{}, opts disrupOpt) (Disruption, error) {
 	d := Disruption{}
+
+	if s, ok := disrup["Sample"]; ok {
+		d.Sample = s.(float64) != 0
+	}
+
 	if t, ok := disrup["Time"]; ok {
 		d.Time = int(t.(float64))
 	} else {
@@ -226,12 +231,8 @@ func parseDisrup(disrup map[string]interface{}, opts disrupOpt) (Disruption, err
 		d.BuildProto = proto.(string)
 	}
 
-	if (d.KillProto == "" && d.BuildProto == "") || (d.KillProto != "" && d.BuildProto != "") {
+	if d.Sample && ((d.KillProto == "" && d.BuildProto == "") || (d.KillProto != "" && d.BuildProto != "")) {
 		return Disruption{}, errors.New("disruption config must have exactly one of 'BuildProto' or 'KillProto' params set")
-	}
-
-	if s, ok := disrup["Sample"]; ok {
-		d.Sample = s.(float64) != 0
 	}
 
 	if prob, ok := disrup["Prob"]; ok {
