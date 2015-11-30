@@ -1,6 +1,7 @@
 package scen
 
 import (
+	"fmt"
 	"math"
 	"testing"
 )
@@ -61,6 +62,24 @@ func TestAggregateObj(t *testing.T) {
 		if diff := math.Abs(got - test.Obj); diff > 1e-10 {
 			t.Errorf("case %v: got %v, want %v", i+1, got, test.Obj)
 		}
+	}
+}
+
+// this was used in my dissertation to generate equi-probable sample points
+// for my disruption probability distribution.
+func testSamplePoints(t *testing.T) {
+	fn := func(x float64) float64 {
+		k, theta, a := 1.5, 2.0, 1.0/600
+		return a / (math.Gamma(k) * math.Pow(theta, k)) * math.Sqrt(x*a) * math.Exp(-x*a/2)
+	}
+
+	x1, x2 := 0.0, 2400.0
+	xs := sampleUniformProb(fn, x1, x2, 10, 10000)
+
+	fmt.Println(xs)
+	fmt.Printf("x1-x0 = %v\n", xs[0])
+	for i, x := range xs[:len(xs)-1] {
+		fmt.Printf("x%v-x%v = %v\n", i+2, i+1, xs[i+1]-x)
 	}
 }
 
