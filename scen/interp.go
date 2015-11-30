@@ -63,6 +63,23 @@ func integrateMid(fn smoothFn, x1, x2 float64, ninterval int) float64 {
 	return tot
 }
 
+func sampleUniformProb(fn smoothFn, x1, x2 float64, nsample, ninterval int) (xs []float64) {
+	totA := integrateMid(fn, x1, x2, ninterval*nsample)
+	sampleA := totA / float64(nsample)
+
+	dx := (x2 - x1) / float64(ninterval*nsample)
+	tot := 0.0
+	for i := 0; i < ninterval*nsample; i++ {
+		x := x1 + (float64(i)+0.5)*dx
+		dA := fn(x) * dx
+		tot += dA
+		if tot >= float64(len(xs)+1)*sampleA {
+			xs = append(xs, x)
+		}
+	}
+	return xs
+}
+
 func zip(disrups []Disruption, objs []float64) []sample {
 	if len(disrups) != len(objs) {
 		panic("cannot zip slices of unequal length")
