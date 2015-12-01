@@ -124,6 +124,7 @@ func (w *Worker) dojob() (wait bool, err error) {
 	}
 
 	pr, pw := io.Pipe()
+	defer pr.Close()
 
 	rundone := make(chan bool)
 	go func() {
@@ -137,7 +138,6 @@ func (w *Worker) dojob() (wait bool, err error) {
 		return false, err
 	}
 	<-rundone
-	pr.Close()
 
 	j.WorkerId = w.Id
 	j.Infiles = nil // don't need to send back input files
