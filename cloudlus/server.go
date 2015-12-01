@@ -232,7 +232,7 @@ func (s *Server) checkbeat() {
 
 			if !inqueue {
 				// job is also not queued
-				s.log.Printf("[GC] removed conn waiting for dropped job %v\n", jid)
+				s.log.Printf("[GC] removed conn waiting for dropped job %v\n", JobId(jid))
 				s.Stats.NFailed++
 				j, _ := s.alljobs.Get(jid)
 				ch <- j
@@ -327,10 +327,12 @@ func (s *Server) dispatcher() {
 			oldb, ok := s.jobinfo[b.JobId]
 			if !ok {
 				// job was completed by another worker already
+				s.log.Printf("[BEAT] sending kill signal: job %v already completed by another worker\n", b.JobId)
 				b.kill <- true
 				continue
 			} else if oldb.WorkerId != b.WorkerId {
 				// job has been reassigned to another worker
+				s.log.Printf("[BEAT] sending kill signal: job %v was rescheduled to another worker\n", b.JobId)
 				b.kill <- true
 				continue
 			}
@@ -338,17 +340,22 @@ func (s *Server) dispatcher() {
 			j, err = s.alljobs.Get(b.JobId)
 			if err != nil {
 				b.kill <- true
-				s.log.Printf("[BEAT] error - job %v not found in db\n", b.JobId)
+				s.log.Printf("[BEAT] sending kill signal: error - job %v not found in db\n", b.JobId)
 				continue
 			}
 
-			s.log.Printf("[BEAT] job %v (worker %v), %v left of %v\n", b.JobId, b.WorkerId, j.Timeout-time.Now().Sub(j.Fetched), j.Timeout)
 			s.jobinfo[b.JobId] = b
+
+			if j.Fetched.IsZero() {
+				s.log.Printf("[BEAT] job %v (worker %v), ??? left of %v\n", b.JobId, b.WorkerId, j.Timeout)
+			} else {
+				s.log.Printf("[BEAT] job %v (worker %v), %v left of %v\n", b.JobId, b.WorkerId, j.Timeout-time.Now().Sub(j.Fetched), j.Timeout)
+			}
 
 			if time.Now().Sub(j.Fetched) > j.Timeout && j.Timeout > 0 && !j.Fetched.IsZero() {
 				j.Status = StatusFailed
 				s.finnishJob(j)
-				s.log.Printf("[BEAT] sending kill signal: job %v (worker %v)\n", b.JobId, b.WorkerId)
+				s.log.Printf("[BEAT] sending kill signal: job %v timed out (worker %v)\n", b.JobId, b.WorkerId)
 				b.kill <- true
 			}
 			b.kill <- false

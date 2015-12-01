@@ -187,14 +187,19 @@ func (j *Job) Execute(kill chan bool, outbuf io.Writer) {
 	// wait for job to finish or timeout
 	select {
 	case <-time.After(j.Timeout):
-		fmt.Fprintf(multierr, "\nKilling job...")
+		fmt.Fprintf(multierr, "\nkilling job...")
 		killall(multierr, cmd)
-		fmt.Fprintf(multierr, "\nJob timed out after %v\n", time.Now().Sub(j.Started))
-		j.Status = <-done
-	case <-kill:
-		killall(multierr, cmd)
-		fmt.Fprintf(multierr, "\nJob was terminated by server\n")
-		j.Status = <-done
+		<-done
+		j.Status = StatusFailed
+		fmt.Fprintf(multierr, "\njob timed out after %v\n", time.Now().Sub(j.Started))
+	case dokill := <-kill:
+		if dokill { // just in case (I don't think it is necessary)
+			fmt.Fprintf(multierr, "\nkilling job...")
+			killall(multierr, cmd)
+			<-done
+			j.Status = StatusFailed
+			fmt.Fprintf(multierr, "\njob was terminated by server\n")
+		}
 	case j.Status = <-done:
 	}
 
