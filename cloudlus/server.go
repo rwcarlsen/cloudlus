@@ -21,8 +21,8 @@ const defaultdbpath = "./jobdb"
 // defaultCollectFreq if the duration between old job purging from db.
 var defaultCollectFreq = 2 * time.Minute
 
-var beatInterval = 15 * time.Second
-var beatLimit = 2 * beatInterval
+var beatInterval = 30 * time.Second
+var beatLimit = 3 * beatInterval
 var beatCheckFreq = beatInterval / 3
 
 // nfailban is the number of consecutive jobs after which a worker is
