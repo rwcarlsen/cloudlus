@@ -25,6 +25,10 @@ var beatInterval = 15 * time.Second
 var beatLimit = 2 * beatInterval
 var beatCheckFreq = beatInterval / 3
 
+// nfailban is the number of consecutive jobs after which a worker is
+// permanently banned from receiving more jobs
+var nfailban = 4
+
 type Server struct {
 	log          *log.Logger
 	serv         *http.Server
@@ -45,10 +49,15 @@ type Server struct {
 	kill         chan struct{}
 	Stats        *Stats
 	rpcserv      *rpc.Server
+	// workerFailures tracks consecutive failed jobs from workers
+	workerFailures map[WorkerId]int
 }
 
 type Stats struct {
-	Started     time.Time
+	Started time.Time
+	// NBanned reports the number of workers that have been permanently banned
+	// from running more jobs due to a poor track record.
+	NBanned     int
 	NSubmitted  int
 	NCompleted  int
 	NFailed     int
@@ -243,6 +252,20 @@ func (s *Server) checkbeat() {
 	}
 }
 
+func (s *Server) isBanned(wid WorkerId) bool {
+	return s.workerFailures[wid] >= nfailban
+}
+
+func (s *Server) nBannedWorkers() int {
+	n := 0
+	for _, nfail := range s.workerFailures {
+		if nfail >= nfailban {
+			n++
+		}
+	}
+	return n
+}
+
 func (s *Server) dispatcher() {
 	beatcheck := time.NewTicker(beatCheckFreq)
 	defer beatcheck.Stop()
@@ -250,6 +273,7 @@ func (s *Server) dispatcher() {
 	for {
 		s.Stats.CurrQueued = len(s.queue)
 		s.Stats.CurrRunning = len(s.jobinfo)
+		s.Stats.NBanned = s.nBannedWorkers()
 
 		select {
 		case <-beatcheck.C:
@@ -288,6 +312,12 @@ func (s *Server) dispatcher() {
 				req.Resp <- nil
 			}
 		case j := <-s.pushjobs:
+			if j.Status == StatusComplete {
+				s.workerFailures[j.WorkerId] = 0
+			} else if j.Status == StatusFailed {
+				s.workerFailures[j.WorkerId]++
+			}
+
 			s.log.Printf("[PUSH] job %v\n", j.Id)
 			if jj, err := s.alljobs.Get(j.Id); err == nil {
 				// workers nilify the Infiles to reduce network traffic
@@ -299,6 +329,12 @@ func (s *Server) dispatcher() {
 		case req := <-s.fetchjobs:
 			var j *Job
 			var err error
+
+			if s.isBanned(req.WorkerId) {
+				s.log.Printf("[FETCH] no work for banned worker %v)\n", req.WorkerId)
+				req.Ch <- nil
+				continue
+			}
 
 			// skip jobs that were finished by a worker reassigned *from*
 			for i, id := range s.queue {

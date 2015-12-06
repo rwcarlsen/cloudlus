@@ -286,16 +286,13 @@ const home = `
     <div id="stats">
 		<ul>
 			<li>
-				{{.Stats.CurrRunning}} jobs currently running
+				{{.Stats.NSubmitted}} jobs received
 			</li>
 			<li>
 				{{.Stats.CurrQueued}} jobs currently queued
 			</li>
 			<li>
-				{{.Stats.NRequeued}} jobs requeued
-			</li>
-			<li>
-				{{.Stats.NSubmitted}} jobs received
+				{{.Stats.CurrRunning}} jobs currently running
 			</li>
 			<li>
 				{{.Stats.NCompleted}} jobs completed
@@ -303,9 +300,21 @@ const home = `
 			<li>
 				{{.Stats.NFailed}} jobs failed
 			</li>
+		</ul>
+		<br>
+		<ul>
+			<li>
+				{{.Stats.NRequeued}} jobs requeued
+			</li>
 			<li>
 				{{.Stats.NPurged}} old jobs purged.
 			</li>
+			<li>
+				{{.Stats.NBanned}} workers banned.
+			</li>
+		</ul>
+		<br>
+		<ul>
 			<li>
 				{{.Stats.TotJobTime}} cumulative job run time.
 			</li>
@@ -317,18 +326,6 @@ const home = `
 			</li>
 			<li>
 				{{.Stats.MaxJobTime}} longest single job run time.
-			</li>
-			<li>
-				{{.Stats.TotCmdTime}} cumulative command run time.
-			</li>
-			<li>
-				{{.Stats.AvgCmdTime}} average command run time.
-			</li>
-			<li>
-				{{.Stats.MinCmdTime}} shortest single command run time.
-			</li>
-			<li>
-				{{.Stats.MaxCmdTime}} longest single command run time.
 			</li>
 		</ul>
 	</div>
