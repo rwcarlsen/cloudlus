@@ -80,19 +80,20 @@ type Stats struct {
 
 func NewServer(httpaddr, rpcaddr string, db *DB) *Server {
 	s := &Server{
-		submitjobs:   make(chan jobSubmit),
-		submitchans:  map[[16]byte]chan *Job{},
-		retrievejobs: make(chan jobRequest),
-		pushjobs:     make(chan *Job),
-		fetchjobs:    make(chan workRequest),
-		jobinfo:      map[JobId]Beat{},
-		beat:         make(chan Beat),
-		reset:        make(chan struct{}),
-		rpcaddr:      rpcaddr,
-		log:          log.New(os.Stdout, "", log.LstdFlags),
-		kill:         make(chan struct{}),
-		CollectFreq:  defaultCollectFreq,
-		Stats:        &Stats{},
+		submitjobs:     make(chan jobSubmit),
+		submitchans:    map[[16]byte]chan *Job{},
+		retrievejobs:   make(chan jobRequest),
+		pushjobs:       make(chan *Job),
+		fetchjobs:      make(chan workRequest),
+		jobinfo:        map[JobId]Beat{},
+		beat:           make(chan Beat),
+		reset:          make(chan struct{}),
+		rpcaddr:        rpcaddr,
+		log:            log.New(os.Stdout, "", log.LstdFlags),
+		kill:           make(chan struct{}),
+		CollectFreq:    defaultCollectFreq,
+		Stats:          &Stats{},
+		workerFailures: map[WorkerId]int{},
 	}
 
 	var err error
