@@ -183,6 +183,11 @@ func (s *Server) Run(j *Job) *Job {
 }
 
 func (s *Server) Start(j *Job, ch chan *Job) chan *Job {
+	j.Status = StatusQueued
+	j.Submitted = time.Now()
+	s.alljobs.Put(j)
+	s.log.Printf("[SUBMIT] job %v\n", j.Id)
+
 	if ch == nil {
 		ch = make(chan *Job, 1)
 	}
@@ -293,17 +298,11 @@ func (s *Server) dispatcher() {
 		case <-s.kill:
 			return
 		case js := <-s.submitjobs:
+			s.queue = append(s.queue, js.J.Id)
 			s.Stats.NSubmitted++
-			s.log.Printf("[SUBMIT] job %v\n", js.J.Id)
-			j := js.J
 			if js.Result != nil {
-				s.submitchans[j.Id] = js.Result
+				s.submitchans[js.J.Id] = js.Result
 			}
-			j.Status = StatusQueued
-			j.Submitted = time.Now()
-			s.queue = append(s.queue, j.Id)
-
-			s.alljobs.Put(j)
 		case req := <-s.retrievejobs:
 			if j, err := s.alljobs.Get(req.Id); err == nil {
 				s.log.Printf("[RETRIEVE] job %v\n", j.Id)
