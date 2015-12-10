@@ -328,7 +328,6 @@ func (s *Server) dispatcher() {
 			s.finnishJob(j)
 		case req := <-s.fetchjobs:
 			var j *Job
-			var err error
 
 			if s.isBanned(req.WorkerId) {
 				s.log.Printf("[FETCH] no work for banned worker %v)\n", req.WorkerId)
@@ -338,16 +337,16 @@ func (s *Server) dispatcher() {
 
 			// skip jobs that were finished by a worker reassigned *from*
 			for i, id := range s.queue {
-				j, err = s.alljobs.Get(id)
-				if err == nil && j.Status == StatusQueued {
-					s.queue = s.queue[i+1:]
+				jj, err := s.alljobs.Get(id)
+				if err == nil && jj.Status == StatusQueued {
+					s.queue = append(s.queue[:i], s.queue[i+1:]...)
+					j = jj // ensure j is nil if job is not currently queued status
 					break
 				}
 			}
 
 			if j == nil {
 				s.log.Printf("[FETCH] no work in queue (worker %v)\n", req.WorkerId)
-				s.queue = nil
 			} else {
 				s.log.Printf("[FETCH] job %v (worker %v)\n", j.Id, req.WorkerId)
 				s.jobinfo[j.Id] = NewBeat(req.WorkerId, j.Id)
