@@ -289,10 +289,10 @@ const home = `
 				{{.Stats.NSubmitted}} jobs received
 			</li>
 			<li>
-				{{.Stats.CurrQueued}} jobs currently queued
+				{{.Stats.CurrQueued}} jobs queued
 			</li>
 			<li>
-				{{.Stats.CurrRunning}} jobs currently running
+				{{.Stats.CurrRunning}} jobs running
 			</li>
 			<li>
 				{{.Stats.NCompleted}} jobs completed

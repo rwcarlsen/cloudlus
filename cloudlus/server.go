@@ -217,12 +217,12 @@ func (s *Server) checkbeat() {
 	for jid, b := range s.jobinfo {
 		if now.Sub(b.Time) > beatLimit {
 			j, err := s.alljobs.Get(jid)
-			delete(s.jobinfo, jid)
 			if err != nil {
-				s.log.Printf("[ERROR] cannot find job %v for requeueing", jid)
+				s.log.Printf("[ERROR] cannot find job %v for beat check", jid)
 				continue
 			}
 
+			delete(s.jobinfo, jid)
 			s.log.Printf("[REQUEUE] job %v\n", jid)
 			s.Stats.NRequeued++
 			j.Status = StatusQueued
@@ -316,6 +316,15 @@ func (s *Server) dispatcher() {
 				s.workerFailures[j.WorkerId] = 0
 			} else if j.Status == StatusFailed {
 				s.workerFailures[j.WorkerId]++
+			}
+
+			// clean out the queue in case the job has already been requeud or
+			// some other strange happening
+			for i, id := range s.queue {
+				if id == j.Id {
+					s.queue = append(s.queue[:i], s.queue[i+1:]...)
+					break
+				}
 			}
 
 			s.log.Printf("[PUSH] job %v\n", j.Id)
