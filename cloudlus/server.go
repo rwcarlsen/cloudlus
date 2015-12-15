@@ -40,7 +40,7 @@ type Server struct {
 	pushjobs     chan *Job
 	fetchjobs    chan workRequest
 	reset        chan struct{}
-	queue        []JobId
+	queue        []*Job
 	alljobs      *DB
 	rpc          *RPC
 	jobinfo      map[JobId]Beat // map[Worker]Job
@@ -109,7 +109,7 @@ func NewServer(httpaddr, rpcaddr string, db *DB) *Server {
 		panic(err)
 	}
 	for _, j := range q {
-		s.queue = append(s.queue, j.Id)
+		s.queue = append(s.queue, j)
 	}
 
 	mux := http.NewServeMux()
@@ -210,6 +210,24 @@ func (s *Server) ResetQueue() {
 	s.reset <- struct{}{}
 }
 
+func (s *Server) cleanQueue(delids ...JobId) {
+	// remove named job ids from queue
+	newqueue := make([]*Job, 0, len(s.queue))
+	for _, j := range s.queue {
+		skip := false
+		for _, delid := range delids {
+			if j.Id == delid {
+				skip = true
+				break
+			}
+		}
+		if !skip {
+			newqueue = append(newqueue, j)
+		}
+	}
+	s.queue = newqueue
+}
+
 // checkbeat checks for workers that have stopped responding and requeues their
 // jobs to try again.
 func (s *Server) checkbeat() {
@@ -226,7 +244,7 @@ func (s *Server) checkbeat() {
 			s.log.Printf("[REQUEUE] job %v\n", jid)
 			s.Stats.NRequeued++
 			j.Status = StatusQueued
-			s.queue = append([]JobId{j.Id}, s.queue...)
+			s.queue = append([]*Job{j}, s.queue...)
 			s.alljobs.Put(j)
 		}
 	}
@@ -238,8 +256,8 @@ func (s *Server) checkbeat() {
 		if !ok {
 			// job is not currently running
 			inqueue := false
-			for _, qjid := range s.queue {
-				if jid == qjid {
+			for _, qj := range s.queue {
+				if jid == qj.Id {
 					inqueue = true
 					break
 				}
@@ -286,19 +304,16 @@ func (s *Server) dispatcher() {
 			s.checkbeat()
 		case <-s.reset:
 			s.log.Printf("[RESET] removed %v queued jobs\n", len(s.queue))
-			for _, jid := range s.queue {
-				j, err := s.alljobs.Get(jid)
-				if err == nil {
-					j.Status = StatusFailed
-					j.Stderr += "\nkilled by server reset\n"
-				}
+			for _, j := range s.queue {
+				j.Status = StatusFailed
+				j.Stderr += "\nkilled by server reset\n"
 				s.finnishJob(j)
 			}
 			s.queue = s.queue[:0]
 		case <-s.kill:
 			return
 		case js := <-s.submitjobs:
-			s.queue = append(s.queue, js.J.Id)
+			s.queue = append(s.queue, js.J)
 			s.Stats.NSubmitted++
 			if js.Result != nil {
 				s.submitchans[js.J.Id] = js.Result
@@ -316,15 +331,6 @@ func (s *Server) dispatcher() {
 				s.workerFailures[j.WorkerId] = 0
 			} else if j.Status == StatusFailed {
 				s.workerFailures[j.WorkerId]++
-			}
-
-			// clean out the queue in case the job has already been requeud or
-			// some other strange happening
-			for i, id := range s.queue {
-				if id == j.Id {
-					s.queue = append(s.queue[:i], s.queue[i+1:]...)
-					break
-				}
 			}
 
 			s.log.Printf("[PUSH] job %v\n", j.Id)
@@ -345,11 +351,10 @@ func (s *Server) dispatcher() {
 			}
 
 			// skip jobs that were finished by a worker reassigned *from*
-			for i, id := range s.queue {
-				jj, err := s.alljobs.Get(id)
-				if err == nil && jj.Status == StatusQueued {
+			for i, qj := range s.queue {
+				if qj.Status == StatusQueued {
 					s.queue = append(s.queue[:i], s.queue[i+1:]...)
-					j = jj // ensure j is nil if job is not currently queued status
+					j = qj // ensure j is nil if job is not currently queued status
 					break
 				}
 			}
@@ -408,6 +413,13 @@ func (s *Server) dispatcher() {
 }
 
 func (s *Server) finnishJob(j *Job) {
+	if j == nil {
+		return
+	}
+
+	// put this first to get data in db as soon as possible.
+	s.alljobs.Put(j)
+
 	if j.Status == StatusFailed {
 		s.Stats.NFailed++
 	} else if j.Status == StatusComplete {
@@ -440,7 +452,7 @@ func (s *Server) finnishJob(j *Job) {
 	}
 
 	delete(s.jobinfo, j.Id)
-	s.alljobs.Put(j)
+	s.cleanQueue(j.Id)
 }
 
 type jobRequest struct {
