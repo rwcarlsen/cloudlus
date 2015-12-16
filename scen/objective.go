@@ -80,11 +80,12 @@ type ObjFunc func(scen *Scenario, db *sql.DB, simid []byte) (float64, error)
 // referenced/used for computing objective values for scen.Scenarios.  New
 // alternative objective functions should be added to this list.
 var ObjFuncs = map[string]ObjFunc{
-	"":                  ObjSlowVsFastPower,
-	"slowvfast":         ObjSlowVsFastPower,
-	"slowvfast-penalty": ObjSlowVsFastPowerPenalty,
-	"slowvfast-fueled":  ObjSlowVsFastPowerFueled,
-	"ans2014":           ObjANS2014,
+	"":                   ObjSlowVsFastPower,
+	"slowvfast":          ObjSlowVsFastPower,
+	"slowvfast-penalty":  ObjSlowVsFastPowerPenalty,
+	"slowvfast-penalty2": ObjSlowVsFastPowerPenaltySquared,
+	"slowvfast-fueled":   ObjSlowVsFastPowerFueled,
+	"ans2014":            ObjANS2014,
 }
 
 // ObjSlowVsFastPower returns:
@@ -156,6 +157,47 @@ func ObjSlowVsFastPowerPenalty(scen *Scenario, db *sql.DB, simid []byte) (float6
 	}
 
 	return slowE / totE * totcap / totE, nil
+}
+
+// ObjSlowVsFastPowerPenaltySquared is the same as ObjSlowVsFastPower except there is
+// an extra factor [(total installed MWe years) / (tot energy produced)]^2
+// multiplied onto the objective that penalizes offline capacity due to e.g.
+// fuel shortages.  This objective doesn't work with the db flag because
+// cloudlus commands/pkgs are not smart enough to parse out a build schedule
+// from a cyclus database (yet).
+func ObjSlowVsFastPowerPenaltySquared(scen *Scenario, db *sql.DB, simid []byte) (float64, error) {
+	// calculate actual generated power
+	q1 := `
+        SELECT TOTAL(Value) FROM timeseriespower AS p
+           JOIN agents AS a ON a.agentid=p.agentid AND a.simid=p.simid
+           WHERE a.Prototype IN (?,?) AND p.simid=?
+		`
+
+	slowE := 0.0
+	err := db.QueryRow(q1, "slow_reactor", "init_slow_reactor", simid).Scan(&slowE)
+	if err != nil {
+		return math.Inf(1), err
+	}
+
+	fastE := 0.0
+	err = db.QueryRow(q1, "fast_reactor", "fast_reactor", simid).Scan(&fastE)
+	if err != nil {
+		return math.Inf(1), err
+	}
+
+	totE := slowE + fastE
+
+	// calculate integrated capacity
+	builds := map[string][]Build{}
+	for _, b := range scen.Builds {
+		builds[b.Proto] = append(builds[b.Proto], b)
+	}
+	totcap := 0.0
+	for t := 0; t < scen.SimDur; t++ {
+		totcap += scen.PowerCap(builds, t)
+	}
+
+	return slowE / totE * math.Pow(totcap/totE, 2), nil
 }
 
 // ObjSlowVsFastPowerFueled returns:
