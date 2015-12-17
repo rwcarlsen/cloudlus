@@ -174,27 +174,33 @@ func (j *Job) Execute(kill chan bool, outbuf io.Writer) {
 	// launch job process
 	done := make(chan string)
 	cmdstart := time.Now()
-	go func() {
-		if err := cmd.Run(); err != nil {
-			fmt.Fprint(multierr, err)
-			done <- StatusFailed
-		} else {
-			done <- StatusComplete
-		}
+	if err := cmd.Start(); err != nil {
+		fmt.Fprint(multierr, err)
+		done <- StatusFailed
 		close(done)
-	}()
+	} else {
+		go func() {
+			if err := cmd.Run(); err != nil {
+				fmt.Fprint(multierr, err)
+				done <- StatusFailed
+			} else {
+				done <- StatusComplete
+			}
+			close(done)
+		}()
+	}
 
 	// wait for job to finish or timeout
 	select {
 	case <-time.After(j.Timeout):
-		fmt.Fprintf(multierr, "\nkilling job...")
+		fmt.Printf("\nkilling job...\n") // not multierr to avoid data race
 		killall(multierr, cmd)
 		<-done
 		j.Status = StatusFailed
 		fmt.Fprintf(multierr, "\njob timed out after %v\n", time.Now().Sub(j.Started))
 	case dokill := <-kill:
 		if dokill { // just in case (I don't think it is necessary)
-			fmt.Fprintf(multierr, "\nkilling job...")
+			fmt.Printf("\nkilling job...\n") // not multierr to avoid data race
 			killall(multierr, cmd)
 			<-done
 			j.Status = StatusFailed
@@ -336,8 +342,6 @@ func NewJobStat(j *Job) *JobStat {
 }
 
 func killall(multierr io.Writer, cmd *exec.Cmd) {
-	cmd.Start()
-
 	pgid, err := syscall.Getpgid(cmd.Process.Pid)
 
 	// don't kill myself if cmd is running in same process group
