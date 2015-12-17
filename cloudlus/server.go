@@ -373,8 +373,6 @@ func (s *Server) dispatcher() {
 			s.alljobs.Put(j)
 			req.Ch <- j
 		case b := <-s.beat:
-			var err error
-			var j *Job
 			oldb, ok := s.jobinfo[b.JobId]
 			if !ok {
 				// job was completed by another worker already
@@ -388,14 +386,16 @@ func (s *Server) dispatcher() {
 				continue
 			}
 
-			j, err = s.alljobs.Get(b.JobId)
+			s.jobinfo[b.JobId] = b
+
+			j, err := s.alljobs.Get(b.JobId)
 			if err != nil {
-				b.kill <- true
-				s.log.Printf("[BEAT] sending kill signal: error - job %v not found in db\n", b.JobId)
+				// don't kill the job because maybe the db just hasn't synced
+				// fully yet.
+				b.kill <- false
+				s.log.Printf("[BEAT] error: job %v not found in db\n", b.JobId)
 				continue
 			}
-
-			s.jobinfo[b.JobId] = b
 
 			if j.Fetched.IsZero() {
 				s.log.Printf("[BEAT] job %v (worker %v), ??? left of %v\n", b.JobId, b.WorkerId, j.Timeout)
