@@ -211,13 +211,25 @@ func (s *Server) ResetQueue() {
 }
 
 func (s *Server) cleanQueue(delids ...JobId) {
-	// remove named job ids from queue
 	newqueue := make([]*Job, 0, len(s.queue))
+
+	// remove jobs that don't have proper queued status
+	for _, j := range s.queue {
+		if j.Status == StatusQueued {
+			newqueue = append(newqueue, j)
+		} else {
+			s.log.Printf("[GC] removed job with status %v from queue (id %v)\n", j.Status, j.Id)
+		}
+	}
+	s.queue = newqueue
+
+	// remove named job ids from queue
 	for _, j := range s.queue {
 		skip := false
 		for _, delid := range delids {
 			if j.Id == delid {
 				skip = true
+				s.log.Printf("[GC] removed completed job from queue (id %v)\n", delid)
 				break
 			}
 		}
@@ -342,33 +354,23 @@ func (s *Server) dispatcher() {
 			}
 			s.finnishJob(j)
 		case req := <-s.fetchjobs:
-			var j *Job
-
 			if s.isBanned(req.WorkerId) {
 				s.log.Printf("[FETCH] no work for banned worker %v)\n", req.WorkerId)
 				req.Ch <- nil
 				continue
-			}
-
-			// skip jobs that were finished by a worker reassigned *from*
-			for i, qj := range s.queue {
-				if qj.Status == StatusQueued {
-					s.queue = append(s.queue[:i], s.queue[i+1:]...)
-					j = qj // ensure j is nil if job is not currently queued status
-					break
-				}
-			}
-
-			if j == nil {
+			} else if len(s.queue) == 0 {
 				s.log.Printf("[FETCH] no work in queue (worker %v)\n", req.WorkerId)
-			} else {
-				s.log.Printf("[FETCH] job %v (worker %v)\n", j.Id, req.WorkerId)
-				s.jobinfo[j.Id] = NewBeat(req.WorkerId, j.Id)
-				j.Fetched = time.Now()
-				j.Status = StatusRunning
-				s.alljobs.Put(j)
+				req.Ch <- nil
+				continue
 			}
 
+			j := s.queue[0]
+			s.queue = append([]*Job{}, s.queue[1:]...)
+			s.log.Printf("[FETCH] job %v (worker %v)\n", j.Id, req.WorkerId)
+			s.jobinfo[j.Id] = NewBeat(req.WorkerId, j.Id)
+			j.Fetched = time.Now()
+			j.Status = StatusRunning
+			s.alljobs.Put(j)
 			req.Ch <- j
 		case b := <-s.beat:
 			var err error
