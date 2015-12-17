@@ -222,6 +222,7 @@ func (s *Server) cleanQueue(delids ...JobId) {
 		}
 	}
 	s.queue = newqueue
+	newqueue = newqueue[:0]
 
 	// remove named job ids from queue
 	for _, j := range s.queue {
