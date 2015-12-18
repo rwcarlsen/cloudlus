@@ -180,7 +180,7 @@ func (j *Job) Execute(kill chan bool, outbuf io.Writer) {
 		close(done)
 	} else {
 		go func() {
-			if err := cmd.Run(); err != nil {
+			if err := cmd.Wait(); err != nil {
 				fmt.Fprint(multierr, err)
 				done <- StatusFailed
 			} else {
