@@ -335,10 +335,10 @@ func (s *Server) dispatcher() {
 			}
 		case req := <-s.retrievejobs:
 			if j, ok := s.running[req.Id]; ok {
-				s.log.Printf("[RETRIEVE] job %v\n", j.Id)
+				s.log.Printf("[RETRIEVE] from run list job %v\n", j.Id)
 				req.Resp <- j
 			} else if j, err := s.alljobs.Get(req.Id); err == nil {
-				s.log.Printf("[RETRIEVE] job %v\n", j.Id)
+				s.log.Printf("[RETRIEVE] from db job %v\n", j.Id)
 				req.Resp <- j
 			} else {
 				s.log.Printf("[RETRIEVE] error: job %v not found\n", req.Id)

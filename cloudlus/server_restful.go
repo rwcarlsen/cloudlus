@@ -151,22 +151,17 @@ func (s *Server) handleOutfiles(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	} else if r.Method == "GET" {
-		j, err := s.Get(jid)
-		if err != nil {
-			httperror(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		if j.Status != StatusComplete {
-			msg := fmt.Sprintf("job %v status: %v", idstr, j.Status)
-			httperror(w, msg, http.StatusBadRequest)
-			return
+		if j, err := s.Get(jid); err != nil {
+			s.log.Printf("[REST] warning: /api/v1/job-outfiles/ request for job not in db (id=%v)\n", jid)
+		} else if j.Status != StatusComplete {
+			s.log.Printf("[REST] warning: /api/v1/job-outfiles/ request for potentially incomplete job")
 		}
 
-		w.Header().Add("Content-Disposition", fmt.Sprintf("filename=\"results-%v.zip\"", j.Id))
+		w.Header().Add("Content-Disposition", fmt.Sprintf("filename=\"results-%v.zip\"", jid))
 
 		f, err := os.Open(outfileName(jid))
 		if err != nil {
-			msg := fmt.Sprintf("job %v output files not found", idstr)
+			msg := fmt.Sprintf("[REST] error: job %v output files not found", jid)
 			httperror(w, msg, http.StatusBadRequest)
 			return
 		}

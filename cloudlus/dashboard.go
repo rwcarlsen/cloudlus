@@ -286,9 +286,6 @@ const home = `
     <div id="stats">
 		<ul>
 			<li>
-				{{.Stats.NSubmitted}} jobs received
-			</li>
-			<li>
 				{{.Stats.CurrQueued}} jobs queued
 			</li>
 			<li>
@@ -300,8 +297,10 @@ const home = `
 			<li>
 				{{.Stats.NFailed}} jobs failed
 			</li>
+			<li>
+				{{.Stats.NSubmitted}} jobs received
+			</li>
 		</ul>
-		<br>
 		<ul>
 			<li>
 				{{.Stats.NRequeued}} jobs requeued
@@ -313,7 +312,6 @@ const home = `
 				{{.Stats.NBanned}} workers banned.
 			</li>
 		</ul>
-		<br>
 		<ul>
 			<li>
 				{{.Stats.TotJobTime}} cumulative job run time.
