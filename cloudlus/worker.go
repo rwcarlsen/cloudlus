@@ -135,6 +135,7 @@ func (w *Worker) dojob() (wait bool, err error) {
 
 	err = client.PushOutfile(j.Id, pr)
 	if err != nil {
+		<-rundone
 		return false, err
 	}
 	<-rundone

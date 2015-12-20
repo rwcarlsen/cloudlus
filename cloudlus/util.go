@@ -48,6 +48,19 @@ func (i WorkerId) String() string { return hex.EncodeToString(i[:]) }
 
 type JobId [16]byte
 
+func DecodeJobId(s string) (JobId, error) {
+	var id JobId
+	buf, err := hex.DecodeString(s)
+	if err != nil {
+		return id, err
+	}
+
+	if n := copy(id[:], buf); n < len(id) {
+		return JobId{}, fmt.Errorf("invalid JobId string length %v", n)
+	}
+	return id, nil
+}
+
 func (i JobId) MarshalJSON() ([]byte, error) {
 	return []byte("\"" + hex.EncodeToString(i[:]) + "\""), nil
 }
@@ -129,7 +142,7 @@ func (d *DB) GC() (npurged, nremain int, err error) {
 		}
 
 		if j.Done() && now.Sub(j.Finished) > d.PurgeAge {
-			os.Remove(outfileName(j))
+			os.Remove(outfileName(j.Id))
 			d.db.Delete(it.Key(), nil)
 			d.db.Delete(finishKey(j), nil)
 			d.db.Delete(currentKey(j), nil)
@@ -335,6 +348,6 @@ func (d *DB) Put(j *Job) error {
 	return d.db.Put(j.Id[:], data, nil)
 }
 
-func outfileName(j *Job) string {
-	return fmt.Sprintf("%s-outdata.zip", j.Id)
+func outfileName(id JobId) string {
+	return fmt.Sprintf("%s-outdata.zip", id)
 }

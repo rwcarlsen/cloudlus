@@ -19,7 +19,14 @@ func httperror(w http.ResponseWriter, msg string, code int) {
 func (s *Server) handleJob(w http.ResponseWriter, r *http.Request) {
 	if r.Method == "GET" || r.Method == "" {
 		idstr := r.URL.Path[len("/api/v1/job/"):]
-		j, err := s.getjob(idstr)
+
+		jid, err := DecodeJobId(idstr)
+		if err != nil {
+			httperror(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		j, err := s.Get(jid)
 		if err != nil {
 			httperror(w, err.Error(), http.StatusBadRequest)
 			return
@@ -62,7 +69,14 @@ func (s *Server) handleReset(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleJobStat(w http.ResponseWriter, r *http.Request) {
 	idstr := r.URL.Path[len("/api/v1/job-stat/"):]
-	j, err := s.getjob(idstr)
+
+	jid, err := DecodeJobId(idstr)
+	if err != nil {
+		httperror(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	j, err := s.Get(jid)
 	if err != nil {
 		httperror(w, err.Error(), http.StatusBadRequest)
 		return
@@ -114,20 +128,18 @@ func (s *Server) handleSubmitInfile(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleOutfiles(w http.ResponseWriter, r *http.Request) {
 	idstr := r.URL.Path[len("/api/v1/job-outfiles/"):]
-	j, err := s.getjob(idstr)
+	jid, err := DecodeJobId(idstr)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		log.Print(err)
+		httperror(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
 	if r.Method == "POST" {
-		fname := outfileName(j)
+		fname := outfileName(jid)
 		f, err := os.Create(fname)
 		if err != nil {
 			msg := fmt.Sprintf("job %v outfile subission failed: %v", idstr, err)
-			http.Error(w, msg, http.StatusBadRequest)
-			log.Print(msg)
+			httperror(w, msg, http.StatusBadRequest)
 			return
 		}
 		defer f.Close()
@@ -135,33 +147,34 @@ func (s *Server) handleOutfiles(w http.ResponseWriter, r *http.Request) {
 		_, err = io.Copy(f, r.Body)
 		if err != nil {
 			msg := fmt.Sprintf("job %v outfile subission failed: %v", idstr, err)
-			http.Error(w, msg, http.StatusBadRequest)
-			log.Print(msg)
+			httperror(w, msg, http.StatusBadRequest)
 			return
 		}
 	} else if r.Method == "GET" {
+		j, err := s.Get(jid)
+		if err != nil {
+			httperror(w, err.Error(), http.StatusBadRequest)
+			return
+		}
 		if j.Status != StatusComplete {
 			msg := fmt.Sprintf("job %v status: %v", idstr, j.Status)
-			http.Error(w, msg, http.StatusBadRequest)
-			log.Print(msg)
+			httperror(w, msg, http.StatusBadRequest)
 			return
 		}
 
 		w.Header().Add("Content-Disposition", fmt.Sprintf("filename=\"results-%v.zip\"", j.Id))
 
-		f, err := os.Open(outfileName(j))
+		f, err := os.Open(outfileName(jid))
 		if err != nil {
 			msg := fmt.Sprintf("job %v output files not found", idstr)
-			http.Error(w, msg, http.StatusBadRequest)
-			log.Print(msg)
+			httperror(w, msg, http.StatusBadRequest)
 			return
 		}
 		defer f.Close()
 
 		_, err = io.Copy(w, f)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			log.Print(err)
+			httperror(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 	}

@@ -43,7 +43,8 @@ type Server struct {
 	queue        []*Job
 	alljobs      *DB
 	rpc          *RPC
-	jobinfo      map[JobId]Beat // map[Worker]Job
+	jobinfo      map[JobId]Beat
+	running      map[JobId]*Job
 	beat         chan Beat
 	rpcaddr      string
 	kill         chan struct{}
@@ -86,6 +87,7 @@ func NewServer(httpaddr, rpcaddr string, db *DB) *Server {
 		pushjobs:       make(chan *Job),
 		fetchjobs:      make(chan workRequest),
 		jobinfo:        map[JobId]Beat{},
+		running:        map[JobId]*Job{},
 		beat:           make(chan Beat),
 		reset:          make(chan struct{}),
 		rpcaddr:        rpcaddr,
@@ -156,7 +158,7 @@ func (s *Server) ListenAndServe() error {
 				if err != nil {
 					s.log.Print(err)
 				}
-				s.log.Printf("[INFO] purged %v old jobs from db, %v remain", npurged, nremain)
+				s.log.Printf("[INFO] purged %v old jobs from db, %v remain\n", npurged, nremain)
 			}
 			<-time.After(s.CollectFreq)
 		}
@@ -247,13 +249,13 @@ func (s *Server) checkbeat() {
 	now := time.Now()
 	for jid, b := range s.jobinfo {
 		if now.Sub(b.Time) > beatLimit {
-			j, err := s.alljobs.Get(jid)
-			if err != nil {
-				s.log.Printf("[ERROR] cannot find job %v for beat check", jid)
-				continue
+			j, ok := s.running[jid]
+			if !ok {
+				panic("server job 'running' and 'jobinfo' lists are out of sync")
 			}
 
 			delete(s.jobinfo, jid)
+			delete(s.running, jid)
 			s.log.Printf("[REQUEUE] job %v\n", jid)
 			s.Stats.NRequeued++
 			j.Status = StatusQueued
@@ -332,7 +334,10 @@ func (s *Server) dispatcher() {
 				s.submitchans[js.J.Id] = js.Result
 			}
 		case req := <-s.retrievejobs:
-			if j, err := s.alljobs.Get(req.Id); err == nil {
+			if j, ok := s.running[req.Id]; ok {
+				s.log.Printf("[RETRIEVE] job %v\n", j.Id)
+				req.Resp <- j
+			} else if j, err := s.alljobs.Get(req.Id); err == nil {
 				s.log.Printf("[RETRIEVE] job %v\n", j.Id)
 				req.Resp <- j
 			} else {
@@ -347,11 +352,13 @@ func (s *Server) dispatcher() {
 			}
 
 			s.log.Printf("[PUSH] job %v\n", j.Id)
-			if jj, err := s.alljobs.Get(j.Id); err == nil {
+			if jj, ok := s.running[j.Id]; ok {
 				// workers nilify the Infiles to reduce network traffic
 				// we want to re-add the locally stored infiles back to keep
 				// job data complete.
 				j.Infiles = jj.Infiles
+			} else {
+				s.log.Printf("[PUSH] error: push for job not running (id=%v)\n", j.Id)
 			}
 			s.finnishJob(j)
 		case req := <-s.fetchjobs:
@@ -369,6 +376,7 @@ func (s *Server) dispatcher() {
 			s.queue = append([]*Job{}, s.queue[1:]...)
 			s.log.Printf("[FETCH] job %v (worker %v)\n", j.Id, req.WorkerId)
 			s.jobinfo[j.Id] = NewBeat(req.WorkerId, j.Id)
+			s.running[j.Id] = j
 			j.Fetched = time.Now()
 			j.Status = StatusRunning
 			s.alljobs.Put(j)
@@ -389,12 +397,12 @@ func (s *Server) dispatcher() {
 
 			s.jobinfo[b.JobId] = b
 
-			j, err := s.alljobs.Get(b.JobId)
-			if err != nil {
+			j, ok := s.running[b.JobId]
+			if !ok {
 				// don't kill the job because maybe the db just hasn't synced
 				// fully yet.
-				b.kill <- false
-				s.log.Printf("[BEAT] error: job %v not found in db\n", b.JobId)
+				b.kill <- true
+				s.log.Printf("[BEAT] sending kill signal: job %v not listed as running\n", b.JobId)
 				continue
 			}
 
@@ -455,6 +463,7 @@ func (s *Server) finnishJob(j *Job) {
 	}
 
 	delete(s.jobinfo, j.Id)
+	delete(s.running, j.Id)
 	s.cleanQueue(j.Id)
 }
 
