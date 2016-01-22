@@ -7,8 +7,8 @@ import (
 	"io/ioutil"
 	"math"
 
-	"github.com/rwcarlsen/cloudlus/Godeps/_workspace/src/github.com/rwcarlsen/cyan/nuc"
-	"github.com/rwcarlsen/cloudlus/Godeps/_workspace/src/github.com/rwcarlsen/cyan/query"
+	"github.com/rwcarlsen/cyan/nuc"
+	"github.com/rwcarlsen/cyan/query"
 )
 
 type ANSFacility struct {

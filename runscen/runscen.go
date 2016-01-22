@@ -15,9 +15,9 @@ import (
 	"time"
 
 	"code.google.com/p/go-uuid/uuid"
-	"github.com/rwcarlsen/cloudlus/Godeps/_workspace/src/github.com/rwcarlsen/cyan/post"
 	"github.com/rwcarlsen/cloudlus/cloudlus"
 	"github.com/rwcarlsen/cloudlus/scen"
+	"github.com/rwcarlsen/cyan/post"
 )
 
 var objfile = "runsim-obj.dat"

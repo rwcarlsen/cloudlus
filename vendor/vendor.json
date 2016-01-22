@@ -1,0 +1,172 @@
+{
+	"comment": "",
+	"ignore": "test",
+	"package": [
+		{
+			"path": "code.google.com/p/go-uuid/uuid",
+			"revision": "35bc42037350",
+			"revisionTime": "2014-12-02T10:54:02-06:00"
+		},
+		{
+			"path": "github.com/gonum/blas",
+			"revision": "11931630eb0ebc4a31d1f40337eebba5b3c0c3d7",
+			"revisionTime": "2015-09-12T01:45:48-06:00"
+		},
+		{
+			"path": "github.com/gonum/blas/blas64",
+			"revision": "11931630eb0ebc4a31d1f40337eebba5b3c0c3d7",
+			"revisionTime": "2015-09-12T01:45:48-06:00"
+		},
+		{
+			"path": "github.com/gonum/blas/native",
+			"revision": "11931630eb0ebc4a31d1f40337eebba5b3c0c3d7",
+			"revisionTime": "2015-09-12T01:45:48-06:00"
+		},
+		{
+			"path": "github.com/gonum/blas/native/internal/math32",
+			"revision": "11931630eb0ebc4a31d1f40337eebba5b3c0c3d7",
+			"revisionTime": "2015-09-12T01:45:48-06:00"
+		},
+		{
+			"path": "github.com/gonum/floats",
+			"revision": "e2a0ed964056c50da3cc6414e6719010ef50535b",
+			"revisionTime": "2015-09-09T08:35:29-04:00"
+		},
+		{
+			"path": "github.com/gonum/internal/asm",
+			"revision": "266f56a1bd90ca9ec520f5e918a683fc00eea8b5",
+			"revisionTime": "2015-08-31T15:28:52+09:30"
+		},
+		{
+			"path": "github.com/gonum/lapack",
+			"revision": "2d9784a50cb0e08db1eab6f682f40897fbd9c0ea",
+			"revisionTime": "2015-09-13T22:04:10-06:00"
+		},
+		{
+			"path": "github.com/gonum/lapack/lapack64",
+			"revision": "2d9784a50cb0e08db1eab6f682f40897fbd9c0ea",
+			"revisionTime": "2015-09-13T22:04:10-06:00"
+		},
+		{
+			"path": "github.com/gonum/lapack/native",
+			"revision": "2d9784a50cb0e08db1eab6f682f40897fbd9c0ea",
+			"revisionTime": "2015-09-13T22:04:10-06:00"
+		},
+		{
+			"path": "github.com/gonum/matrix/mat64",
+			"revision": "338afb3046087c321b10a6b1720500e7625b9a91",
+			"revisionTime": "2015-09-14T00:42:43-06:00"
+		},
+		{
+			"path": "github.com/rwcarlsen/cyan/nuc",
+			"revision": "ef36dadde4f97cf562868998963cdbb79f98f01f",
+			"revisionTime": "2016-01-22T11:21:29-06:00"
+		},
+		{
+			"path": "github.com/rwcarlsen/cyan/post",
+			"revision": "ef36dadde4f97cf562868998963cdbb79f98f01f",
+			"revisionTime": "2016-01-22T11:21:29-06:00"
+		},
+		{
+			"path": "github.com/rwcarlsen/cyan/query",
+			"revision": "ef36dadde4f97cf562868998963cdbb79f98f01f",
+			"revisionTime": "2016-01-22T11:21:29-06:00"
+		},
+		{
+			"path": "github.com/rwcarlsen/go-sqlite3",
+			"revision": "fbebdb147721e5fbe3d49283a375bd560fd1ddef",
+			"revisionTime": "2016-01-22T10:34:24-06:00",
+			"tree": true
+		},
+		{
+			"path": "github.com/rwcarlsen/optim",
+			"revision": "c3ec3ecac0e228252c6745c4c56af793b02377c8",
+			"revisionTime": "2015-09-01T11:23:58-05:00"
+		},
+		{
+			"path": "github.com/rwcarlsen/optim/pattern",
+			"revision": "c3ec3ecac0e228252c6745c4c56af793b02377c8",
+			"revisionTime": "2015-09-01T11:23:58-05:00"
+		},
+		{
+			"path": "github.com/rwcarlsen/optim/swarm",
+			"revision": "c3ec3ecac0e228252c6745c4c56af793b02377c8",
+			"revisionTime": "2015-09-01T11:23:58-05:00"
+		},
+		{
+			"path": "github.com/syndtr/goleveldb/leveldb",
+			"revision": "63c9e642efad852f49e20a6f90194cae112fd2ac",
+			"revisionTime": "2014-12-10T13:58:38+07:00"
+		},
+		{
+			"path": "github.com/syndtr/goleveldb/leveldb/cache",
+			"revision": "63c9e642efad852f49e20a6f90194cae112fd2ac",
+			"revisionTime": "2014-12-10T13:58:38+07:00"
+		},
+		{
+			"path": "github.com/syndtr/goleveldb/leveldb/comparer",
+			"revision": "63c9e642efad852f49e20a6f90194cae112fd2ac",
+			"revisionTime": "2014-12-10T13:58:38+07:00"
+		},
+		{
+			"path": "github.com/syndtr/goleveldb/leveldb/errors",
+			"revision": "63c9e642efad852f49e20a6f90194cae112fd2ac",
+			"revisionTime": "2014-12-10T13:58:38+07:00"
+		},
+		{
+			"path": "github.com/syndtr/goleveldb/leveldb/filter",
+			"revision": "63c9e642efad852f49e20a6f90194cae112fd2ac",
+			"revisionTime": "2014-12-10T13:58:38+07:00"
+		},
+		{
+			"path": "github.com/syndtr/goleveldb/leveldb/iterator",
+			"revision": "63c9e642efad852f49e20a6f90194cae112fd2ac",
+			"revisionTime": "2014-12-10T13:58:38+07:00"
+		},
+		{
+			"path": "github.com/syndtr/goleveldb/leveldb/journal",
+			"revision": "63c9e642efad852f49e20a6f90194cae112fd2ac",
+			"revisionTime": "2014-12-10T13:58:38+07:00"
+		},
+		{
+			"path": "github.com/syndtr/goleveldb/leveldb/memdb",
+			"revision": "63c9e642efad852f49e20a6f90194cae112fd2ac",
+			"revisionTime": "2014-12-10T13:58:38+07:00"
+		},
+		{
+			"path": "github.com/syndtr/goleveldb/leveldb/opt",
+			"revision": "63c9e642efad852f49e20a6f90194cae112fd2ac",
+			"revisionTime": "2014-12-10T13:58:38+07:00"
+		},
+		{
+			"path": "github.com/syndtr/goleveldb/leveldb/storage",
+			"revision": "63c9e642efad852f49e20a6f90194cae112fd2ac",
+			"revisionTime": "2014-12-10T13:58:38+07:00"
+		},
+		{
+			"path": "github.com/syndtr/goleveldb/leveldb/table",
+			"revision": "63c9e642efad852f49e20a6f90194cae112fd2ac",
+			"revisionTime": "2014-12-10T13:58:38+07:00"
+		},
+		{
+			"path": "github.com/syndtr/goleveldb/leveldb/util",
+			"revision": "63c9e642efad852f49e20a6f90194cae112fd2ac",
+			"revisionTime": "2014-12-10T13:58:38+07:00"
+		},
+		{
+			"path": "github.com/syndtr/gosnappy/snappy",
+			"revision": "ce8acff4829e0c2458a67ead32390ac0a381c862",
+			"revisionTime": "2013-02-20T22:16:03+11:00"
+		},
+		{
+			"path": "golang.org/x/crypto/ssh",
+			"revision": "4ed45ec682102c643324fae5dff8dab085b6c300",
+			"revisionTime": "2014-12-26T19:04:10-08:00"
+		},
+		{
+			"path": "golang.org/x/crypto/ssh/agent",
+			"revision": "4ed45ec682102c643324fae5dff8dab085b6c300",
+			"revisionTime": "2014-12-26T19:04:10-08:00"
+		}
+	]
+}

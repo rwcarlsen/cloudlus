@@ -14,8 +14,8 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/rwcarlsen/cloudlus/Godeps/_workspace/src/golang.org/x/crypto/ssh"
-	"github.com/rwcarlsen/cloudlus/Godeps/_workspace/src/golang.org/x/crypto/ssh/agent"
+	"golang.org/x/crypto/ssh"
+	"golang.org/x/crypto/ssh/agent"
 )
 
 var (

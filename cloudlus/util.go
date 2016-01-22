@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rwcarlsen/cloudlus/Godeps/_workspace/src/github.com/syndtr/goleveldb/leveldb"
-	"github.com/rwcarlsen/cloudlus/Godeps/_workspace/src/github.com/syndtr/goleveldb/leveldb/storage"
-	"github.com/rwcarlsen/cloudlus/Godeps/_workspace/src/github.com/syndtr/goleveldb/leveldb/util"
+	"github.com/syndtr/goleveldb/leveldb"
+	"github.com/syndtr/goleveldb/leveldb/storage"
+	"github.com/syndtr/goleveldb/leveldb/util"
 )
 
 type Beat struct {

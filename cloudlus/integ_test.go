@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rwcarlsen/cloudlus/Godeps/_workspace/src/code.google.com/p/go-uuid/uuid"
+	"code.google.com/p/go-uuid/uuid"
 )
 
 const workerpoll = 1 * time.Second
