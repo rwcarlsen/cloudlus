@@ -8,14 +8,20 @@ import (
 )
 
 type Disruption struct {
-	// Time is the time step on which the facility shutdown disruption occurs.
+	// Time is the time step on which the disruption occurs (i.e. facility
+	// shutdown, facility construction, or objective change).
 	Time int
 	// KillProto is the prototype for which all facilities will be shut down
 	// by the given time.
 	KillProto string
 	// BuildProto is the prototype of which to build a single new instance at
-	// the given time.
+	// the given disruption time.
 	BuildProto string
+	// SwitchObjFunc specifies a disruption where the objective function
+	// changes.  This can be used together with the KillProto and BuildProto
+	// components of the disruption, but has not been tested together with
+	// them.
+	SwitchObjFunc string
 	// Prob holds the probability that the disruption will happen at a
 	// particular time.  This is ignored in disrup-single mode.  An
 	// unspecified probability for a disruption is assumed to be zero.  Note
@@ -54,14 +60,7 @@ func disrupSingleModeLin(s *Scenario, obj ObjExecFunc) (float64, error) {
 		return math.Inf(1), fmt.Errorf("disrup-single-lin: %v", err)
 	}
 
-	// set separations plant to die disruption time.
-	clone := s.Clone()
-	clone.Builds = append(clone.Builds, buildsForDisrup(clone, disrup)...)
-	if disrup.Time >= 0 {
-		for i, b := range clone.Builds {
-			clone.Builds[i] = modForDisrup(clone, disrup, b)
-		}
-	}
+	clone := modForDisrup(s, disrup)
 
 	subobj, err := obj(clone)
 	if err != nil {
@@ -83,16 +82,28 @@ func disrupSingleMode(s *Scenario, obj ObjExecFunc) (float64, error) {
 		return math.Inf(1), fmt.Errorf("disrup-single: %v", err)
 	}
 
-	// set separations plant to die disruption time.
-	clone := s.Clone()
-	clone.Builds = append(clone.Builds, buildsForDisrup(clone, disrup)...)
-	if disrup.Time >= 0 {
+	clone := modForDisrup(s, disrup)
+
+	return obj(clone)
+}
+
+// modForDisrup creates and returns a clone of s that is modified according to
+// the disruption specified by d - i.e. builds are modified according to
+// disrupted prototypes and/or objective function may be changed.
+func modForDisrup(s *Scenario, d Disruption) (clone *Scenario) {
+	clone = s.Clone()
+	if d.SwitchObjFunc != "" {
+		clone.ObjFunc = d.SwitchObjFunc
+	}
+
+	clone.Builds = append(clone.Builds, buildsForDisrup(clone, d)...)
+	if d.Time >= 0 {
 		for i, b := range clone.Builds {
-			clone.Builds[i] = modForDisrup(clone, disrup, b)
+			clone.Builds[i] = modBuildForDisrup(clone, d, b)
 		}
 	}
 
-	return obj(clone)
+	return clone
 }
 
 func buildsForDisrup(s *Scenario, disrup Disruption) []Build {
@@ -115,10 +126,14 @@ func buildsForDisrup(s *Scenario, disrup Disruption) []Build {
 	panic("prototype " + b.Proto + " not found")
 }
 
-func modForDisrup(s *Scenario, disrup Disruption, b Build) Build {
+func modBuildForDisrup(s *Scenario, disrup Disruption, b Build) Build {
 	if disrup.Time < 0 {
 		return b
 	} else if b.Proto != disrup.KillProto {
+		return b
+	} else if !b.Alive(disrup.Time) {
+		// Only shorten the life if the facility is operating when the disruption
+		// occurs.
 		return b
 	}
 
@@ -267,13 +282,7 @@ func runDisrupSims(s *Scenario, obj ObjExecFunc, disrups []Disruption) (objs []f
 	var errinner error
 	for i, d := range sampled {
 		// set separations plant to die disruption time.
-		clone := s.Clone()
-		clone.Builds = append(clone.Builds, buildsForDisrup(clone, d)...)
-		if d.Time >= 0 {
-			for i, b := range clone.Builds {
-				clone.Builds[i] = modForDisrup(clone, d, b)
-			}
-		}
+		clone := modForDisrup(s, d)
 
 		go func(i int, scn *Scenario) {
 			defer wg.Done()
