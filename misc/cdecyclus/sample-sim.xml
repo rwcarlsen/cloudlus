@@ -17,6 +17,7 @@
     <spec><lib>cycamore</lib><name>FuelFab</name></spec>
     <spec><lib>cycamore</lib><name>Separations</name></spec>
     <spec><lib>cycamore</lib><name>Enrichment</name></spec>
+    <spec><lib>cycamore</lib><name>Mixer</name></spec>
 
     <spec><lib>agents</lib><name>KFacility</name></spec>
     <spec><lib>agents</lib><name>NullInst</name></spec>
