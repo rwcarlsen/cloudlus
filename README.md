@@ -225,3 +225,10 @@ The api consists of the following endpoints:
 
  Send a GET request to `/api/v1/job` and use the text from the `Stdout` field
  of the JSON in the response body.
+
+Misc.
+-----
+
+Cloudlus is used for remote execution of Cyclus simulations by
+`fuelcycle.org`.  Files and instructions for how this is accomplished are in
+the `misc/fuelcycle.org` directory.

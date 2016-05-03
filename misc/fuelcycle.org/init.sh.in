@@ -1,0 +1,15 @@
+#!/bin/bash
+
+tar -xzf cyc-cde.tar.gz
+
+echo '#!/bin/bash' > cyclus
+echo "$PWD/cyc-cde/cde-exec {{CYCLUS_PATH}} \$@" >> cyclus
+chmod a+x cyclus
+
+echo '#!/bin/bash' > cycobj
+echo "$PWD/cyc-cde/cde-exec {{CYCOBJ_PATH}} \$@" >> cycobj
+chmod a+x cycobj
+
+echo '#!/bin/bash' > cyan
+echo "$PWD/cyc-cde/cde-exec {{CYAN_PATH}} \$@" >> cyan
+chmod a+x cyan

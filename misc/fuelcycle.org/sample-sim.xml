@@ -1,0 +1,51 @@
+<simulation>
+  <schematype>flat</schematype>
+  <control>
+    <duration>2400</duration>
+    <startmonth>1</startmonth>
+    <startyear>2000</startyear>
+    <decay>never</decay>
+  </control>
+
+  <archetypes>
+    <spec><lib>cycamore</lib><name>Source</name></spec>
+    <spec><lib>cycamore</lib><name>Sink</name></spec>
+    <spec><lib>cycamore</lib><name>Reactor</name></spec>
+    <spec><lib>cycamore</lib><name>DeployInst</name></spec>
+    <spec><lib>cycamore</lib><name>GrowthRegion</name></spec>
+    <spec><lib>cycamore</lib><name>ManagerInst</name></spec>
+    <spec><lib>cycamore</lib><name>FuelFab</name></spec>
+    <spec><lib>cycamore</lib><name>Separations</name></spec>
+    <spec><lib>cycamore</lib><name>Enrichment</name></spec>
+    <spec><lib>cycamore</lib><name>Mixer</name></spec>
+
+    <spec><lib>agents</lib><name>KFacility</name></spec>
+    <spec><lib>agents</lib><name>NullInst</name></spec>
+    <spec><lib>agents</lib><name>NullRegion</name></spec>
+    <spec><lib>agents</lib><name>Predator</name></spec>
+    <spec><lib>agents</lib><name>Prey</name></spec>
+    <spec><lib>agents</lib><name>Sink</name><alias>Sink2</alias></spec>
+    <spec><lib>agents</lib><name>Source</name><alias>Source2</alias></spec>
+  </archetypes>
+
+  <prototype>
+    <name>src</name>
+    <config>
+      <Source>
+        <outcommod>depleted_u</outcommod>
+        <outrecipe>depleted_u</outrecipe>
+        <throughput>1e10</throughput>
+      </Source>
+    </config>
+  </prototype>
+
+  <agent><prototype>src</prototype><name>src1</name></agent>
+
+  <recipe>
+    <name>depleted_u</name>
+    <basis>mass</basis>
+    <nuclide> <id>U235</id><comp>0.0025</comp></nuclide>
+    <nuclide><id>U238</id><comp>0.9975</comp></nuclide>
+  </recipe>
+
+</simulation>
