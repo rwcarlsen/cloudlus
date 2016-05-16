@@ -1,0 +1,78 @@
+{
+    "SimDur": 1200,
+	"CyclusTmpl": "cyclus-tmpl.xml",
+    "ObjFunc": "slowvfast",
+    "ObjMode": "single",
+	"BuildPeriod": 24,
+    "BuildOffset": 0,
+    "Handle": "my_scen1",
+	"Facs": [
+        {
+            "Proto": "slow_reactor",
+            "Cap": 900,
+            "Life": 720
+        }, {
+            "Proto": "fast_reactor",
+            "BuildAfter": 100,
+            "Cap": 360,
+            "Life": 720
+        }, {
+            "Proto": "slow_separations",
+            "BuildAfter": -1
+        }, {
+            "Proto": "fast_separations",
+            "BuildAfter": -1
+        }, {
+            "Proto": "fastfab",
+            "BuildAfter": -1
+        }, {
+            "Proto": "repo",
+            "BuildAfter": -1
+        }, {
+            "Proto": "enrichment",
+            "BuildAfter": -1
+        }, {
+            "Proto": "depleted_src",
+            "BuildAfter": -1
+        }, {
+            "Proto": "slow_storage",
+            "BuildAfter": -1
+        }, {
+            "Proto": "fast_storage",
+            "BuildAfter": -1
+        }
+    ],
+    "StartBuilds": [
+        { "Time": 180, "Proto": "slow_separations", "N": 2 },
+        { "Time": 300, "Proto": "slow_separations", "N": 1 },
+        { "Time": 1, "Proto": "fast_separations", "N": 1 },
+        { "Time": 1, "Proto": "fastfab", "N": 1 },
+        { "Time": 1, "Proto": "repo", "N": 1 },
+        { "Time": 1, "Proto": "enrichment", "N": 1 },
+        { "Time": 1, "Proto": "depleted_src", "N": 1 },
+        { "Time": 1, "Proto": "slow_storage", "N": 1 },
+        { "Time": 1, "Proto": "fast_storage", "N": 1 },
+        { "Time": 1, "Proto": "slow_reactor", "N": 1, "Life": 192 },
+        { "Time": 1, "Proto": "slow_reactor", "N": 1, "Life": 204 },
+        { "Time": 1, "Proto": "slow_reactor", "N": 1, "Life": 216 },
+        { "Time": 1, "Proto": "slow_reactor", "N": 1, "Life": 228 },
+        { "Time": 1, "Proto": "slow_reactor", "N": 1, "Life": 240 },
+        { "Time": 1, "Proto": "slow_reactor", "N": 1, "Life": 252 },
+        { "Time": 1, "Proto": "slow_reactor", "N": 1, "Life": 264 },
+        { "Time": 1, "Proto": "slow_reactor", "N": 1, "Life": 276 },
+        { "Time": 1, "Proto": "slow_reactor", "N": 1, "Life": 288 },
+        { "Time": 1, "Proto": "slow_reactor", "N": 1, "Life": 300 },
+        { "Time": 1, "Proto": "slow_reactor", "N": 1, "Life": 552 },
+        { "Time": 1, "Proto": "slow_reactor", "N": 1, "Life": 564 },
+        { "Time": 1, "Proto": "slow_reactor", "N": 1, "Life": 576 },
+        { "Time": 1, "Proto": "slow_reactor", "N": 1, "Life": 588 },
+        { "Time": 1, "Proto": "slow_reactor", "N": 1, "Life": 600 },
+        { "Time": 1, "Proto": "slow_reactor", "N": 1, "Life": 612 },
+        { "Time": 1, "Proto": "slow_reactor", "N": 1, "Life": 624 },
+        { "Time": 1, "Proto": "slow_reactor", "N": 1, "Life": 636 },
+        { "Time": 1, "Proto": "slow_reactor", "N": 1, "Life": 648 },
+        { "Time": 1, "Proto": "slow_reactor", "N": 1, "Life": 660 }
+    ],
+    "MinPower": [15300, 15608.9505, 15924.13959, 16245.69324, 16573.73997, 16908.41091, 17249.83979, 17598.1631, 17953.52005, 18316.05266, 18685.90584, 19063.22741, 19448.16817, 19840.88197, 20241.52579, 20650.25975, 21067.2472, 21492.65482, 21926.65262, 22369.41408, 22821.11615, 23281.93937, 23752.06792, 24231.6897, 24720.99641, 25220.18361, 25729.45082, 26249.00158, 26779.04355, 27319.78858, 27871.45278, 28434.25665, 29008.42514, 29594.18772, 30191.7785, 30801.43635, 31423.40492, 32057.93281, 32705.27362, 33365.68607, 34039.43414, 34726.78709, 35428.01965, 36143.4121, 36873.25035, 37617.82611, 38377.43697, 39152.38653, 39942.98453, 40749.54695],
+    "MaxPower": [20700, 21117.99185, 21544.42415, 21979.46733, 22423.29526, 22876.08534, 23338.01855, 23809.27949, 24290.05654, 24780.54184, 25280.93143, 25791.42531, 26312.22752, 26843.5462, 27385.59372, 27938.58671, 28502.74621, 29078.29769, 29665.4712, 30264.5014, 30875.62773, 31499.09444, 32135.15071, 32784.05077, 33446.05396, 34121.42488, 34810.43346, 35513.35508, 36230.47069, 36962.0669, 37708.43612, 38469.87665, 39246.69283, 40039.19514, 40847.70033, 41672.53153, 42514.01842, 43372.49733, 44248.31136, 45141.81057, 46053.35207, 46983.30018, 47932.02659, 48899.91048, 49887.3387, 50894.70591, 51922.41472, 52970.87589, 54040.50848, 55131.73999]
+}
