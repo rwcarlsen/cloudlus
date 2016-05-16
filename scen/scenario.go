@@ -138,10 +138,11 @@ type Scenario struct {
 	// File is the name of the scenario file. This is for internal use and
 	// does not need to be filled out by the user.
 	File string
-	// Handle is used internally and does not need to be specified by the
-	// user.
+	// Handle can optionally be set/used as a scenario label in the templated
+	// input file in i.e. the '<handle>' tag in the simulation control param
+	// section.
 	Handle string
-	// tmpl is a cach for the templated cyclus input file
+	// tmpl is a cache for the templated cyclus input file
 	tmpl *template.Template
 }
 
