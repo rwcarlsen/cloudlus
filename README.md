@@ -12,7 +12,7 @@ is:
 go get github.com/rwcarlsen/cloudlus/...
 ```
 
-You'll want `GOPATH/bin` to be in your `PATH`. You will then be able to use a
+You'll want `$GOPATH/bin` to be in your `PATH`. You will then be able to use a
 few cli tools described below.
 
 The primary tool provided is the `cloudlus` command. It provides the ability
@@ -20,7 +20,7 @@ to run a remote execution server.  This server handles the dispatch and
 distribution of cyclus jobs to *workers* that can also be deployed with this
 command.  There can be an arbitrary number of workers and they can live
 locally on the same machine as the server or somewhere else in the nets.
-Cyclus jobs can be deployed and fetched to/from the server using the
+Cyclus jobs can also be deployed to and fetched from the server using the
 `cloudlus` command.  The server also provides a simple RESTful api.
 
 CLI tools
