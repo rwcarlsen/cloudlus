@@ -9,6 +9,7 @@ import (
 	"io"
 	"io/ioutil"
 	"math"
+	"os"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -109,6 +110,7 @@ func Local(scn *scen.Scenario, stdout, stderr io.Writer) (obj float64, err error
 		if err := cmd.Run(); err != nil {
 			return math.Inf(1), err
 		}
+		defer os.Remove(dbfile)
 
 		// post process cyclus output db
 		db, err := sql.Open("sqlite3", dbfile)
