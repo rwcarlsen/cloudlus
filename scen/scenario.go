@@ -84,7 +84,9 @@ type Scenario struct {
 	// facilities are deployed
 	BuildPeriod int
 	// NuclideCost represents the waste cost per kg material per time step for
-	// each nuclide in the entire simulation (repository's exempt).
+	// each nuclide in the entire simulation (repository's exempt).  This is
+	// just information that can optionally be used by some objective
+	// functions.
 	NuclideCost map[string]float64
 	// ObjFunc is the name of the objective function in the
 	// ObjFuncs map variable to be used for
@@ -115,7 +117,7 @@ type Scenario struct {
 	// Discount represents the nominal annual discount rate (including
 	// inflation) for the simulation.
 	Discount float64
-	// CustomConfig is for internal use for sub-scenario-specific
+	// CustomConfig is for internal use for
 	// configuration used in things like disruption scenarios where each run
 	// or objective evaluation consists of multiple simulations with various
 	// perturbations.
@@ -139,8 +141,8 @@ type Scenario struct {
 	// does not need to be filled out by the user.
 	File string
 	// Handle can optionally be set/used as a scenario label in the templated
-	// input file in i.e. the '<handle>' tag in the simulation control param
-	// section.
+	// input file in i.e. the '<simhandle>' tag in the simulation control
+	// param section.
 	Handle string
 	// tmpl is a cache for the templated cyclus input file
 	tmpl *template.Template
