@@ -28,6 +28,7 @@ var (
 	addr         = flag.String("addr", "", "address to submit jobs to (otherwise, run locally)")
 	swarmonly    = flag.Bool("swarmonly", false, "Don't do pattern search - only particle swarm")
 	npar         = flag.Int("npar", 0, "number of particles (0 => choose automatically)")
+	ncpu         = flag.Int("ncpu", 4, "number of parallel objective evaluations for local runs")
 	seed         = flag.Int("seed", 1, "seed for random number generator")
 	maxeval      = flag.Int("maxeval", 50000, "max number of objective evaluations")
 	maxiter      = flag.Int("maxiter", 500, "max number of optimizer iterations")
@@ -186,7 +187,7 @@ func buildIter(lb, ub []float64) optim.Method {
 
 	ev := optim.ParallelEvaler{}
 	if *addr == "" {
-		ev.NConcurrent = 8
+		ev.NConcurrent = *ncpu
 	}
 
 	pop := swarm.NewPopulationRand(n, lb, ub)
