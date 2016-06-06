@@ -1,36 +1,35 @@
 
-FROM base/archlinux
+FROM ubuntu
 
 RUN echo "1"
 
-# this trusts all keys and allows the system update to run
-RUN mv /etc/pacman.conf /etc/pacman.conf.back
-RUN sed 's/^SigLevel *= .*/SigLevel = TrustAll/' /etc/pacman.conf.back > /etc/pacman.conf
+RUN apt-get -y --force-yes update
 
-RUN pacman-key --refresh-keys
-RUN pacman -Syu --noconfirm
-RUN pacman-db-upgrade
+RUN apt-get install -y --force-yes \
+    cmake \
+    make \
+    libboost-all-dev \
+    libxml2-dev \
+    libxml++2.6-dev \
+    libsqlite3-dev \
+    libhdf5-serial-dev \
+    libbz2-dev \
+    coinor-libcbc-dev \
+    coinor-libcoinutils-dev \
+    coinor-libosi-dev \
+    coinor-libclp-dev \
+    coinor-libcgl-dev \
+    libblas-dev \
+    liblapack-dev \
+    g++ \
+    libgoogle-perftools-dev \
+    git \
+    python \
+    python-tables \
+    python-numpy \
+    python-nose
 
-# developer packages
-RUN pacman -S --noconfirm base-devel
-RUN pacman -S --noconfirm cmake
-RUN pacman -S --noconfirm git
-RUN pacman -S --noconfirm mercurial
-RUN pacman -S --noconfirm abs
-RUN pacman -S --noconfirm gcc-fortran
-RUN pacman -S --noconfirm go
-RUN pacman -S --noconfirm wget
-
-# cyclus dependencies
-RUN pacman -S --noconfirm sqlite
-RUN pacman -S --noconfirm boost
-RUN pacman -S --noconfirm libxml++
-RUN pacman -S --noconfirm hdf5
-RUN pacman -S --noconfirm python2
-RUN pacman -S --noconfirm python2-nose
-RUN pacman -S --noconfirm python2-pytables
-RUN pacman -S --noconfirm coin-or-cbc
-RUN ln -s /usr/bin/python2 /usr/local/bin/python
+RUN apt-get install -y --force-yes wget
 
 ENV version=develop
 # install cyclus and cycamore
@@ -51,8 +50,14 @@ WORKDIR /
 # bump number below to force update cloudlus
 RUN echo "1"
 
-ENV GOPATH /
+RUN wget https://storage.googleapis.com/golang/go1.6.2.linux-amd64.tar.gz
+RUN echo "export GOPATH=/usr/local" >> .profile
+RUN echo "export PATH=$PATH:/usr/local/go/bin" >> .profile
+ENV PATH $PATH:/usr/local/go/bin
+ENV GOPATH /usr/local
+RUN tar -C /usr/local -xzf go1.6.2.linux-amd64.tar.gz
+RUN go version
 RUN go get github.com/rwcarlsen/cloudlus/...
 RUN go get github.com/rwcarlsen/cyan/cmd/cyan
 
-ENTRYPOINT ["/bin/cloudlus", "-addr", "cycrun.fuelcycle.org:80", "work", "-interval", "3s", "-whitelist", "cyclus", "cyan", "-timeout=3m"]
+ENTRYPOINT ["/bin/cloudlus", "-addr", "cycrun.fuelcycle.org:4343", "work", "-interval", "3s", "-whitelist", "cyclus,cyan,cycobj", "-timeout=3m"]
