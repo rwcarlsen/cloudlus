@@ -91,6 +91,18 @@ func (s *Server) handleJobStat(w http.ResponseWriter, r *http.Request) {
 	w.Write(data)
 }
 
+func (s *Server) handleServerStats(w http.ResponseWriter, r *http.Request) {
+
+  data, err := json.Marshal(s.Stats)
+	if err != nil {
+		httperror(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	w.Write(data)
+}
+
+
 func (s *Server) createJob(r *http.Request, w http.ResponseWriter, j *Job) {
 	s.Start(j, nil)
 

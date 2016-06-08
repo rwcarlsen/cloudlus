@@ -124,6 +124,7 @@ func NewServer(httpaddr, rpcaddr string, db *DB) *Server {
 	mux.HandleFunc("/api/v1/job-stat/", s.handleJobStat)
 	mux.HandleFunc("/api/v1/job-infile", s.handleSubmitInfile)
 	mux.HandleFunc("/api/v1/job-outfiles/", s.handleOutfiles)
+	mux.HandleFunc("/api/v1/server-stats/", s.handleServerStats)
 	mux.HandleFunc("/dashboard", s.dashboard)
 	mux.HandleFunc("/dashboard/", s.dashboard)
 	mux.HandleFunc("/dashboard/infile/", s.dashboardInfile)
